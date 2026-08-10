@@ -78,6 +78,8 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
     return participants.filter((p) => p.alive && p.characterId !== (active && active.characterId));
   }, [battle, participants, heroes, enemies, active, isMasterTurn, currentIsMine]);
 
+  const megaNeedsTarget = (s) => s && (s.tipo === 'fisico' || s.tipo === 'magia');
+
   const act = async (payload) => {
     if (!active) return;
     setBusy(true);
@@ -343,6 +345,11 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                 <button className={actionType === 'defense' ? 'active' : ''} onClick={() => setActionType('defense')}>
                   🛡️ Defesa
                 </button>
+                {!isMasterTurn && active && (active.ultimate || active.especial) && (
+                  <button className={actionType === 'mega' ? 'active' : ''} onClick={() => setActionType('mega')}>
+                    🔥 MEGA
+                  </button>
+                )}
               </div>
 
               {actionType === 'attack' && (
@@ -399,6 +406,71 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                   </button>
                 </div>
               )}
+
+              {actionType === 'mega' && active && (
+                <div className="action-body mega-actions">
+                  <div className="mega-bars block">
+                    <span className="bar-row">
+                      <span className="bar-label">🔥 Ultimate</span>
+                      <div className="bar-track">
+                        <div className="bar-fill ult" style={{ width: `${active.ultimateBar || 0}%` }} />
+                      </div>
+                      <span className="bar-num">{Math.round(active.ultimateBar || 0)}%</span>
+                    </span>
+                    <span className="bar-row">
+                      <span className="bar-label">💫 Especial</span>
+                      <div className="bar-track">
+                        <div className="bar-fill esp" style={{ width: `${active.especialBar || 0}%` }} />
+                      </div>
+                      <span className="bar-num">{Math.round(active.especialBar || 0)}%</span>
+                    </span>
+                  </div>
+
+                  {active.ultimate && (
+                    <>
+                      <button
+                        className="ghost"
+                        onClick={() => act({ type: 'ultimate' })}
+                        disabled={busy || (active.ultimateBar || 0) < 100 || active.ultimateMode}
+                      >
+                        {active.ultimateMode
+                          ? `🔥 Modo Ultimate ativo (${active.ultimateModeTurns}t · dano +${Math.round((active.ultimateModeMult || 0) * 100)}%)`
+                          : `🔥 Ativar Ultimate (${active.ultimate.nome})`}
+                      </button>
+                      {active.ultimateMode && !active.ultimateSkillUsed && (
+                        <>
+                          {megaNeedsTarget(active.ultimate) && (
+                            <TargetSelect targets={aliveTargets} value={targetId} onChange={setTargetId} />
+                          )}
+                          <button
+                            onClick={() => act({ type: 'ultimateSkill', targetId: targetId || null })}
+                            disabled={busy || !aliveTargets.length || (megaNeedsTarget(active.ultimate) && !targetId)}
+                          >
+                            ⚡ Golpe Ultimate: {active.ultimate.nome}
+                          </button>
+                        </>
+                      )}
+                      {active.ultimateMode && active.ultimateSkillUsed && (
+                        <p className="muted small">Golpe ultimate já usado nesta ativação.</p>
+                      )}
+                    </>
+                  )}
+
+                  {active.especial && (
+                    <>
+                      {megaNeedsTarget(active.especial) && (
+                        <TargetSelect targets={aliveTargets} value={targetId} onChange={setTargetId} />
+                      )}
+                      <button
+                        onClick={() => act({ type: 'especial', targetId: targetId || null })}
+                        disabled={busy || (active.especialBar || 0) < 100 || !aliveTargets.length || (megaNeedsTarget(active.especial) && !targetId)}
+                      >
+                        💫 {active.especial.nome} (100%)
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -442,7 +514,7 @@ function CharCard({ p, current, gameData, selectTarget, selected }) {
   const hpPct = (p.hp / p.hpMax) * 100;
   const icon = p.isMonster ? (p.isBoss ? BOSS_ICON : MONSTER_ICON) : CLASS_ICONS[p.cls] || '🧙';
   const label = p.isMonster ? p.monsterName : p.custom_class_name || gameData.classes?.[p.cls]?.nome;
-  const race = !p.isMonster && gameData.races?.[p.race];
+  const races = !p.isMonster && Array.isArray(p.races) && p.races.length ? p.races : !p.isMonster && gameData.races?.[p.race] ? [gameData.races[p.race]] : [];
   return (
     <div
       className={['char-card battle-card', isCurrent ? 'current' : '', p.alive ? '' : 'dead', selected ? 'targeted' : '', p.isMonster ? 'monster-card' : '', p.isBoss ? 'boss-card' : ''].filter(Boolean).join(' ')}
@@ -453,7 +525,9 @@ function CharCard({ p, current, gameData, selectTarget, selected }) {
         <div>
           <strong>{p.charName}</strong>
           <span className="tag">{label}</span>
-          {race && <span className="tag">{race.nome}</span>}
+          {races.map((r) => (
+            <span className="tag" key={r.id || r.nome}>{r.nome}</span>
+          ))}
           {p.isBoss && <span className="tag boss-tag">☠️ CHEFE</span>}
           {p.team && <span className="tag">Eq. {p.team}</span>}
           {isCurrent && <span className="tag current-tag">▶ Turno</span>}
@@ -463,7 +537,26 @@ function CharCard({ p, current, gameData, selectTarget, selected }) {
         <>
           <StatBar label="HP" value={p.hp} max={p.hpMax} color="#e63946" />
           <StatBar label="MP" value={p.mp} max={p.mpMax} color="#4a90e2" />
+          {p.ultimateMode && <span className="tag ult-mode-tag">🔥 Modo Ultimate ({p.ultimateModeTurns}t · +{Math.round((p.ultimateModeMult || 0) * 100)}%)</span>}
           {p.kills > 0 && <span className="tag">⚔️ {p.kills} abates</span>}
+          {!p.isMonster && (
+            <div className="mega-bars">
+              <span className="bar-row">
+                <span className="bar-label" title="Ultimate">🔥</span>
+                <div className="bar-track">
+                  <div className={`bar-fill ult${p.ultimateMode ? ' active' : ''}`} style={{ width: `${p.ultimateBar || 0}%` }} />
+                </div>
+                <span className="bar-num">{Math.round(p.ultimateBar || 0)}%</span>
+              </span>
+              <span className="bar-row">
+                <span className="bar-label" title="Especial">💫</span>
+                <div className="bar-track">
+                  <div className={`bar-fill esp${(p.especialBar || 0) >= 100 ? ' ready' : ''}`} style={{ width: `${p.especialBar || 0}%` }} />
+                </div>
+                <span className="bar-num">{Math.round(p.especialBar || 0)}%</span>
+              </span>
+            </div>
+          )}
         </>
       ) : (
         <div className="dead-label">☠️ Derrotado</div>

@@ -1,19 +1,31 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
-import { ATTRIBUTES, ATTRIBUTE_NAMES } from '../config.js';
+import { ATTRIBUTES, ATTRIBUTE_NAMES, SKILL_TYPES } from '../config.js';
 
 export default function Registry({ player, gameData, onBack }) {
   const [tab, setTab] = useState('classes');
   const [classes, setClasses] = useState([]);
   const [monsters, setMonsters] = useState([]);
+  const [races, setRaces] = useState([]);
+  const [equipment, setEquipment] = useState([]);
+  const [skills, setSkills] = useState([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
     try {
-      const [c, m] = await Promise.all([api.listCustomClasses(), api.listCustomMonsters()]);
+      const [c, m, r, e, s] = await Promise.all([
+        api.listCustomClasses(),
+        api.listCustomMonsters(),
+        api.listCustomRaces(),
+        api.listCustomEquipment(),
+        api.listCustomSkills(),
+      ]);
       setClasses(c.classes || []);
       setMonsters(m.monsters || []);
+      setRaces(r.races || []);
+      setEquipment(e.equipment || []);
+      setSkills(s.skills || []);
     } catch (err) {
       setError(err.message);
     }
@@ -40,6 +52,15 @@ export default function Registry({ player, gameData, onBack }) {
           <button className={tab === 'classes' ? 'active' : ''} onClick={() => setTab('classes')}>
             Classes
           </button>
+          <button className={tab === 'races' ? 'active' : ''} onClick={() => setTab('races')}>
+            Raças
+          </button>
+          <button className={tab === 'equipment' ? 'active' : ''} onClick={() => setTab('equipment')}>
+            Equipamentos
+          </button>
+          <button className={tab === 'skills' ? 'active' : ''} onClick={() => setTab('skills')}>
+            Golpes
+          </button>
           <button className={tab === 'monsters' ? 'active' : ''} onClick={() => setTab('monsters')}>
             Monstros
           </button>
@@ -49,6 +70,15 @@ export default function Registry({ player, gameData, onBack }) {
 
         {tab === 'classes' && (
           <ClassRegistry player={player} classes={classes} gameData={gameData} onChanged={() => { setError(''); load(); }} setError={setError} />
+        )}
+        {tab === 'races' && (
+          <RaceRegistry player={player} races={races} onChanged={() => { setError(''); load(); }} setError={setError} />
+        )}
+        {tab === 'equipment' && (
+          <EquipmentRegistry player={player} equipment={equipment} onChanged={() => { setError(''); load(); }} setError={setError} />
+        )}
+        {tab === 'skills' && (
+          <SkillRegistry player={player} skills={skills} onChanged={() => { setError(''); load(); }} setError={setError} />
         )}
         {tab === 'monsters' && (
           <MonsterRegistry player={player} monsters={monsters} gameData={gameData} onChanged={() => { setError(''); load(); }} setError={setError} />
@@ -126,7 +156,6 @@ function ClassRegistry({ player, classes, gameData, onChanged, setError }) {
               ))}
             </select>
           </label>
-          {error && <div className="error">{error}</div>}
           <button type="submit">{editingId ? 'Salvar Alterações' : 'Registrar Classe'}</button>
           {editingId && (
             <button type="button" className="ghost" onClick={() => { setEditingId(null); setError(''); }}>
@@ -298,6 +327,302 @@ function MonsterRegistry({ player, monsters, gameData, onChanged, setError }) {
             </div>
           ))}
           {monsters.length === 0 && <p className="muted">Nenhum monstro criado ainda.</p>}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function RaceRegistry({ player, races, onChanged, setError }) {
+  const [form, setForm] = useState({ nome: '', bonus: {}, passiva: '' });
+
+  const setBonus = (k, v) => setForm((f) => ({ ...f, bonus: { ...f.bonus, [k]: Number(v) } }));
+
+  const save = async (e) => {
+    e.preventDefault();
+    if (!form.nome.trim()) return setError('Informe o nome da raça.');
+    setError('');
+    try {
+      await api.createCustomRace({ creatorId: player.id, nome: form.nome, bonus: form.bonus, passiva: form.passiva });
+      setForm({ nome: '', bonus: {}, passiva: '' });
+      onChanged();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const remove = async (id) => {
+    try {
+      await api.deleteCustomRace(id, player.id);
+      onChanged();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  return (
+    <div className="registry-grid">
+      <section className="panel">
+        <h2>Nova Raça</h2>
+        <form onSubmit={save} className="stack">
+          <label>
+            Nome da raça
+            <input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} maxLength={40} placeholder="Ex.: Tribo do Céu" />
+          </label>
+          <p className="muted small">Bônus raciais de atributo (valores positivos somam, negativos subtraem).</p>
+          <div className="attrs mini">
+            {ATTRIBUTES.map((k) => (
+              <div className="attr-row" key={k}>
+                <span className="attr-name">{ATTRIBUTE_NAMES[k]}</span>
+                <input type="number" step={1} min={-3} max={3} value={form.bonus[k] ?? 0} onChange={(e) => setBonus(k, e.target.value)} />
+              </div>
+            ))}
+          </div>
+          <label>
+            Passiva
+            <textarea value={form.passiva} onChange={(e) => setForm((f) => ({ ...f, passiva: e.target.value }))} rows={2} maxLength={300} placeholder="Ex.: +15% de esquiva em florestas..." />
+          </label>
+          <button type="submit">Registrar Raça</button>
+        </form>
+      </section>
+
+      <section className="panel">
+        <h2>Raças registradas ({races.length})</h2>
+        <div className="registry-list">
+          {races.map((r) => (
+            <div className="registry-card" key={r.id}>
+              <div>
+                <strong>{r.nome}</strong>{' '}
+                <span className="tag">por {r.creator_name}</span>
+                <p className="muted">
+                  {ATTRIBUTES.filter((k) => r.bonus?.[k]).map((k) => `${ATTRIBUTE_NAMES[k]} ${r.bonus[k] > 0 ? '+' : ''}${r.bonus[k]}`).join(' · ') || 'sem bônus'}
+                </p>
+                <p className="muted">✨ {r.passiva || 'Sem passiva'}</p>
+              </div>
+              {r.creator_id === player.id && (
+                <div className="registry-actions">
+                  <button className="ghost danger" onClick={() => remove(r.id)}>
+                    Excluir
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+          {races.length === 0 && <p className="muted">Nenhuma raça registrada ainda.</p>}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function EquipmentRegistry({ player, equipment, onChanged, setError }) {
+  const [form, setForm] = useState({
+    tipo: 'arma',
+    nome: '',
+    dano_base: 6,
+    defesa: 4,
+    bonus: {},
+    penalidade: {},
+    maleficio: '',
+  });
+
+  const setBonus = (k, v) => setForm((f) => ({ ...f, bonus: { ...f.bonus, [k]: Number(v) } }));
+  const setPenal = (k, v) => setForm((f) => ({ ...f, penalidade: { ...f.penalidade, [k]: Number(v) } }));
+
+  const save = async (e) => {
+    e.preventDefault();
+    if (!form.nome.trim()) return setError('Informe o nome do equipamento.');
+    setError('');
+    try {
+      await api.createCustomEquipment({ creatorId: player.id, ...form });
+      setForm({ tipo: 'arma', nome: '', dano_base: 6, defesa: 4, bonus: {}, penalidade: {}, maleficio: '' });
+      onChanged();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const remove = async (id) => {
+    try {
+      await api.deleteCustomEquipment(id, player.id);
+      onChanged();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  return (
+    <div className="registry-grid">
+      <section className="panel">
+        <h2>Novo Equipamento</h2>
+        <form onSubmit={save} className="stack">
+          <div className="form-row">
+            <label>
+              Tipo
+              <select value={form.tipo} onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value }))}>
+                <option value="arma">Arma</option>
+                <option value="armadura">Armadura</option>
+              </select>
+            </label>
+            <label>
+              Nome
+              <input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} maxLength={40} placeholder="Ex.: Espada de Cinzas" />
+            </label>
+            {form.tipo === 'arma' ? (
+              <label>
+                Dano base
+                <input type="number" min={1} max={30} value={form.dano_base} onChange={(e) => setForm((f) => ({ ...f, dano_base: Number(e.target.value) }))} />
+              </label>
+            ) : (
+              <label>
+                Defesa
+                <input type="number" min={1} max={20} value={form.defesa} onChange={(e) => setForm((f) => ({ ...f, defesa: Number(e.target.value) }))} />
+              </label>
+            )}
+          </div>
+          <div className="attrs mini">
+            {ATTRIBUTES.map((k) => (
+              <div className="attr-row" key={k}>
+                <span className="attr-name">{ATTRIBUTE_NAMES[k]}</span>
+                <label>Bônus
+                  <input type="number" step={1} min={-3} max={3} value={form.bonus[k] ?? 0} onChange={(e) => setBonus(k, e.target.value)} />
+                </label>
+                <label>Malefício
+                  <input type="number" step={1} min={-3} max={3} value={form.penalidade[k] ?? 0} onChange={(e) => setPenal(k, e.target.value)} />
+                </label>
+              </div>
+            ))}
+          </div>
+          <label>
+            Descrição do malefício
+            <input value={form.maleficio} onChange={(e) => setForm((f) => ({ ...f, maleficio: e.target.value }))} maxLength={200} placeholder="Ex.: pesada demais, -1 de reflexos" />
+          </label>
+          <button type="submit">Registrar Equipamento</button>
+        </form>
+      </section>
+
+      <section className="panel">
+        <h2>Equipamentos registrados ({equipment.length})</h2>
+        <div className="registry-list">
+          {equipment.map((it) => (
+            <div className="registry-card" key={it.id}>
+              <div>
+                <strong>{it.tipo === 'arma' ? '⚔️' : '🛡️'} {it.nome}</strong>{' '}
+                <span className="tag">{it.tipo === 'arma' ? `dano ${it.dano_base}` : `def ${it.defesa}`}</span>
+                <span className="tag">por {it.creator_name}</span>
+                <p className="muted">
+                  {ATTRIBUTES.filter((k) => it.bonus?.[k] || it.penalidade?.[k])
+                    .map((k) => `${ATTRIBUTE_NAMES[k]} ${it.bonus?.[k] > 0 ? '+' : ''}${it.bonus?.[k] || 0}${it.penalidade?.[k] ? ` / -${Math.abs(it.penalidade[k])}` : ''}`)
+                    .join(' · ') || 'sem bônus'}
+                </p>
+                {it.maleficio && <p className="muted">⚠️ {it.maleficio}</p>}
+              </div>
+              {it.creator_id === player.id && (
+                <div className="registry-actions">
+                  <button className="ghost danger" onClick={() => remove(it.id)}>
+                    Excluir
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+          {equipment.length === 0 && <p className="muted">Nenhum equipamento registrado ainda.</p>}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function SkillRegistry({ player, skills, onChanged, setError }) {
+  const [form, setForm] = useState({ nome: '', tipo: 'magia', poder: 150, custo: 5, cooldown: 0, todos: false });
+
+  const save = async (e) => {
+    e.preventDefault();
+    if (!form.nome.trim()) return setError('Informe o nome do golpe.');
+    setError('');
+    try {
+      await api.createCustomSkill({ creatorId: player.id, ...form });
+      setForm({ nome: '', tipo: 'magia', poder: 150, custo: 5, cooldown: 0, todos: false });
+      onChanged();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const remove = async (id) => {
+    try {
+      await api.deleteCustomSkill(id, player.id);
+      onChanged();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  return (
+    <div className="registry-grid">
+      <section className="panel">
+        <h2>Novo Golpe</h2>
+        <form onSubmit={save} className="stack">
+          <div className="form-row">
+            <label>
+              Nome
+              <input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} maxLength={40} placeholder="Ex.: Lâmina Espectral" />
+            </label>
+            <label>
+              Tipo
+              <select value={form.tipo} onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value }))}>
+                {Object.entries(SKILL_TYPES).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Poder (%)
+              <input type="number" min={10} max={1000} value={form.poder} onChange={(e) => setForm((f) => ({ ...f, poder: Number(e.target.value) }))} />
+            </label>
+          </div>
+          <div className="form-row">
+            <label>
+              Custo de MP
+              <input type="number" min={0} max={99} value={form.custo} onChange={(e) => setForm((f) => ({ ...f, custo: Number(e.target.value) }))} />
+            </label>
+            <label>
+              Recarga (turnos)
+              <input type="number" min={0} max={20} value={form.cooldown} onChange={(e) => setForm((f) => ({ ...f, cooldown: Number(e.target.value) }))} />
+            </label>
+            <label className="check-label">
+              <input type="checkbox" checked={form.todos} onChange={(e) => setForm((f) => ({ ...f, todos: e.target.checked }))} />
+              Atinge todos (AoE / cura em massa)
+            </label>
+          </div>
+          <button type="submit">Registrar Golpe</button>
+        </form>
+      </section>
+
+      <section className="panel">
+        <h2>Golpes registrados ({skills.length})</h2>
+        <div className="registry-list">
+          {skills.map((s) => (
+            <div className="registry-card" key={s.id}>
+              <div>
+                <strong>{s.nome}</strong>{' '}
+                <span className="tag">{SKILL_TYPES[s.tipo]}</span>
+                <span className="tag">{s.poder}%</span>
+                <span className="tag">MP {s.custo}</span>
+                {s.cooldown > 0 && <span className="tag">⏳ {s.cooldown}t</span>}
+                {s.todos && <span className="tag">✦ Todos</span>}
+                <span className="tag">por {s.creator_name}</span>
+              </div>
+              {s.creator_id === player.id && (
+                <div className="registry-actions">
+                  <button className="ghost danger" onClick={() => remove(s.id)}>
+                    Excluir
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+          {skills.length === 0 && <p className="muted">Nenhum golpe registrado ainda.</p>}
         </div>
       </section>
     </div>

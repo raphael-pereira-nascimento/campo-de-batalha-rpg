@@ -12,6 +12,7 @@ import {
   MAX_ATTRIBUTE_WITH_BONUS,
 } from '../game/data.js';
 import { RACES } from '../game/races.js';
+import { getCustomEquipment } from './customContent.js';
 
 export async function createPlayer(name) {
   const trimmed = String(name).trim();
@@ -293,10 +294,27 @@ export async function equipItem(characterId, slot, itemId) {
   if (!char) throw new Error('Personagem não encontrado.');
 
   const catalog = slot === 'arma' ? EQUIPMENT.armas : EQUIPMENT.armaduras;
-  const item = catalog[itemId];
-  if (!item) throw new Error('Item não existe.');
+  let item = null;
+  if (itemId) {
+    item = catalog[itemId] ? { id: itemId, ...catalog[itemId] } : null;
+    if (!item) {
+      const custom = await getCustomEquipment(itemId);
+      if (custom && custom.tipo === slot) {
+        item = {
+          id: custom.id,
+          nome: custom.nome,
+          danoBase: custom.dano_base,
+          defesa: custom.defesa,
+          bonus: custom.bonus || {},
+          penalidade: custom.penalidade || {},
+          maleficio: custom.maleficio || '',
+        };
+      }
+    }
+    if (!item) throw new Error('Item não existe.');
+  }
 
-  const equipment = { ...char.equipment, [slot]: itemId ? { id: itemId, ...item } : null };
+  const equipment = { ...char.equipment, [slot]: item };
   const stats = deriveStats(char.classes, char.level, char.attributes, equipment, char.races);
   const hpMax = stats.hpMax;
   const mpMax = stats.mpMax;

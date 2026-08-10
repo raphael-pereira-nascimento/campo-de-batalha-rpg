@@ -64,7 +64,7 @@ function effFor(attrs, races, classes, equipment) {
   for (const item of [equipment.arma, equipment.armadura]) {
     if (!item) continue;
     for (const [k, v] of Object.entries(item.bonus || {})) eff[k] = (eff[k] || 0) + v;
-    for (const [k, v] of Object.entries(item.penalidade || {})) eff[k] = (eff[k] || 0) - v;
+    for (const [k, v] of Object.entries(item.penalidade || {})) eff[k] = (eff[k] || 0) - Math.abs(v);
   }
   for (const k of ATTRIBUTES) eff[k] = Math.max(1, eff[k] || 1);
   return eff;

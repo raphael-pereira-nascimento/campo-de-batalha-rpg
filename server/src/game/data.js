@@ -206,7 +206,9 @@ export function effectiveAttributes(attributes, equipment = {}, races = null, cl
       for (const [k, v] of Object.entries(item.bonus)) eff[k] = (eff[k] || 0) + v;
     }
     if (item.penalidade) {
-      for (const [k, v] of Object.entries(item.penalidade)) eff[k] = (eff[k] || 0) + v;
+      // Malefícios sempre reduzem o atributo (armaduras do catálogo guardam
+      // valores negativos; equipamentos customizados guardam valores positivos).
+      for (const [k, v] of Object.entries(item.penalidade)) eff[k] = (eff[k] || 0) - Math.abs(v);
     }
   }
   for (const key of Object.keys(eff)) {
