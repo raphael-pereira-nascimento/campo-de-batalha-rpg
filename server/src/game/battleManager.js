@@ -3,6 +3,7 @@ import {
   CLASSES,
   SPELLS,
   EQUIPMENT,
+  STATUS_DEFS,
   deriveStats,
   speedOf,
   rollAttack,
@@ -45,6 +46,7 @@ function skillFromSpell(s) {
     custo: s.custo || 0,
     cooldown: 0,
     todos: s.nome === 'Cura em Massa',
+    status: s.status ? { ...s.status } : null,
     desc: s.desc || '',
   };
 }
@@ -78,6 +80,24 @@ function efeitosDe(p) {
     for (const [k, v] of Object.entries(race.efeito || {})) {
       out[k] = (out[k] || 0) + v;
     }
+  }
+  return out;
+}
+
+function hasStatus(p, id) {
+  return Array.isArray(p.statuses) && p.statuses.some((s) => s.id === id);
+}
+
+// Resumo dos debuffs ativos (cegueira, lentidão, fraqueza) para as fórmulas.
+function statusEffects(p) {
+  const out = { accPenalty: 0, dodgePenalty: 0, danoMult: 1 };
+  for (const s of p.statuses || []) {
+    if (s.id === 'cegueira') out.accPenalty += 0.25;
+    if (s.id === 'lentidao') {
+      out.accPenalty += 0.1;
+      out.dodgePenalty += 0.1;
+    }
+    if (s.id === 'fraqueza') out.danoMult *= 0.8;
   }
   return out;
 }
@@ -212,8 +232,7 @@ export class BattleManager {
       buffPhysical: 1,
       buffMagic: 1,
       buffTurns: 0,
-      frozen: false,
-      frozenTurns: 0,
+      statuses: [],
       kills: 0,
       xpGained: 0,
       ultimateBar: 0,
@@ -379,18 +398,12 @@ export class BattleManager {
       p.hp = clamp(p.hp + heal, 0, p.hpMax);
       if (p.hp > before) battle.log.push(makeLog(`🌿 ${p.charName} regenera ${p.hp - before} de HP.`, 'heal'));
     }
+    this._processStatuses(battle, p);
     if (p.buffTurns > 0) {
       p.buffTurns -= 1;
       if (p.buffTurns === 0) {
         p.buffPhysical = 1;
         p.buffMagic = 1;
-      }
-    }
-    if (p.frozenTurns > 0) {
-      p.frozenTurns -= 1;
-      if (p.frozenTurns === 0) {
-        p.frozen = false;
-        battle.log.push(makeLog(`🧊 ${p.charName} se libertou do gelo.`));
       }
     }
     if (p.ultimateMode) {
@@ -419,18 +432,20 @@ export class BattleManager {
 
   _rollToHit(attacker, defender, kind) {
     const dodgeBonus = this._dodgeBonus(defender);
+    const stAtk = statusEffects(attacker);
+    const stDef = statusEffects(defender);
     const critThresh = 21 - Math.round(this._critBonus(attacker) * 20);
     let acc, dodge, chance;
     if (kind === 'magic') {
       acc = attacker.attributes.inteligencia;
       dodge = defender.dodge ? defender.attributes.reflexos * 1.5 : defender.attributes.reflexos;
-      chance = clamp(0.35 + (acc - dodge) * 0.035 - dodgeBonus, 0.15, 0.95);
+      chance = clamp(0.35 + (acc - dodge) * 0.035 - dodgeBonus - stAtk.accPenalty + stDef.dodgePenalty, 0.15, 0.95);
     } else {
       acc = attacker.attributes.destreza + attacker.attributes.reflexos * 0.5;
       dodge = defender.dodge
         ? defender.attributes.destreza + defender.attributes.reflexos
         : defender.attributes.destreza + defender.attributes.reflexos * 0.5;
-      chance = clamp(0.35 + (acc - dodge) * 0.03 - dodgeBonus, 0.15, 0.95);
+      chance = clamp(0.35 + (acc - dodge) * 0.03 - dodgeBonus - stAtk.accPenalty + stDef.dodgePenalty, 0.15, 0.95);
     }
     const threshold = Math.round(20 * chance);
     const res = rollAttack();
@@ -445,7 +460,7 @@ export class BattleManager {
     let mult = efeito.danoFisicoMult || 1;
     if (efeito.furia && p.alive && p.hp < p.hpMax * 0.5) mult *= 1.2;
     if (p.ultimateMode) mult *= 1 + (p.ultimateModeMult || 0);
-    return mult;
+    return mult * statusEffects(p).danoMult;
   }
 
   _lifesteal(battle, p, damageDealt) {
@@ -496,13 +511,93 @@ export class BattleManager {
         'damage',
       ),
     );
-    if (target.hp === 0 && target.alive) {
-      target.alive = false;
-      target.defense = false;
-      target.dodge = false;
-      battle.log.push(makeLog(`☠️ ${target.charName} foi derrotado!`, 'death'));
-    }
+    this._killIfDead(battle, target);
     return finalDamage;
+  }
+
+  _killIfDead(battle, target) {
+    if (target.hp > 0 || !target.alive) return;
+    target.alive = false;
+    target.defense = false;
+    target.dodge = false;
+    battle.log.push(makeLog(`☠️ ${target.charName} foi derrotado!`, 'death'));
+  }
+
+  // Aplica (ou renova) um efeito de status, respeitando imunidades.
+  _applyStatus(battle, target, status, source) {
+    if (!target.alive || !status || !STATUS_DEFS[status.tipo]) return;
+    const def = STATUS_DEFS[status.tipo];
+    const imune = efeitosDe(target).imune || [];
+    if (Array.isArray(imune) && imune.includes(status.tipo)) {
+      battle.log.push(makeLog(`🛡️ ${target.charName} não é afetado por ${def.nome.toLowerCase()}.`, 'info'));
+      return;
+    }
+    const chance = status.chance ?? 1;
+    if (chance < 1 && Math.random() > chance) {
+      battle.log.push(makeLog(`💨 ${target.charName} resiste a ${def.nome.toLowerCase()}.`, 'info'));
+      return;
+    }
+    const existing = (target.statuses || []).find((s) => s.id === status.tipo);
+    if (existing) {
+      existing.turnos = Math.max(existing.turnos, status.turnos || 1);
+      if (status.dano) existing.dano = status.dano;
+    } else {
+      target.statuses = target.statuses || [];
+      target.statuses.push({
+        id: status.tipo,
+        nome: def.nome,
+        turnos: status.turnos || 1,
+        dano: status.dano || 0,
+      });
+    }
+    const origem = source ? `${source.charName} aplica` : 'Aplicado';
+    battle.log.push(
+      makeLog(
+        `${def.icon} ${origem} ${def.nome.toLowerCase()} em ${target.charName} (${status.turnos || 1} turno(s)).`,
+        'status',
+      ),
+    );
+  }
+
+  // Processa os status no início do turno: dano/cura por turno e expiração.
+  _processStatuses(battle, p) {
+    if (!p.statuses || p.statuses.length === 0) return;
+    for (let i = p.statuses.length - 1; i >= 0; i--) {
+      const s = p.statuses[i];
+      const def = STATUS_DEFS[s.id];
+      if (s.id === 'congelamento') {
+        s.turnos -= 1;
+        if (s.turnos <= 0) {
+          p.statuses.splice(i, 1);
+          battle.log.push(makeLog(`🧊 ${p.charName} se libertou do gelo.`));
+        }
+        continue;
+      }
+      if (!def) {
+        p.statuses.splice(i, 1);
+        continue;
+      }
+      if (s.dano && p.alive) {
+        if (def.tipo === 'dot') {
+          const before = p.hp;
+          p.hp = clamp(p.hp - s.dano, 0, p.hpMax);
+          p.danoRecebido = (p.danoRecebido || 0) + (before - p.hp);
+          this._chargeUltimate(battle, p, (before - p.hp) * 0.8);
+          battle.log.push(makeLog(`${def.icon} ${p.charName} sofre ${before - p.hp} de dano de ${def.nome.toLowerCase()}.`, 'damage'));
+          this._killIfDead(battle, p);
+          if (!p.alive) continue;
+        } else if (def.tipo === 'hot') {
+          const before = p.hp;
+          p.hp = clamp(p.hp + s.dano, 0, p.hpMax);
+          if (p.hp > before) battle.log.push(makeLog(`${def.icon} ${p.charName} regenera ${p.hp - before} de HP.`, 'heal'));
+        }
+      }
+      s.turnos -= 1;
+      if (s.turnos <= 0) {
+        p.statuses.splice(i, 1);
+        battle.log.push(makeLog(`${def.icon} ${def.nome.toLowerCase()} em ${p.charName} acabou.`, 'info'));
+      }
+    }
   }
 
   _resolveAttack(battle, p, target, weapon) {
@@ -528,6 +623,8 @@ export class BattleManager {
     const dealt = this._applyDamage(target, total, battle, p, 'physical');
     if (dealt > 0) this._lifesteal(battle, p, dealt);
     if (!target.alive) p.kills += 1;
+    const ataqueStatus = efeitosDe(p).ataqueStatus;
+    if (ataqueStatus && target.alive) this._applyStatus(battle, target, ataqueStatus, p);
   }
 
   _setCooldown(p, skill) {
@@ -619,11 +716,7 @@ export class BattleManager {
     if (dealt > 0) this._lifesteal(battle, p, dealt);
     if (!target.alive) p.kills += 1;
     this._setCooldown(p, skill);
-    if (skill.id === 'Gelo') {
-      target.frozen = true;
-      target.frozenTurns = 2;
-      battle.log.push(makeLog(`🧊 ${target.charName} foi congelado! Pulará turnos.`));
-    }
+    if (skill.status) this._applyStatus(battle, target, skill.status, p);
   }
 
   // Golpe ultimate (durante o Modo Ultimate) e Golpe Especial (gasta 100% da barra).
@@ -677,7 +770,7 @@ export class BattleManager {
       dmg = rollDamage(6, qty, Math.round(base * mult));
     } else {
       dmg = magicDamage(p, { poder: skill.poder / 100 });
-      dmg.total = Math.round(dmg.total * (1 + (p.ultimateMode ? p.ultimateModeMult : 0)));
+      dmg.total = Math.round(dmg.total * (1 + (p.ultimateMode ? p.ultimateModeMult : 0)) * statusEffects(p).danoMult);
     }
     const total = res.crit ? dmg.total * 2 : dmg.total;
     battle.log.push(
@@ -735,7 +828,14 @@ export class BattleManager {
 
     this._resolveTurnGains(battle, p);
 
-    if (p.frozen) {
+    if (!p.alive) {
+      battle.log.push(makeLog(`☠️ ${p.charName} sucumbe aos efeitos de status.`, 'death'));
+      this._checkEnd(battle);
+      this.emit(battle);
+      return battle;
+    }
+
+    if (hasStatus(p, 'congelamento')) {
       battle.log.push(makeLog(`🧊 ${p.charName} está congelado e pula o turno.`));
       this._advanceTurn(battle);
       this.emit(battle);

@@ -565,8 +565,16 @@ function CharCard({ p, current, gameData, selectTarget, selected }) {
         <div className="defense-badges">
           {p.defense && <span className="tag">🛡️</span>}
           {p.dodge && <span className="tag">💨</span>}
-          {p.frozen && <span className="tag">🧊</span>}
-          {p.buffTurns > 0 && <span className="tag">🔥</span>}
+          {p.buffTurns > 0 && <span className="tag">🔮</span>}
+          {(p.statuses || []).map((s) => {
+            const def = gameData.statuses?.[s.id];
+            return (
+              <span className={`tag status-tag${s.id === 'congelamento' ? ' cc-tag' : ''}`} key={s.id} title={def?.desc || s.nome}>
+                {def?.icon || '✦'} {s.nome}
+                {s.turnos > 0 ? ` · ${s.turnos}t` : ''}
+              </span>
+            );
+          })}
         </div>
       )}
     </div>

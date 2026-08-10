@@ -183,11 +183,20 @@ check('dados rolados aparecem na crônica', hasDice);
 check('danos são menores que a vida (não estourou)', true);
 
 // XP / persistência
-const Aafter = await req(`/api/players/${A.player.id}/characters`);
-const winner = Aafter.characters.find((c) => c.id === A.character.id) || Aafter.characters[0];
-const bAfter = await req(`/api/players/${B.player.id}/characters`);
-const xpChanged = Aafter.characters[0].xp > 0 || bAfter.characters[0].xp > 0;
-check('vencedor ganhou XP (persistido no banco)', xpChanged, `xp A=${Aafter.characters[0].xp}, B=${bAfter.characters[0].xp}`);
+async function totalXp(playerId) {
+  const data = await req(`/api/players/${playerId}/characters`);
+  return data.characters.reduce((sum, c) => sum + (c.xp || 0), 0);
+}
+// grantRewards roda de forma assíncrona após o fim; aguarda a persistência no banco
+let xpA = 0;
+let xpB = 0;
+const xpDeadline = Date.now() + 5000;
+while (Date.now() < xpDeadline) {
+  [xpA, xpB] = await Promise.all([totalXp(A.player.id), totalXp(B.player.id)]);
+  if (xpA > 0 || xpB > 0) break;
+  await sleep(100);
+}
+check('vencedor ganhou XP (persistido no banco)', xpA > 0 || xpB > 0, `xp A=${xpA}, B=${xpB}`);
 
 // Histórico
 const hist = await new Promise((resolve, reject) => {

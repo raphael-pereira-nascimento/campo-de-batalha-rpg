@@ -66,18 +66,18 @@ export const CLASSES = {
 };
 
 export const SPELLS = {
-  golpe_sangrento: { nome: 'Golpe Sangrento', tipo: 'ataque', custo: 5, poder: 2.0, desc: 'Ataque físico brutal com força aumentada.' },
+  golpe_sangrento: { nome: 'Golpe Sangrento', tipo: 'ataque', custo: 5, poder: 2.0, desc: 'Ataque físico brutal com força aumentada.', status: { tipo: 'sangramento', turnos: 2, dano: 6 } },
   grito_de_guerra: { nome: 'Grito de Guerra', tipo: 'buff', custo: 6, poder: 0.15, desc: 'Aumenta o dano físico de todos os aliados.' },
   muralha: { nome: 'Muralha', tipo: 'defesa', custo: 6, poder: 0.25, desc: 'Reduz o dano recebido nesta rodada.' },
 
-  bola_de_fogo: { nome: 'Bola de Fogo', tipo: 'ataque', custo: 8, poder: 2.4, desc: 'Explosão de fogo devastadora.' },
+  bola_de_fogo: { nome: 'Bola de Fogo', tipo: 'ataque', custo: 8, poder: 2.4, desc: 'Explosão de fogo devastadora.', status: { tipo: 'queimadura', turnos: 3, dano: 5 } },
   raio: { nome: 'Raio', tipo: 'ataque', custo: 6, poder: 1.8, desc: 'Descarga elétrica precisa.' },
-  gelo: { nome: 'Gelo', tipo: 'ataque', custo: 7, poder: 1.6, desc: 'Congela o alvo e reduz a velocidade dele.' },
+  gelo: { nome: 'Gelo', tipo: 'ataque', custo: 7, poder: 1.6, desc: 'Congela o alvo e reduz a velocidade dele.', status: { tipo: 'congelamento', turnos: 2 } },
   escudo_arcano: { nome: 'Escudo Arcano', tipo: 'defesa', custo: 7, poder: 0.3, desc: 'Barreira mágica que absorve dano.' },
 
   tiro_preciso: { nome: 'Tiro Preciso', tipo: 'ataque', custo: 4, poder: 1.5, desc: 'Dano crítico elevado.' },
   chuva_de_flechas: { nome: 'Chuva de Flechas', tipo: 'ataque', custo: 9, poder: 2.2, desc: 'Acerta todos os inimigos.' },
-  flecha_ardente: { nome: 'Flecha Ardente', tipo: 'ataque', custo: 6, poder: 1.9, desc: 'Flecha em chamas que causa queimadura.' },
+  flecha_ardente: { nome: 'Flecha Ardente', tipo: 'ataque', custo: 6, poder: 1.9, desc: 'Flecha em chamas que causa queimadura.', status: { tipo: 'queimadura', turnos: 3, dano: 6 } },
 
   cura: { nome: 'Cura', tipo: 'cura', custo: 6, poder: 2.0, desc: 'Restaura HP com base na inteligência.' },
   cura_massa: { nome: 'Cura em Massa', tipo: 'cura', custo: 12, poder: 1.2, desc: 'Cura todos os aliados vivos.' },
@@ -85,7 +85,7 @@ export const SPELLS = {
   benção: { nome: 'Benção', tipo: 'buff', custo: 5, poder: 0.1, desc: 'Aumenta o dano mágico dos aliados.' },
 
   golpe_preciso: { nome: 'Golpe Preciso', tipo: 'ataque', custo: 5, poder: 1.6, desc: 'Ataque certeiro que tem alta chance de crítico.' },
-  veneno: { nome: 'Veneno', tipo: 'ataque', custo: 6, poder: 1.4, desc: 'Envenena o alvo, causando dano contínuo.' },
+  veneno: { nome: 'Veneno', tipo: 'ataque', custo: 6, poder: 1.4, desc: 'Envenena o alvo, causando dano contínuo.', status: { tipo: 'veneno', turnos: 3, dano: 4 } },
   sombra: { nome: 'Sombra', tipo: 'defesa', custo: 5, poder: 0.3, desc: 'Desaparece nas sombras, reduzindo muito o dano recebido.' },
 
   golpe_sagrado: { nome: 'Golpe Sagrado', tipo: 'ataque', custo: 7, poder: 2.0, desc: 'Espada envolta em luz sagrada.' },
@@ -116,6 +116,21 @@ export const EQUIPMENT = {
     armadura_leve: { nome: 'Armadura Leve', tipo: 'armadura', defesa: 5, bonus: { reflexos: 1 } },
   },
 };
+
+// Efeitos de status aplicados em batalha.
+// tipo: dot = dano por turno | hot = cura por turno | debuff = penalidade passiva | cc = controle (pula turnos)
+export const STATUS_DEFS = {
+  queimadura: { id: 'queimadura', nome: 'Queimadura', icon: '🔥', tipo: 'dot', desc: 'Causa dano de fogo a cada turno.' },
+  sangramento: { id: 'sangramento', nome: 'Sangramento', icon: '🩸', tipo: 'dot', desc: 'Perde HP a cada turno.' },
+  veneno: { id: 'veneno', nome: 'Veneno', icon: '☠️', tipo: 'dot', desc: 'Causa dano de veneno a cada turno.' },
+  regeneracao: { id: 'regeneracao', nome: 'Regeneração', icon: '🌿', tipo: 'hot', desc: 'Recupera HP a cada turno.' },
+  lentidao: { id: 'lentidao', nome: 'Lentidão', icon: '🐢', tipo: 'debuff', desc: 'Reduz a precisão e a esquiva.' },
+  cegueira: { id: 'cegueira', nome: 'Cegueira', icon: '🌫️', tipo: 'debuff', desc: 'Reduz muito a chance de acerto.' },
+  fraqueza: { id: 'fraqueza', nome: 'Fraqueza', icon: '💢', tipo: 'debuff', desc: 'Reduz o dano físico e mágico causado.' },
+  congelamento: { id: 'congelamento', nome: 'Congelamento', icon: '🧊', tipo: 'cc', desc: 'Pula os turnos até se libertar do gelo.' },
+};
+
+export const STATUS_KEYS = Object.keys(STATUS_DEFS);
 
 export const POTIONS = {
   pocao_cura: { nome: 'Poção de Cura', tipo: 'pocao', cura: 25, desc: 'Restaura 25 de HP.' },

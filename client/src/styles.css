@@ -564,6 +564,18 @@ label {
   font-weight: 700;
   color: var(--accent-2);
 }
+.log-status {
+  border-left-color: var(--accent);
+  font-style: italic;
+}
+.status-tag {
+  background: rgba(154, 106, 255, 0.18);
+  color: #d9c8ff;
+}
+.status-tag.cc-tag {
+  background: rgba(90, 200, 250, 0.18);
+  color: #bfeaff;
+}
 
 .action-panel {
   display: flex;
@@ -914,3 +926,29 @@ button.danger {
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
+.error-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+}
+
+.error-page h1 {
+  margin: 0;
+  color: var(--red);
+}
+
+.error-page p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.error-page button {
+  margin-top: 8px;
+}
+

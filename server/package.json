@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "init-db": "node src/db/init.js"
+    "init-db": "node src/db/init.js",
+    "backup": "node src/db/backup.js",
+    "test": "vitest run"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -16,5 +18,8 @@
     "pg": "^8.13.1",
     "socket.io": "^4.8.1",
     "uuid": "^11.0.3"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.10"
   }
 }

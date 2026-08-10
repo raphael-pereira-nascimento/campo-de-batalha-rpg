@@ -14,7 +14,7 @@ import {
   getCharacter,
   equipItem,
 } from './services/characters.js';
-import { CLASSES, SPELLS, EQUIPMENT, POTIONS } from './game/data.js';
+import { CLASSES, SPELLS, EQUIPMENT, POTIONS, STATUS_DEFS } from './game/data.js';
 import { RACES } from './game/races.js';
 import { MONSTERS } from './game/monsters.js';
 import {
@@ -42,6 +42,16 @@ const PORT = process.env.PORT || 3000;
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Healthcheck (usado pelo start-server.bat e por ferramentas de monitoramento)
+app.get('/api/health', async (_req, res) => {
+  try {
+    const dbUp = await testConnection();
+    res.json({ ok: true, db: dbUp ? 'up' : 'down', uptime: Math.round(process.uptime()) });
+  } catch (err) {
+    res.status(500).json({ ok: false, db: 'down', uptime: Math.round(process.uptime()), error: err.message });
+  }
+});
 
 // API
 app.post('/api/players', async (req, res) => {
@@ -99,6 +109,7 @@ app.get('/api/gamedata', (_req, res) => {
     potions: POTIONS,
     races: RACES,
     monsters: MONSTERS,
+    statuses: STATUS_DEFS,
   });
 });
 

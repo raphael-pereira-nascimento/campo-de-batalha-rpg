@@ -10,6 +10,7 @@ import {
   MIN_ATTRIBUTE,
   MAX_ATTRIBUTE,
   MAX_ATTRIBUTE_WITH_BONUS,
+  STATUS_KEYS,
 } from '../game/data.js';
 import { RACES } from '../game/races.js';
 import { getCustomEquipment } from './customContent.js';
@@ -30,6 +31,12 @@ function clampInt(v, min, max) {
   const n = Number(v);
   if (Number.isNaN(n)) return min;
   return Math.max(min, Math.min(max, Math.round(n)));
+}
+
+function clampFloat(v, min, max) {
+  const n = Number(v);
+  if (Number.isNaN(n)) return min;
+  return Math.max(min, Math.min(max, n));
 }
 
 function isObj(v) {
@@ -90,7 +97,18 @@ export function normalizeSkill(s = {}) {
     custo: clampInt(s.custo ?? 0, 0, 99),
     cooldown: clampInt(s.cooldown ?? 0, 0, 20),
     todos: !!s.todos,
+    status: normalizeStatus(s.status),
     desc: String(s.desc || '').slice(0, 200),
+  };
+}
+
+function normalizeStatus(st) {
+  if (!isObj(st) || !STATUS_KEYS.includes(st.tipo)) return null;
+  return {
+    tipo: st.tipo,
+    turnos: clampInt(st.turnos ?? 1, 1, 8),
+    dano: clampInt(st.dano ?? 0, 0, 999),
+    chance: clampFloat(st.chance ?? 1, 0.05, 1),
   };
 }
 
@@ -152,6 +170,7 @@ function presetSkillsFrom(classes) {
         custo: s.custo || 0,
         cooldown: 0,
         todos: s.nome === 'Cura em Massa',
+        status: s.status ? { ...s.status } : null,
         desc: s.desc || '',
       });
     }

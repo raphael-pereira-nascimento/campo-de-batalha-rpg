@@ -10,7 +10,9 @@
     "dev:client": "npm run dev --prefix client",
     "build": "npm run build --prefix client",
     "start": "node server/src/index.js",
-    "test": "cd client && node smoke-test.mjs"
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "npm run test --prefix server",
+    "test:e2e": "cd client && node smoke-test.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"
