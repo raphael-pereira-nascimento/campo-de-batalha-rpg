@@ -1,0 +1,18 @@
+{
+  "name": "campo-de-batalha-rpg",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Batalhas de RPG estilo Final Fantasy/Pokémon em tempo real para até 20 jogadores",
+  "scripts": {
+    "setup": "npm install --prefix server && npm install --prefix client",
+    "dev": "concurrently -n server,client -c blue,green \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "build": "npm run build --prefix client",
+    "start": "node server/src/index.js",
+    "test": "cd client && node smoke-test.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
