@@ -2,6 +2,7 @@ import { Server } from 'socket.io';
 import { BattleManager } from './game/battleManager.js';
 import { MONSTERS, defFromCustomMonster } from './game/monsters.js';
 import { getCharacter } from './services/characters.js';
+import { query } from './db/index.js';
 import { saveBattle, listFinishedBattles } from './services/battles.js';
 import { grantRewards } from './services/characters.js';
 import { getCustomMonster } from './services/customContent.js';
@@ -29,8 +30,28 @@ export function setupSockets(httpServer) {
     },
   });
 
+  async function authenticate(socket, token, ack) {
+    if (!token) return ack && ack({ ok: false, error: 'Token ausente.' });
+    try {
+      const { rows } = await query('SELECT id, name FROM players WHERE token = $1', [token]);
+      if (!rows.length) return ack && ack({ ok: false, error: 'Token inválido.' });
+      socket.data.playerId = rows[0].id;
+      socket.data.playerName = rows[0].name;
+      return ack && ack({ ok: true });
+    } catch (err) {
+      ack && ack({ ok: false, error: err.message });
+    }
+  }
+
   io.on('connection', (socket) => {
     socket.emit('lobbyUpdate', manager.listBattles());
+
+    socket.on('authenticate', (payload, ack) => authenticate(socket, payload && payload.token, ack));
+
+    const me = () => socket.data.playerId;
+    function assertAuthed() {
+      if (!socket.data.playerId) throw new Error('Você precisa estar autenticado.');
+    }
 
     socket.on('joinLobby', () => {
       socket.emit('lobbyUpdate', manager.listBattles());
@@ -53,12 +74,13 @@ export function setupSockets(httpServer) {
       }
     });
 
-    socket.on('createBattle', async ({ name, mode, playerId, characterId }, ack) => {
+    socket.on('createBattle', async ({ name, mode, characterId }, ack) => {
       try {
+        assertAuthed();
         const character = await getCharacter(characterId);
         if (!character) throw new Error('Personagem não encontrado.');
-        if (character.player_id !== playerId) throw new Error('Este personagem não é seu.');
-        const battle = manager.createBattle({ name, mode, host: playerId, hostName: socket.data.playerName || 'Anfitrião', character });
+        if (character.player_id !== me()) throw new Error('Este personagem não é seu.');
+        const battle = manager.createBattle({ name, mode, host: me(), hostName: socket.data.playerName || 'Anfitrião', character });
         socket.join(battle.id);
         publishBattle(io, manager, battle);
         ack({ ok: true, battleId: battle.id });
@@ -67,12 +89,13 @@ export function setupSockets(httpServer) {
       }
     });
 
-    socket.on('joinBattle', async ({ battleId, playerId, characterId, team }, ack) => {
+    socket.on('joinBattle', async ({ battleId, characterId, team }, ack) => {
       try {
+        assertAuthed();
         const character = await getCharacter(characterId);
         if (!character) throw new Error('Personagem não encontrado.');
-        if (character.player_id !== playerId) throw new Error('Este personagem não é seu.');
-        const battle = manager.joinBattle({ battleId, playerId, playerName: socket.data.playerName || character.name, character, team });
+        if (character.player_id !== me()) throw new Error('Este personagem não é seu.');
+        const battle = manager.joinBattle({ battleId, playerId: me(), playerName: socket.data.playerName || character.name, character, team });
         socket.join(battleId);
         publishBattle(io, manager, battle);
         ack({ ok: true, battleId: battle.id });
@@ -97,29 +120,31 @@ export function setupSockets(httpServer) {
       }
     });
 
-    socket.on('startBattle', ({ battleId, playerId }, ack) => {
+    socket.on('startBattle', ({ battleId }, ack) => {
       try {
-        const battle = manager.startBattle({ battleId, playerId });
+        assertAuthed();
+        const battle = manager.startBattle({ battleId, playerId: me() });
         ack({ ok: true, battle });
       } catch (err) {
         ack({ ok: false, error: err.message });
       }
     });
 
-    socket.on('addMonster', async ({ battleId, playerId, monsterId, customMonsterId }, ack) => {
+    socket.on('addMonster', async ({ battleId, monsterId, customMonsterId }, ack) => {
       try {
+        assertAuthed();
         let def = null;
         if (customMonsterId) {
           const row = await getCustomMonster(customMonsterId);
           if (!row) throw new Error('Monstro customizado não encontrado.');
-          if (row.creator_id !== playerId) throw new Error('Este monstro não é seu.');
+          if (row.creator_id !== me()) throw new Error('Este monstro não é seu.');
           def = defFromCustomMonster(row);
         } else if (MONSTERS[monsterId]) {
           def = MONSTERS[monsterId];
         } else {
           throw new Error('Monstro desconhecido.');
         }
-        const battle = manager.addMonster({ battleId, hostId: playerId, monsterDef: def });
+        const battle = manager.addMonster({ battleId, hostId: me(), monsterDef: def });
         publishBattle(io, manager, battle);
         ack({ ok: true, battleId: battle.id });
       } catch (err) {
@@ -127,9 +152,9 @@ export function setupSockets(httpServer) {
       }
     });
 
-    socket.on('removeMonster', ({ battleId, playerId, participantId }, ack) => {
+    socket.on('removeMonster', ({ battleId, participantId }, ack) => {
       try {
-        const battle = manager.removeMonster({ battleId, hostId: playerId, participantId });
+        const battle = manager.removeMonster({ battleId, hostId: me(), participantId });
         publishBattle(io, manager, battle);
         ack({ ok: true });
       } catch (err) {
@@ -137,10 +162,22 @@ export function setupSockets(httpServer) {
       }
     });
 
-    socket.on('battleAction', ({ battleId, characterId, playerId, action }, ack) => {
+    socket.on('battleAction', ({ battleId, characterId, action }, ack) => {
       try {
-        const battle = manager.handleAction({ battleId, characterId, playerId, action });
-        ack({ ok: true, battle: battle ? serializeBattle(battle) : null });
+        assertAuthed();
+        const battle = manager.getBattle(battleId);
+        if (!battle) throw new Error('Batalha não encontrada.');
+        const participant = battle.participants.find(
+          (q) => q.characterId === characterId || q.uid === characterId,
+        );
+        if (!participant) throw new Error('Participante não está na batalha.');
+        if (participant.isMonster) {
+          if (me() !== battle.host) throw new Error('Somente o mestre controla os inimigos.');
+        } else if (participant.playerId !== me()) {
+          throw new Error('Este personagem não é seu.');
+        }
+        const managed = manager.handleAction({ battleId, characterId, playerId: me(), action });
+        ack({ ok: true, battle: managed ? serializeBattle(managed) : null });
       } catch (err) {
         ack({ ok: false, error: err.message });
       }

@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { scryptSync, timingSafeEqual } from 'node:crypto';
 import { query } from '../db/index.js';
 import {
   CLASSES,
@@ -15,16 +17,42 @@ import {
 import { RACES } from '../game/races.js';
 import { getCustomEquipment } from './customContent.js';
 
-export async function createPlayer(name) {
-  const trimmed = String(name).trim();
+export function hashPassword(password) {
+  const salt = randomUUID().replace(/-/g, '');
+  const hash = scryptSync(password, salt, 32).toString('hex');
+  return `${salt}$${hash}`;
+}
+
+export function verifyPassword(password, stored) {
+  if (!stored || !stored.includes('$')) return false;
+  const [salt, hash] = stored.split('$');
+  const candidate = scryptSync(password, salt, 32).toString('hex');
+  return timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(candidate, 'hex'));
+}
+
+export async function createPlayer(name, password) {
+  const trimmed = String(name || '').trim();
   if (!trimmed) throw new Error('Informe um nome de jogador.');
+  if (!password) throw new Error(' Informe uma senha.');
+  const pw = String(password);
+  if (pw.length < 4) throw new Error('A senha precisa de pelo menos 4 caracteres.');
+  const existing = await query('SELECT id, password_hash FROM players WHERE name = $1', [trimmed]);
+  if (existing.rows.length > 0) {
+    const row = existing.rows[0];
+    if (!verifyPassword(pw, row.password_hash)) {
+      throw new Error('Senha incorreta.');
+    }
+    const token = randomUUID();
+    const { rows } = await query('UPDATE players SET token = $1 WHERE id = $2 RETURNING id, name', [token, row.id]);
+    return { ...rows[0], token };
+  }
+  const token = randomUUID();
   const { rows } = await query(
-    `INSERT INTO players (name) VALUES ($1)
-     ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+    `INSERT INTO players (name, password_hash, token) VALUES ($1, $2, $3)
      RETURNING id, name`,
-    [trimmed],
+    [trimmed, hashPassword(pw), token],
   );
-  return rows[0];
+  return { ...rows[0], token };
 }
 
 function clampInt(v, min, max) {
@@ -379,6 +407,10 @@ export async function grantRewards(battle) {
     const stats = deriveStats(char.classes, level, attributes, char.equipment, char.races);
     const hpMax = stats.hpMax;
     const mpMax = stats.mpMax;
+
+    // Recompensa em moedas: vencedor ganha cobre (ℛ) + bônus por abates.
+    const coins = 100 + (p.kills || 0) * 25;
+
     await query(
       `UPDATE characters
        SET xp = $1, level = $2, hp_max = $3, mp_max = $4, hp_current = $5, mp_current = $6,
@@ -395,5 +427,48 @@ export async function grantRewards(battle) {
         p.characterId,
       ],
     );
+    const playerId = char.player_id;
+    if (playerId && coins > 0) {
+      await query('UPDATE players SET wallet_cents = (wallet_cents + $1) WHERE id = $2', [coins, playerId]);
+    }
   }
 }
+
+export async function getWallet(playerId) {
+  const { rows } = await query('SELECT wallet_cents, name FROM players WHERE id = $1', [playerId]);
+  if (!rows.length) throw new Error('Jogador não encontrado.');
+  return { cents: Number(rows[0].wallet_cents) || 0 };
+}
+
+export async function addWalletCents(playerId, cents) {
+  await query('UPDATE players SET wallet_cents = wallet_cents + $1 WHERE id = $2', [cents, playerId]);
+  return getWallet(playerId);
+}
+
+// Formata centavos (ℛ) para as moedas do jogo.
+// 1 Prata = 100 ℛ | 1 Ouro = 1.000 ℛ | 1 Ouropla = 10.000 ℛ | 1 Platina = 100.000 ℛ
+export function formatCoins(cents) {
+  const c = Math.max(0, Number(cents) || 0);
+  const platina = Math.floor(c / 100000);
+  const ouropla = Math.floor((c % 100000) / 10000);
+  const ouro = Math.floor((c % 10000) / 1000);
+  const prata = Math.floor((c % 1000) / 100);
+  const cobre = c % 100;
+  const parts = [];
+  if (platina) parts.push(`${platina} 🪙`);
+  if (ouropla) parts.push(`${ouropla} 🟪`);
+  if (ouro) parts.push(`${ouro} 🟡`);
+  if (prata) parts.push(`${prata} ⚪`);
+  if (cobre || parts.length === 0) parts.push(`${cobre} ℛ`);
+  return parts.join(' ');
+}
+
+// Preços da loja (em cobre ℛ).
+export const SHOP_ITEMS = {
+  antidoto: { nome: 'Antídoto', tipo: 'item', preco: 50, removeStatus: 'veneno', desc: 'Remove o veneno.' },
+  balsamo_de_fogo: { nome: 'Bálsamo de Fogo', tipo: 'item', preco: 60, removeStatus: 'queimadura', desc: 'Apaga queimaduras.' },
+  kit_de_curativo: { nome: 'Kit de Curativo', tipo: 'item', preco: 50, removeStatus: 'sangramento', desc: 'Para o sangramento.' },
+  elixir_antigelo: { nome: 'Elixir Antigelo', tipo: 'item', preco: 80, removeStatus: 'congelamento', desc: 'Rompe o gelo.' },
+  pocao_cura_grande: { nome: 'Poção de Cura Grande', tipo: 'item', preco: 120, cura: 60, desc: 'Restaura 60 de HP.' },
+  elixir_mana_grande: { nome: 'Elixir de Mana Grande', tipo: 'item', preco: 100, mana: 50, desc: 'Restaura 50 de MP.' },
+};

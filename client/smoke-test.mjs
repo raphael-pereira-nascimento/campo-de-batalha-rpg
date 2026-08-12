@@ -2,13 +2,16 @@ import { io } from 'socket.io-client';
 
 const BASE = 'http://localhost:3000';
 
-async function req(url, body) {
+async function req(url, body, token) {
   const res = await fetch(BASE + url, {
-    headers: { 'Content-Type': 'application/json' },
     method: body ? 'POST' : 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
   });
-  const json = await res.json();
+  const json = await res.json().catch(() => ({ ok: false, error: 'erro' }));
   if (!res.ok || json.ok === false) throw new Error(`${url} -> ${json.error || 'erro'}`);
   return json;
 }
@@ -31,19 +34,28 @@ function waitFor(predicate, timeout = 8000) {
   });
 }
 
+const PASSWORDS = { alfa: 'senha123', bravo: 'senha123', mestrekai: 'senha123', delta: 'senha123' };
+
 async function createPlayerAndCharacter(name, cls, attrs) {
-  const { player } = await req('/api/players', { name });
-  const { character } = await req('/api/characters', {
-    playerId: player.id,
-    name: `Heroi_${name}`,
-    class: cls,
-    attributes: attrs,
-  });
-  return { player, character };
+  const key = String(name).toLowerCase().replace(/[^a-z]/g, '');
+  const password = PASSWORDS[key] || 'senha123';
+  const { player, token } = await req('/api/players', { name, password });
+  const { character } = await req(
+    '/api/characters',
+    { playerId: player.id, name: `Heroi_${name}`, class: cls, attributes: attrs },
+    token,
+  );
+  return { player, character, token };
 }
 
-function connect() {
-  return io(BASE);
+function connect(token) {
+  const s = io(BASE);
+  let authed = false;
+  s.on('connect', () => {
+    s.emit('authenticate', { token }, (ack) => { if (ack && ack.ok) authed = true; });
+  });
+  s._waitForAuth = () => waitFor(() => authed, 5000);
+  return s;
 }
 
 const results = [];
@@ -60,8 +72,8 @@ const B = await createPlayerAndCharacter('Bravo', 'mago', {
 });
 check('cria 2 jogadores e 2 fichas', A.player.id && B.player.id && A.character.id && B.character.id);
 
-const sockA = connect();
-const sockB = connect();
+const sockA = connect(A.token);
+const sockB = connect(B.token);
 const stateA = { battle: null, updates: [] };
 const stateB = { battle: null, updates: [] };
 
@@ -74,7 +86,8 @@ sockB.on('battleUpdate', (b) => {
   stateB.updates.push(b);
 });
 
-await new Promise((r) => setTimeout(r, 300));
+await sleep(500);
+await Promise.all([sockA._waitForAuth(), sockB._waitForAuth()].map((p) => p.catch(() => {})));
 
 function emit(sock, event, payload) {
   return new Promise((resolve, reject) => {
@@ -214,37 +227,33 @@ check('gamedata tem Assassino e Paladino', !!gamedata.classes.assassino && !!gam
 
 // classe customizada
 const { cls: customClass } = await req('/api/custom-classes', {
-  creatorId: A.player.id,
   name: 'Bárbaro das Feras',
   funcao: 'Tanque selvagem',
   passiva: 'Fica mais forte ao perder HP',
   forcas: 'Dano físico',
   fraquezas: 'Magia',
   archetype: 'guerreiro',
-});
+}, A.token);
 check('registra classe customizada', !!customClass.id);
 const classList = await req('/api/custom-classes');
 check('lista classes customizadas', classList.classes.some((c) => c.id === customClass.id));
+check('registra monstro customizado', !!customMonster.id);
 
 // monstro customizado
 const { monster: customMonster } = await req('/api/custom-monsters', {
-  creatorId: A.player.id,
   nome: 'Fel das Sombras',
   nivel: 6,
   attributes: { forca: 6, inteligencia: 2, resistencia: 5, destreza: 4, reflexos: 3 },
   arma: { nome: 'Garras Negras', danoBase: 11 },
   passiva: 'Regenera HP',
-});
-check('registra monstro customizado', !!customMonster.id);
+}, A.token);
 
 // ficha com raça e bônus de atributo
-const { character: racialChar } = await req('/api/characters', {
-  playerId: B.player.id,
-  name: 'OrcZul',
-  class: 'assassino',
-  race: 'orc',
-  attributes: { forca: 8, inteligencia: 1, resistencia: 6, destreza: 8, reflexos: 7 },
-});
+const { character: racialChar } = await req(
+  '/api/characters',
+  { playerId: B.player.id, name: 'OrcZul', class: 'assassino', race: 'orc', attributes: { forca: 8, inteligencia: 1, resistencia: 6, destreza: 8, reflexos: 7 } },
+  B.token,
+);
 check('ficha guarda a raça', racialChar.race === 'orc');
 check('vida nova (Resistência x10)', racialChar.hp_max === 60, `hp_max=${racialChar.hp_max}`);
 check('mana nova (Inteligência x10)', racialChar.mp_max === 10, `mp_max=${racialChar.mp_max}`);
@@ -256,8 +265,8 @@ const C = await createPlayerAndCharacter('MestreKai', 'guerreiro', {
 const D = await createPlayerAndCharacter('Delta', 'clerigo', {
   forca: 3, inteligencia: 8, resistencia: 5, destreza: 5, reflexos: 9,
 });
-const sockC = connect();
-const sockD = connect();
+const sockC = connect(C.token);
+const sockD = connect(D.token);
 const stateC = { battle: null };
 const stateD = { battle: null };
 sockC.on('battleUpdate', (b) => (stateC.battle = b));

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, getSocket } from './api.js';
+import { api, getSocket, getPlayer, getToken, logout } from './api.js';
 import Home from './pages/Home.jsx';
 import Characters from './pages/Characters.jsx';
 import Lobby from './pages/Lobby.jsx';
@@ -27,28 +27,33 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const stored = localStorage.getItem('cbr_player');
+    const stored = getPlayer();
     if (stored) {
-      const p = JSON.parse(stored);
-      setPlayer(p);
+      setPlayer(stored);
       api
-        .listCharacters(p.id)
+        .listCharacters(stored.id)
         .then((d) => {
           setCharacters(d.characters);
           setView('characters');
         })
-        .catch(() => setView('home'));
+        .catch(() => {
+          if (getToken()) {
+            logout();
+            setView('home');
+          }
+        });
     }
   }, []);
 
-  const handleLogin = async (name) => {
-    const { player: p } = await api.createPlayer(name);
-    localStorage.setItem('cbr_player', JSON.stringify(p));
-    localStorage.setItem('cbr_player_name', p.name);
-    setPlayer(p);
-    const d = await api.listCharacters(p.id);
+  const handleLogin = async (name, password) => {
+    const { player, token } = await api.createPlayer(name, password);
+    setPlayer(player);
+    localStorage.setItem('cbr_player_name', player.name);
+    localStorage.setItem('cbr_token', token);
+    const d = await api.listCharacters(player.id);
     setCharacters(d.characters);
     setView('characters');
+    return { player, token };
   };
 
   const refreshCharacters = async () => {
@@ -57,8 +62,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('cbr_player');
-    localStorage.removeItem('cbr_player_name');
+    logout();
     setPlayer(null);
     setCharacters([]);
     setView('home');

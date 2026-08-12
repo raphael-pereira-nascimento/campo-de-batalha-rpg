@@ -7,12 +7,17 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { setupSockets } from './sockets.js';
 import { testConnection } from './db/index.js';
+import { requireAuth } from './middleware/auth.js';
+import { query } from './db/index.js';
 import {
   createPlayer,
   createCharacter,
   listCharacters,
   getCharacter,
   equipItem,
+  getWallet,
+  formatCoins,
+  SHOP_ITEMS,
 } from './services/characters.js';
 import { CLASSES, SPELLS, EQUIPMENT, POTIONS, STATUS_DEFS } from './game/data.js';
 import { RACES } from './game/races.js';
@@ -56,15 +61,54 @@ app.get('/api/health', async (_req, res) => {
 // API
 app.post('/api/players', async (req, res) => {
   try {
-    const player = await createPlayer(req.body.name);
+    const player = await createPlayer(req.body.name, req.body.password);
     res.json({ ok: true, player });
+  } catch (err) {
+    const status = err.message.includes('incorreta') || err.message.includes('senha') ? 401 : 400;
+    res.status(status).json({ ok: false, error: err.message });
+  }
+});
+
+// Rotas protegidas: exigem Authorization: Bearer <token>.
+// Listagens públicas (gamedata, listas de custom content) permanecem abertas.
+app.get('/api/wallet', requireAuth, async (req, res) => {
+  try {
+    const wallet = await getWallet(req.player.id);
+    res.json({ ok: true, wallet });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
 });
 
-app.get('/api/players/:id/characters', async (req, res) => {
+app.get('/api/shop', (_req, res) => {
+  res.json({ ok: true, items: SHOP_ITEMS });
+});
+
+app.post('/api/shop/buy', requireAuth, async (req, res) => {
   try {
+    const { itemId, playerId } = req.body;
+    const item = SHOP_ITEMS[itemId];
+    if (!item) throw new Error('Item de loja inválido.');
+    const { rows } = await query(
+      'SELECT wallet_cents, id FROM players WHERE id = $1 FOR UPDATE',
+      [req.player.id],
+    );
+    if (!rows.length) throw new Error('Jogador não encontrado.');
+    if (Number(rows[0].wallet_cents) < item.preco) throw new Error('Ouro insuficiente.');
+    if (playerId !== req.player.id) throw new Error('Não pode comprar para outro jogador.');
+    await query('UPDATE players SET wallet_cents = wallet_cents - $1 WHERE id = $2', [
+      item.preco,
+      req.player.id,
+    ]);
+    res.json({ ok: true, item });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/players/:id/characters', requireAuth, async (req, res) => {
+  try {
+    if (req.params.id !== req.player.id) return res.status(403).json({ ok: false, error: 'Acesso negado.' });
     const chars = await listCharacters(req.params.id);
     res.json({ ok: true, characters: chars });
   } catch (err) {
@@ -72,9 +116,10 @@ app.get('/api/players/:id/characters', async (req, res) => {
   }
 });
 
-app.post('/api/characters', async (req, res) => {
+app.post('/api/characters', requireAuth, async (req, res) => {
   try {
-    const character = await createCharacter(req.body);
+    const body = { ...req.body, playerId: req.player.id };
+    const character = await createCharacter(body);
     res.json({ ok: true, character });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
@@ -124,30 +169,27 @@ app.get('/api/custom-classes', async (_req, res) => {
   }
 });
 
-app.post('/api/custom-classes', async (req, res) => {
+app.post('/api/custom-classes', requireAuth, async (req, res) => {
   try {
-    const { creatorId, ...data } = req.body;
-    const cls = await createCustomClass(creatorId, data);
+    const cls = await createCustomClass(req.player.id, req.body);
     res.json({ ok: true, cls });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
 });
 
-app.put('/api/custom-classes/:id', async (req, res) => {
+app.put('/api/custom-classes/:id', requireAuth, async (req, res) => {
   try {
-    const { creatorId, ...data } = req.body;
-    const cls = await updateCustomClass(req.params.id, creatorId, data);
+    const cls = await updateCustomClass(req.params.id, req.player.id, req.body);
     res.json({ ok: true, cls });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
 });
 
-app.delete('/api/custom-classes/:id', async (req, res) => {
+app.delete('/api/custom-classes/:id', requireAuth, async (req, res) => {
   try {
-    const { creatorId } = req.body;
-    await deleteCustomClass(req.params.id, creatorId);
+    await deleteCustomClass(req.params.id, req.player.id);
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
@@ -163,20 +205,18 @@ app.get('/api/custom-monsters', async (_req, res) => {
   }
 });
 
-app.post('/api/custom-monsters', async (req, res) => {
+app.post('/api/custom-monsters', requireAuth, async (req, res) => {
   try {
-    const { creatorId, ...data } = req.body;
-    const monster = await createCustomMonster(creatorId, data);
+    const monster = await createCustomMonster(req.player.id, req.body);
     res.json({ ok: true, monster });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
 });
 
-app.delete('/api/custom-monsters/:id', async (req, res) => {
+app.delete('/api/custom-monsters/:id', requireAuth, async (req, res) => {
   try {
-    const { creatorId } = req.body;
-    await deleteCustomMonster(req.params.id, creatorId);
+    await deleteCustomMonster(req.params.id, req.player.id);
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
@@ -194,20 +234,18 @@ app.get('/api/custom-races', async (_req, res) => {
   }
 });
 
-app.post('/api/custom-races', async (req, res) => {
+app.post('/api/custom-races', requireAuth, async (req, res) => {
   try {
-    const { creatorId, ...data } = req.body;
-    const race = await createCustomRace(creatorId, data);
+    const race = await createCustomRace(req.player.id, req.body);
     res.json({ ok: true, race });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
 });
 
-app.delete('/api/custom-races/:id', async (req, res) => {
+app.delete('/api/custom-races/:id', requireAuth, async (req, res) => {
   try {
-    const { creatorId } = req.body;
-    await deleteCustomRace(req.params.id, creatorId);
+    await deleteCustomRace(req.params.id, req.player.id);
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
@@ -223,20 +261,18 @@ app.get('/api/custom-equipment', async (_req, res) => {
   }
 });
 
-app.post('/api/custom-equipment', async (req, res) => {
+app.post('/api/custom-equipment', requireAuth, async (req, res) => {
   try {
-    const { creatorId, ...data } = req.body;
-    const item = await createCustomEquipment(creatorId, data);
+    const item = await createCustomEquipment(req.player.id, req.body);
     res.json({ ok: true, item });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
 });
 
-app.delete('/api/custom-equipment/:id', async (req, res) => {
+app.delete('/api/custom-equipment/:id', requireAuth, async (req, res) => {
   try {
-    const { creatorId } = req.body;
-    await deleteCustomEquipment(req.params.id, creatorId);
+    await deleteCustomEquipment(req.params.id, req.player.id);
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
@@ -252,20 +288,18 @@ app.get('/api/custom-skills', async (_req, res) => {
   }
 });
 
-app.post('/api/custom-skills', async (req, res) => {
+app.post('/api/custom-skills', requireAuth, async (req, res) => {
   try {
-    const { creatorId, ...data } = req.body;
-    const skill = await createCustomSkill(creatorId, data);
+    const skill = await createCustomSkill(req.player.id, req.body);
     res.json({ ok: true, skill });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
 });
 
-app.delete('/api/custom-skills/:id', async (req, res) => {
+app.delete('/api/custom-skills/:id', requireAuth, async (req, res) => {
   try {
-    const { creatorId } = req.body;
-    await deleteCustomSkill(req.params.id, creatorId);
+    await deleteCustomSkill(req.params.id, req.player.id);
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
