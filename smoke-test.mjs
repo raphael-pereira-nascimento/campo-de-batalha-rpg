@@ -196,8 +196,8 @@ check('dados rolados aparecem na crônica', hasDice);
 check('danos são menores que a vida (não estourou)', true);
 
 // XP / persistência
-async function totalXp(playerId) {
-  const data = await req(`/api/players/${playerId}/characters`);
+async function totalXp(playerId, token) {
+  const data = await req(`/api/players/${playerId}/characters`, null, token);
   return data.characters.reduce((sum, c) => sum + (c.xp || 0), 0);
 }
 // grantRewards roda de forma assíncrona após o fim; aguarda a persistência no banco
@@ -205,7 +205,7 @@ let xpA = 0;
 let xpB = 0;
 const xpDeadline = Date.now() + 5000;
 while (Date.now() < xpDeadline) {
-  [xpA, xpB] = await Promise.all([totalXp(A.player.id), totalXp(B.player.id)]);
+  [xpA, xpB] = await Promise.all([totalXp(A.player.id, A.token), totalXp(B.player.id, B.token)]);
   if (xpA > 0 || xpB > 0) break;
   await sleep(100);
 }
@@ -237,7 +237,6 @@ const { cls: customClass } = await req('/api/custom-classes', {
 check('registra classe customizada', !!customClass.id);
 const classList = await req('/api/custom-classes');
 check('lista classes customizadas', classList.classes.some((c) => c.id === customClass.id));
-check('registra monstro customizado', !!customMonster.id);
 
 // monstro customizado
 const { monster: customMonster } = await req('/api/custom-monsters', {
@@ -247,6 +246,7 @@ const { monster: customMonster } = await req('/api/custom-monsters', {
   arma: { nome: 'Garras Negras', danoBase: 11 },
   passiva: 'Regenera HP',
 }, A.token);
+check('registra monstro customizado', !!customMonster.id);
 
 // ficha com raça e bônus de atributo
 const { character: racialChar } = await req(

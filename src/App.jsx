@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, getSocket, getPlayer, getToken, logout } from './api.js';
+import { api, getSocket, getPlayer, getToken, logout, isOffline } from './api.js';
 import Home from './pages/Home.jsx';
 import Characters from './pages/Characters.jsx';
 import Lobby from './pages/Lobby.jsx';
@@ -12,18 +12,26 @@ export default function App() {
   const [characters, setCharacters] = useState([]);
   const [customClasses, setCustomClasses] = useState([]);
   const [gameData, setGameData] = useState(null);
+  const [gameDataError, setGameDataError] = useState(false);
   const [battleId, setBattleId] = useState(null);
+  const [offlineMode, setOfflineMode] = useState(isOffline());
 
   useEffect(() => {
     api
       .getGameData()
       .then((d) => setGameData(d))
-      .catch((e) => console.error(e));
+      .catch((e) => {
+        console.error(e);
+        setGameDataError(true);
+      });
     api
       .listCustomClasses()
       .then((d) => setCustomClasses(d.classes || []))
-      .catch((e) => console.error(e));
-    getSocket();
+      .catch(() => {});
+
+    if (!isOffline()) {
+      try { getSocket(); } catch (_) {}
+    }
   }, []);
 
   useEffect(() => {
@@ -37,7 +45,7 @@ export default function App() {
           setView('characters');
         })
         .catch(() => {
-          if (getToken()) {
+          if (getToken() && !isOffline()) {
             logout();
             setView('home');
           }
@@ -69,6 +77,36 @@ export default function App() {
   };
 
   if (!gameData) {
+    if (gameDataError) {
+      return (
+        <div className="loading">
+          <p>Não foi possível carregar os dados do jogo.</p>
+          {!isOffline() && (
+            <p className="muted">Verifique se o servidor está rodando.</p>
+          )}
+          <button
+            onClick={() => {
+              setGameDataError(false);
+              api
+                .getGameData()
+                .then((d) => setGameData(d))
+                .catch(() => setGameDataError(true));
+            }}
+          >
+            Tentar novamente
+          </button>
+          {!isOffline() && (
+            <button
+              className="ghost"
+              onClick={() => window.location.reload()}
+              style={{ marginTop: 8 }}
+            >
+              Recarregar página
+            </button>
+          )}
+        </div>
+      );
+    }
     return <div className="loading">Carregando o Campo de Batalha...</div>;
   }
 
@@ -100,6 +138,7 @@ export default function App() {
       <Lobby
         player={player}
         characters={characters}
+        gameData={gameData}
         onBack={() => setView('characters')}
         onOpenBattle={(id) => setBattleId(id)}
         onEnterBattle={() => setView('battle')}

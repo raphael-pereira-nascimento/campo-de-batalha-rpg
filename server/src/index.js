@@ -61,8 +61,8 @@ app.get('/api/health', async (_req, res) => {
 // API
 app.post('/api/players', async (req, res) => {
   try {
-    const player = await createPlayer(req.body.name, req.body.password);
-    res.json({ ok: true, player });
+    const { token, ...player } = await createPlayer(req.body.name, req.body.password);
+    res.json({ ok: true, player, token });
   } catch (err) {
     const status = err.message.includes('incorreta') || err.message.includes('senha') ? 401 : 400;
     res.status(status).json({ ok: false, error: err.message });
@@ -307,7 +307,7 @@ app.delete('/api/custom-skills/:id', requireAuth, async (req, res) => {
 });
 
 // Frontend build (produção)
-const clientDist = path.join(__dirname, '../../client/dist');
+const clientDist = path.join(__dirname, '../../dist');
 if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
   app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));

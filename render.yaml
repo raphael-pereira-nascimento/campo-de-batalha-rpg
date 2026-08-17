@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: campo-de-batalha-rpg
+    runtime: node
+    plan: free
+    buildCommand: npm install --prefix server
+    startCommand: node server/src/index.js
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: PORT
+        value: 3000
+
+  - type: pg
+    name: campo-de-batalha-db
+    plan: free
+    databaseName: campo_batalha_rpg
+    ipAllowList: []
