@@ -1,5 +1,6 @@
 import { query } from '../db/index.js';
 import { CLASSES, ATTRIBUTE_KEYS } from '../game/data.js';
+import { clamp } from '../utils.js';
 
 export function validateCustomClass(input) {
   const name = String(input.name || '').trim();
@@ -233,12 +234,6 @@ export function validateCustomEquipment(input) {
   };
 }
 
-function clamp(v, min, max) {
-  const n = Number(v);
-  if (Number.isNaN(n)) return min;
-  return Math.max(min, Math.min(max, Math.round(n)));
-}
-
 export async function createCustomEquipment(creatorId, input) {
   const data = validateCustomEquipment(input);
   const { rows } = await query(
@@ -265,7 +260,7 @@ export async function listCustomEquipment() {
      JOIN players p ON p.id = ce.creator_id
      ORDER BY ce.created_at DESC`,
   );
-  return rows;
+  return rows.map(decorateEquipment);
 }
 
 export async function getCustomEquipment(id) {

@@ -237,7 +237,6 @@ const { cls: customClass } = await req('/api/custom-classes', {
 check('registra classe customizada', !!customClass.id);
 const classList = await req('/api/custom-classes');
 check('lista classes customizadas', classList.classes.some((c) => c.id === customClass.id));
-check('registra monstro customizado', !!customMonster.id);
 
 // monstro customizado
 const { monster: customMonster } = await req('/api/custom-monsters', {
@@ -247,6 +246,7 @@ const { monster: customMonster } = await req('/api/custom-monsters', {
   arma: { nome: 'Garras Negras', danoBase: 11 },
   passiva: 'Regenera HP',
 }, A.token);
+check('registra monstro customizado', !!customMonster.id);
 
 // ficha com raça e bônus de atributo
 const { character: racialChar } = await req(

@@ -33,11 +33,3 @@ export const CONDITION_TYPES = {
   turnos: 'Após X turnos',
   aliadosCaidos: 'X aliados caídos',
 };
-
-export const BONUS_LABELS = {
-  forca: 'Força',
-  inteligencia: 'Inteligência',
-  resistencia: 'Resistência',
-  destreza: 'Destreza',
-  reflexos: 'Reflexos',
-};
