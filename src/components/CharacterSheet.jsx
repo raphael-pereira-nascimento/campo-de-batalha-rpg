@@ -178,7 +178,7 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
           <label>
             Arma
             <select
-              value={(character.equipment.arma && character.equipment.arma.id) || ''}
+              value={(character.equipment?.arma?.id) || ''}
               disabled={busy === 'arma'}
               onChange={(e) => equip('arma', e.target.value)}
             >
@@ -193,7 +193,7 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
           <label>
             Armadura
             <select
-              value={(character.equipment.armadura && character.equipment.armadura.id) || ''}
+              value={(character.equipment?.armadura?.id) || ''}
               disabled={busy === 'armadura'}
               onChange={(e) => equip('armadura', e.target.value)}
             >
@@ -206,15 +206,15 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
             </select>
           </label>
         </div>
-        {(character.equipment.arma || character.equipment.armadura) && (
+        {(character.equipment?.arma || character.equipment?.armadura) && (
           <div className="spell-list">
-            {character.equipment.arma && (
+            {character.equipment?.arma && (
               <div className="spell-chip">
                 <span>⚔️ {character.equipment.arma.nome}</span>
                 <small>dano {character.equipment.arma.danoBase} · {equipSummary(character.equipment.arma)}{character.equipment.arma.maleficio ? ` · ⚠️ ${character.equipment.arma.maleficio}` : ''}</small>
               </div>
             )}
-            {character.equipment.armadura && (
+            {character.equipment?.armadura && (
               <div className="spell-chip">
                 <span>🛡️ {character.equipment.armadura.nome}</span>
                 <small>def {character.equipment.armadura.defesa} · {equipSummary(character.equipment.armadura)}{character.equipment.armadura.maleficio ? ` · ⚠️ ${character.equipment.armadura.maleficio}` : ''}</small>

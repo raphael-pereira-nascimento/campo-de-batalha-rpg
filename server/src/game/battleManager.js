@@ -14,16 +14,13 @@ import {
 } from './data.js';
 import { RACES } from './races.js';
 import { buildMonster, bossActionsPerTurn } from './monsters.js';
+import { clamp } from '../utils.js';
 
 let logCounter = 0;
 
 function makeLog(text, kind = 'info') {
   logCounter += 1;
   return { id: logCounter, time: Date.now(), text, kind };
-}
-
-function clamp(v, min, max) {
-  return Math.max(min, Math.min(max, v));
 }
 
 function attrLabel(name) {
@@ -854,7 +851,10 @@ export class BattleManager {
     switch (action.type) {
       case 'attack': {
         if (!target || !target.alive) throw new Error('Escolha um alvo vivo.');
-        const weapon = p.equipment.arma ? EQUIPMENT.armas[p.equipment.arma.id] : null;
+        let weapon = null;
+        if (p.equipment?.arma) {
+          weapon = EQUIPMENT.armas[p.equipment.arma.id] || p.equipment.arma;
+        }
         this._resolveAttack(battle, p, target, weapon);
         break;
       }

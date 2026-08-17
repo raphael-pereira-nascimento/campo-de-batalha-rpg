@@ -86,20 +86,42 @@ app.get('/api/shop', (_req, res) => {
 
 app.post('/api/shop/buy', requireAuth, async (req, res) => {
   try {
-    const { itemId, playerId } = req.body;
+    const { itemId, characterId } = req.body;
     const item = SHOP_ITEMS[itemId];
     if (!item) throw new Error('Item de loja inválido.');
     const { rows } = await query(
-      'SELECT wallet_cents, id FROM players WHERE id = $1 FOR UPDATE',
+      'SELECT wallet_cents FROM players WHERE id = $1 FOR UPDATE',
       [req.player.id],
     );
     if (!rows.length) throw new Error('Jogador não encontrado.');
     if (Number(rows[0].wallet_cents) < item.preco) throw new Error('Ouro insuficiente.');
-    if (playerId !== req.player.id) throw new Error('Não pode comprar para outro jogador.');
     await query('UPDATE players SET wallet_cents = wallet_cents - $1 WHERE id = $2', [
       item.preco,
       req.player.id,
     ]);
+    if (characterId) {
+      const { rows: charRows } = await query(
+        'SELECT inventory FROM characters WHERE id = $1 AND player_id = $2',
+        [characterId, req.player.id],
+      );
+      if (charRows.length) {
+        const inventory = typeof charRows[0].inventory === 'string'
+          ? JSON.parse(charRows[0].inventory)
+          : (charRows[0].inventory || []);
+        inventory.push({
+          id: itemId,
+          nome: item.nome,
+          tipo: item.tipo,
+          cura: item.cura || null,
+          mana: item.mana || null,
+          removeStatus: item.removeStatus || null,
+        });
+        await query('UPDATE characters SET inventory = $1 WHERE id = $2', [
+          JSON.stringify(inventory),
+          characterId,
+        ]);
+      }
+    }
     res.json({ ok: true, item });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
@@ -126,7 +148,7 @@ app.post('/api/characters', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/characters/:id', async (req, res) => {
+app.get('/api/characters/:id', requireAuth, async (req, res) => {
   try {
     const character = await getCharacter(req.params.id);
     if (!character) return res.status(404).json({ ok: false, error: 'Não encontrado' });
@@ -136,7 +158,7 @@ app.get('/api/characters/:id', async (req, res) => {
   }
 });
 
-app.post('/api/characters/:id/equip', async (req, res) => {
+app.post('/api/characters/:id/equip', requireAuth, async (req, res) => {
   try {
     const { slot, itemId } = req.body;
     const character = await equipItem(req.params.id, slot, itemId);

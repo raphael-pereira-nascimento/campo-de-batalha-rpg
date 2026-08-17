@@ -1,7 +1,6 @@
 import { query } from '../db/index.js';
 
 export async function saveBattle(battle) {
-  const summary = battleToSummary(battle);
   await query(
     `INSERT INTO battles
       (id, name, status, turn_order, current_turn_index, log, winner, finished_at)
@@ -47,17 +46,6 @@ export async function saveBattle(battle) {
       ],
     );
   }
-  void summary;
-}
-
-function battleToSummary(battle) {
-  return {
-    id: battle.id,
-    name: battle.name,
-    status: battle.status,
-    winner: battle.winner,
-    participants: battle.participants.length,
-  };
 }
 
 export async function listFinishedBattles(limit = 10) {

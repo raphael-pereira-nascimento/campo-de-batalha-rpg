@@ -1,22 +1,28 @@
 # Campo de Batalha RPG
 
-Jogo de batalha estilo Final Fantasy / Pokémon em tempo real, suportando até 20 jogadores simultaneamente.
+Jogo de batalha estilo Final Fantasy / Pokémon em tempo real, suportando até 20 jogadores simultaneamente. Combina batalhas táticas por turnos com sistema de progressão, conteúdo customizado pelos jogadores e uma interface moderna baseada em web.
+
+Jogue **online** (com backend + PostgreSQL) ou **offline** (100% no browser, sem servidor).
 
 ## Funcionalidades
 
-- **Batalha por Turnos** com dados (d20), críticos, esquiva, defesa e status effects
-- **3 Modos de Jogo**: Livre, Equipes e Mestre vs Jogadores
-- **Criação de Personagem** com multi-raças, multi-classes, ultimate e especial
-- **22 Raças jogáveis** com bônus de atributo e passivas mecânicas
+- **Sistema de Batalha por Turnos** com dados (d20), críticos, esquiva, defesa e 8 status effects
+- **3 Modos de Jogo**: Livre (free-for-all), Equipes e Mestre vs Jogadores
+- **Modo Solo Offline** — batalhe contra monstros controlados por IA sem servidor
+- **Criação de Personagem** com multi-raças, multi-classes, golpes customizados, ultimate e especial
+- **23 Raças jogáveis** com bônus de atributo e passivas mecânicas
 - **6 Classes base** (Guerreiro, Mago, Arqueiro, Clérigo, Assassino, Paladino)
-- **Sistema de Loja** com moedas e itens de combate
+- **Sistema de Loja** com moedas (cobre, prata, ouro, ouropla, platina) e itens de combate
 - **World Registry** para criar classes, raças, equipamentos, golpes e monstros customizados
 - **Bestiário** com 10 monstros built-in + monstros customizados
+- **Sistema de Level-Up** com distribuição automática de atributos
+- **Recompensas Pós-Batalha** (XP, moedas, abates)
+- **Autenticação** com senhas e hashing scrypt
 
 ## Tecnologias
 
 | Camada | Tecnologia |
-|--------|-----------|
+|--------|------------|
 | Frontend | React 18 + Vite |
 | Backend | Node.js + Express |
 | Realtime | Socket.IO |
@@ -26,69 +32,162 @@ Jogo de batalha estilo Final Fantasy / Pokémon em tempo real, suportando até 2
 ## Pré-requisitos
 
 - [Node.js](https://nodejs.org/) >= 18
-- [PostgreSQL](https://www.postgresql.org/) >= 14
+- [PostgreSQL](https://www.postgresql.org/) >= 14 (apenas para modo online)
 
-## Instalação Local
+## Instalação
 
 ```bash
 git clone <url-do-repositorio>
 cd campo-de-batalha-rpg
-
-# Instalar dependências
-npm run setup
-
-# Configurar banco
-cp server/.env.example server/.env
-# Edite server/.env com sua DATABASE_URL
-npm run init-db --prefix server
-
-# Rodar (server + client simultâneamente)
-npm run dev
+npm install
 ```
 
-O frontend fica em `http://localhost:5173` e o backend em `http://localhost:3000`.
+## Executar o Projeto
 
-## Deploy Online (Render + GitHub Pages)
+```bash
+# Modo offline (sem servidor) — apenas frontend
+npm run dev
 
-### 1. Criar conta no [Render](https://render.com) (grátis)
+# Modo online (server + client simultaneamente)
+npm run dev
 
-### 2. Criar PostgreSQL no Render
-- New → PostgreSQL → Free tier
-- Copie a **Internal Database URL**
+# Produção (Windows)
+start-server.bat
+```
 
-### 3. Criar Web Service no Render
-- New → Web Service
-- Conecte seu repositório GitHub
-- Configurações:
-  - **Build Command:** `npm install --prefix server`
-  - **Start Command:** `node server/src/index.js`
-  - **Environment Variable:** `DATABASE_URL` = URL copiada do PostgreSQL
-- Anote a URL do serviço (ex: `https://campo-de-batalha-rpg.onrender.com`)
+> **Modo offline**: Basta rodar `npm run dev` sem configurar `VITE_API_URL`. O jogo detecta automaticamente e roda 100% no browser com `localStorage`.
 
-### 4. Configurar GitHub Pages
-- Vá em Settings → Pages do repositório
-- Source: **GitHub Actions**
+## Configuração do Banco de Dados (modo online)
 
-### 5. Atualizar a URL do backend
-- Edite `.github/workflows/deploy.yml`
-- Troque `VITE_SOCKET_URL` pela URL do Render
-- Faça push na branch `main` — o GitHub Actions faz deploy automático
+```bash
+# Configurar DATABASE_URL no .env na raiz do projeto
+# DATABASE_URL=postgresql://usuario:senha@localhost:5432/campo_batalha_rpg
 
-### 6. Inicializar o banco
-- No Render, rode no Shell: `npm run init-db --prefix server`
+# Criar as tabelas e migrar dados
+npm run init-db
+```
 
-O site ficará disponível em `https://<seu-usuario>.github.io/campo-de-batalha-rpg/`
+## Estrutura do Projeto
+
+```
+campo-de-batalha-rpg/
+├── src/                     # Frontend React + Vite
+│   ├── api.js               # Camada de API (REST + Socket.IO + modo offline)
+│   ├── config.js            # Constantes compartilhadas
+│   ├── App.jsx              # Componente raiz e roteamento
+│   ├── components/          # Componentes reutilizáveis
+│   │   ├── CharacterSheet.jsx   # Exibição de ficha
+│   │   ├── FichaForm.jsx        # Wizard de criação (10 passos)
+│   │   ├── StatBar.jsx          # Barra de HP/MP
+│   │   └── ErrorBoundary.jsx    # Error boundary React
+│   ├── pages/               # Páginas da aplicação
+│   │   ├── Home.jsx          # Login/Cadastro
+│   │   ├── Characters.jsx    # Gerenciamento de fichas
+│   │   ├── Lobby.jsx         # Lobby multiplayer + solo offline
+│   │   ├── Battle.jsx        # Tela de batalha
+│   │   └── Registry.jsx      # World Registry (CRUD de conteúdo)
+│   ├── game/                # Motor do jogo (portável para browser)
+│   │   ├── data.js           # Classes, golpes, equipamentos, fórmulas
+│   │   ├── races.js          # 23 raças jogáveis
+│   │   ├── monsters.js       # Bestiário e construção de monstros
+│   │   └── battleManager.js  # Máquina de estados da batalha
+│   ├── offline/             # Módulos de modo offline
+│   │   ├── storage.js        # localStorage para player, fichas, carteira
+│   │   ├── gameData.js       # Dados do jogo inline
+│   │   ├── ai.js             # IA para monstros
+│   │   └── battle.js         # Orquestrador de batalha offline
+│   └── styles.css            # Estilos globais (dark theme)
+├── server/                  # Backend Node.js
+│   └── src/
+│       ├── index.js          # Express server + rotas REST
+│       ├── sockets.js        # Socket.IO (lobby, batalha, auth)
+│       ├── db/               # PostgreSQL
+│       │   ├── index.js          # Pool de conexão
+│       │   ├── init.js           # Migrator CLI
+│       │   ├── backup.js         # Backup CLI
+│       │   └── migrations/       # SQL migrations
+│       ├── game/             # Lógica do jogo (server-side)
+│       │   ├── data.js
+│       │   ├── races.js
+│       │   ├── monsters.js
+│       │   └── battleManager.js
+│       ├── services/         # Lógica de negócio
+│       │   ├── characters.js
+│       │   ├── battles.js
+│       │   └── customContent.js
+│       ├── middleware/
+│       │   └── auth.js       # Middleware de autenticação
+│       └── utils.js
+├── .env                     # Variáveis de ambiente (DATABASE_URL)
+├── package.json             # Scripts e dependências
+├── arquitetura.md           # Documentação da arquitetura
+├── render.yaml              # Deploy automático no Render
+└── start-server.bat         # Script de produção (Windows)
+```
 
 ## Comandos
 
 | Comando | Descrição |
 |---------|-----------|
-| `npm run dev` | Server + client em desenvolvimento |
+| `npm run dev` | Frontend em desenvolvimento (funciona offline) |
 | `npm run build` | Build de produção |
 | `npm run start` | Servidor em produção |
-| `npm test` | Todos os testes (unit + e2e) |
+| `npm test` | Todos os testes (46 unit + 28 e2e) |
 | `npm run test:unit` | Testes unitários (vitest) |
 | `npm run test:e2e` | Smoke test (E2E) |
+| `npm run init-db` | Cria/migra as tabelas do banco |
+| `npm run backup` | Backup do banco PostgreSQL |
+
+## Deploy Online (Render + GitHub Pages)
+
+1. Criar conta no [Render](https://render.com) (grátis)
+2. Criar PostgreSQL → copiar **Internal Database URL**
+3. Criar Web Service → conectar repositório GitHub
+   - **Build Command:** `npm install --prefix server`
+   - **Start Command:** `node server/src/index.js`
+   - **Env Var:** `DATABASE_URL` = URL do PostgreSQL
+4. Configurar GitHub Pages → Source: **GitHub Actions**
+5. Atualizar `VITE_SOCKET_URL` no `.github/workflows/deploy.yml` com a URL do Render
+6. No Render Shell: `npm run init-db --prefix server`
+
+## Deploy Offline (GitHub Pages)
+
+O jogo funciona 100% offline sem backend. Para disponibilizar:
+
+```bash
+npm run build
+# O diretório dist/ pode ser hospedado em qualquer static host
+```
+
+## API REST
+
+| Método | Rota | Auth | Descrição |
+|--------|------|:---:|-----------|
+| POST | `/api/players` | - | Login/Cadastro |
+| GET | `/api/players/:id/characters` | ✓ | Listar personagens |
+| POST | `/api/characters` | ✓ | Criar personagem |
+| GET | `/api/characters/:id` | ✓ | Ver ficha |
+| POST | `/api/characters/:id/equip` | ✓ | Equipar item |
+| GET | `/api/wallet` | ✓ | Ver carteira |
+| GET | `/api/shop` | - | Itens da loja |
+| POST | `/api/shop/buy` | ✓ | Comprar item |
+| GET | `/api/gamedata` | - | Dados do jogo |
+| GET/POST/PUT/DELETE | `/api/custom-*` | ✓ | CRUD conteúdo customizado |
+
+## Eventos Socket.IO
+
+| Evento | Descrição |
+|--------|-----------|
+| `authenticate` | Autenticar com token |
+| `createBattle` | Criar batalha no lobby |
+| `joinBattle` | Entrar em batalha |
+| `leaveBattle` | Sair da batalha |
+| `startBattle` | Iniciar batalha |
+| `addMonster` | Adicionar monstro (modo mestre) |
+| `removeMonster` | Remover monstro (modo mestre) |
+| `battleAction` | Executar ação (ataque, magia, defender, etc.) |
+| `battleUpdate` | Receber atualização do estado da batalha |
+| `getHistory` | Consultar histórico de batalhas |
 
 ## Licença
 

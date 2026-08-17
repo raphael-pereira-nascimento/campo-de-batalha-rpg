@@ -203,6 +203,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
               onAdd={addRace}
               onRemove={(id) => setRaces((prev) => prev.filter((r) => r !== id))}
               penaltyPct={penaltyPct}
+              player={player}
             />
           )}
 
@@ -216,6 +217,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
               onPrimary={(id) =>
                 setClasses((prev) => prev.map((c) => ({ ...c, primary: c === id })))
               }
+              player={player}
             />
           )}
 
@@ -232,7 +234,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
           )}
 
           {step === 4 && (
-            <SkillsStep skills={skills} setSkills={setSkills} customSkills={customSkills} />
+            <SkillsStep skills={skills} setSkills={setSkills} customSkills={customSkills} player={player} />
           )}
 
           {step === 5 && (
@@ -259,6 +261,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
               customEquipment={customEquipment}
               equipment={equipment}
               setEquipment={setEquipment}
+              player={player}
             />
           )}
 
@@ -326,7 +329,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
   );
 }
 
-function RacesStep({ gameData, customRaces, races, onAdd, onRemove, penaltyPct }) {
+function RacesStep({ gameData, customRaces, races, onAdd, onRemove, penaltyPct, player }) {
   const [pick, setPick] = useState('');
   const [choice, setChoice] = useState('forca');
   const [creating, setCreating] = useState(false);
@@ -359,7 +362,7 @@ function RacesStep({ gameData, customRaces, races, onAdd, onRemove, penaltyPct }
     onAdd(def);
     if (publish) {
       try {
-        await api.createCustomRace({ creatorId: undefined, ...{ nome: def.nome, bonus: def.bonus, passiva: def.passiva } });
+        await api.createCustomRace({ creatorId: player.id, ...{ nome: def.nome, bonus: def.bonus, passiva: def.passiva } });
       } catch (_e) { /* publicação opcional */ }
     }
     setForm({ nome: '', bonus: {}, passiva: '' });
@@ -451,7 +454,7 @@ function RacesStep({ gameData, customRaces, races, onAdd, onRemove, penaltyPct }
   );
 }
 
-function ClassesStep({ gameData, customClasses, classes, onAdd, onRemove, onPrimary }) {
+function ClassesStep({ gameData, customClasses, classes, onAdd, onRemove, onPrimary, player }) {
   const [pick, setPick] = useState('');
   const [creating, setCreating] = useState(false);
   const [publish, setPublish] = useState(false);
@@ -498,7 +501,7 @@ function ClassesStep({ gameData, customClasses, classes, onAdd, onRemove, onPrim
     onAdd(def);
     if (publish) {
       try {
-        await api.createCustomClass({ creatorId: undefined, name: def.nome, funcao: '', passiva: '', forcas: '', fraquezas: '', archetype: form.archetype });
+        await api.createCustomClass({ creatorId: player.id, name: def.nome, funcao: '', passiva: '', forcas: '', fraquezas: '', archetype: form.archetype });
       } catch (_e) { /* opcional */ }
     }
     setForm({ nome: '', bonus: {}, hpPerLevel: 8, mpPerLevel: 5, levelUp: 'forca', archetype: 'guerreiro', spellList: [] });
@@ -607,7 +610,7 @@ function ClassesStep({ gameData, customClasses, classes, onAdd, onRemove, onPrim
   );
 }
 
-function SkillsStep({ skills, setSkills, customSkills }) {
+function SkillsStep({ skills, setSkills, customSkills, player }) {
   const [form, setForm] = useState({ nome: '', tipo: 'magia', poder: 150, custo: 5, cooldown: 0, todos: false });
   const [pickCustom, setPickCustom] = useState('');
   const [publish, setPublish] = useState(false);
@@ -618,7 +621,7 @@ function SkillsStep({ skills, setSkills, customSkills }) {
     setSkills((prev) => [...prev, skill]);
     if (publish) {
       try {
-        await api.createCustomSkill({ creatorId: undefined, nome: form.nome, tipo: form.tipo, poder: form.poder, custo: form.custo, cooldown: form.cooldown, todos: form.todos });
+        await api.createCustomSkill({ creatorId: player.id, nome: form.nome, tipo: form.tipo, poder: form.poder, custo: form.custo, cooldown: form.cooldown, todos: form.todos });
       } catch (_e) { /* opcional */ }
     }
     setForm({ nome: '', tipo: 'magia', poder: 150, custo: 5, cooldown: 0, todos: false });
@@ -823,7 +826,7 @@ function MegaSkillStep({ title, value, onChange, allowModo }) {
   );
 }
 
-function EquipStep({ gameData, customEquipment, equipment, setEquipment }) {
+function EquipStep({ gameData, customEquipment, equipment, setEquipment, player }) {
   const [creating, setCreating] = useState(false);
   const [publish, setPublish] = useState(false);
   const [form, setForm] = useState({
@@ -877,7 +880,7 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment }) {
     setEquipment((eq) => ({ ...eq, [form.tipo]: def }));
     if (publish) {
       try {
-        await api.createCustomEquipment({ creatorId: undefined, nome: form.nome, tipo: form.tipo, dano_base: form.dano_base, defesa: form.defesa, bonus: form.bonus, penalidade: form.penalidade, maleficio: form.maleficio });
+        await api.createCustomEquipment({ creatorId: player.id, nome: form.nome, tipo: form.tipo, dano_base: form.dano_base, defesa: form.defesa, bonus: form.bonus, penalidade: form.penalidade, maleficio: form.maleficio });
       } catch (_e) { /* opcional */ }
     }
     setForm({ tipo: 'arma', nome: '', dano_base: 6, defesa: 4, bonus: {}, penalidade: {}, maleficio: '' });

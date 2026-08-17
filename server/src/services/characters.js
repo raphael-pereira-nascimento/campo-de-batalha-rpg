@@ -16,6 +16,7 @@ import {
 } from '../game/data.js';
 import { RACES } from '../game/races.js';
 import { getCustomEquipment } from './customContent.js';
+import { clampInt, clampFloat } from '../utils.js';
 
 export function hashPassword(password) {
   const salt = randomUUID().replace(/-/g, '');
@@ -33,7 +34,7 @@ export function verifyPassword(password, stored) {
 export async function createPlayer(name, password) {
   const trimmed = String(name || '').trim();
   if (!trimmed) throw new Error('Informe um nome de jogador.');
-  if (!password) throw new Error(' Informe uma senha.');
+  if (!password) throw new Error('Informe uma senha.');
   const pw = String(password);
   if (pw.length < 4) throw new Error('A senha precisa de pelo menos 4 caracteres.');
   const existing = await query('SELECT id, password_hash FROM players WHERE name = $1', [trimmed]);
@@ -53,18 +54,6 @@ export async function createPlayer(name, password) {
     [trimmed, hashPassword(pw), token],
   );
   return { ...rows[0], token };
-}
-
-function clampInt(v, min, max) {
-  const n = Number(v);
-  if (Number.isNaN(n)) return min;
-  return Math.max(min, Math.min(max, Math.round(n)));
-}
-
-function clampFloat(v, min, max) {
-  const n = Number(v);
-  if (Number.isNaN(n)) return min;
-  return Math.max(min, Math.min(max, n));
 }
 
 function isObj(v) {
