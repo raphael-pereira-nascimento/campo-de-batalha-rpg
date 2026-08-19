@@ -1,8 +1,8 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig({
-  base: '/campo-de-batalha-rpg/',
+export default defineConfig(({ command }) => ({
+  base: command === 'serve' ? '/' : '/campo-de-batalha-rpg/',
   plugins: [react()],
   server: {
     port: 5173,
@@ -15,4 +15,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

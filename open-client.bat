@@ -5,4 +5,4 @@ rem Inicia o servidor Vite e abre o navegador automaticamente.
 cd /d "%~dp0"
 echo [client] Iniciando servidor Vite...
 start "" "http://localhost:5173"
-cmd /c "npm run dev:client --prefix client"
+npx vite
