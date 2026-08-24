@@ -97,8 +97,13 @@ describe('validateAttributes', () => {
     expect(() => validateAttributes({ ...ATTRS, forca: 'x' })).toThrow('inválido');
   });
 
-  it('lança erro se a soma não for 30', () => {
-    expect(() => validateAttributes({ ...ATTRS, forca: 1 })).toThrow('soma dos atributos');
+  it('lança erro se a soma passar de 30', () => {
+    expect(() => validateAttributes({ ...ATTRS, resistencia: 10 })).toThrow('soma dos atributos');
+  });
+
+  it('aceita soma abaixo de 30 quando pontos sobram para habilidades', () => {
+    const menor = { ...ATTRS, forca: 5 };
+    expect(validateAttributes(menor)).toEqual(menor);
   });
 
   it('lança erro se um atributo sair do intervalo 1..10', () => {

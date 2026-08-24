@@ -5,6 +5,7 @@ import { MONSTERS } from '../game/monsters.js';
 export default function Lobby({ player, characters, gameData, onBack, onOpenBattle, onEnterBattle }) {
   const [battles, setBattles] = useState([]);
   const [name, setName] = useState('');
+  const [role, setRole] = useState('jogador');
   const [mode, setMode] = useState('todos');
   const [charId, setCharId] = useState(characters[0]?.id || '');
   const [joinCharId, setJoinCharId] = useState(characters[0]?.id || '');
@@ -36,8 +37,8 @@ export default function Lobby({ player, characters, gameData, onBack, onOpenBatt
     setBusy(true);
     setError('');
     try {
-      const character = characters.find((c) => c.id === charId);
       if (isOffline()) {
+        const character = characters.find((c) => c.id === charId);
         const ack = await emitAck('createBattle', {
           name: name || 'Batalha Solo',
           mode: 'mestre',
@@ -47,11 +48,17 @@ export default function Lobby({ player, characters, gameData, onBack, onOpenBatt
         onOpenBattle(ack.battleId);
         onEnterBattle();
       } else {
+        const needsCharacter = role !== 'mestre';
+        if (needsCharacter && !charId) {
+          throw new Error(role === 'mestre_jogador' ? 'O Mestre Jogador precisa de um personagem para lutar.' : 'Selecione um personagem.');
+        }
+        const battleMode = role === 'jogador' ? mode : 'mestre';
         const ack = await emitAck('createBattle', {
           name,
-          mode,
+          mode: battleMode,
+          role,
           playerId: player.id,
-          characterId: charId,
+          characterId: needsCharacter ? charId : undefined,
         });
         onOpenBattle(ack.battleId);
         onEnterBattle();
@@ -182,30 +189,58 @@ export default function Lobby({ player, characters, gameData, onBack, onOpenBatt
                   <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Arena de Ferro" maxLength={30} />
                 </label>
                 <label>
-                  Modo
-                  <select value={mode} onChange={(e) => setMode(e.target.value)}>
-                    <option value="todos">Todos contra todos</option>
-                    <option value="equipes">2 Equipes (A × B)</option>
-                    <option value="mestre">Mestre vs Jogadores</option>
+                  Seu papel no combate
+                  <select value={role} onChange={(e) => setRole(e.target.value)}>
+                    <option value="jogador">🎮 Somente Jogador — luta com seu personagem</option>
+                    <option value="mestre_jogador">👑 Mestre Jogador — controla os inimigos e também luta</option>
+                    <option value="mestre">👁️ Somente Mestre — controla os inimigos, sem personagem</option>
                   </select>
                 </label>
-                {mode === 'mestre' && (
+                {role === 'jogador' && (
+                  <>
+                    <label>
+                      Modo
+                      <select value={mode} onChange={(e) => setMode(e.target.value)}>
+                        <option value="todos">Todos contra todos</option>
+                        <option value="equipes">2 Equipes (A × B)</option>
+                      </select>
+                    </label>
+                    <label>
+                      Seu personagem
+                      <select value={charId} onChange={(e) => setCharId(e.target.value)}>
+                        {characters.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} (Nv.{c.level})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </>
+                )}
+                {role === 'mestre_jogador' && (
+                  <>
+                    <p className="muted small">
+                      Você será o <strong>Mestre Jogador</strong>: monta e controla os inimigos ao vivo e ainda luta com seu próprio personagem.
+                    </p>
+                    <label>
+                      Seu personagem
+                      <select value={charId} onChange={(e) => setCharId(e.target.value)}>
+                        {characters.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} (Nv.{c.level})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </>
+                )}
+                {role === 'mestre' && (
                   <p className="muted small">
-                    Você será o <strong>Mestre</strong>: controla os inimigos ao vivo e também luta com seu personagem.
+                    Você será o <strong>Somente Mestre</strong>: monta e controla os inimigos ao vivo, mas seu personagem não entra no combate.
                   </p>
                 )}
-                <label>
-                  Seu personagem
-                  <select value={charId} onChange={(e) => setCharId(e.target.value)}>
-                    {characters.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} (Nv.{c.level})
-                      </option>
-                    ))}
-                  </select>
-                </label>
                 {error && <div className="error">{error}</div>}
-                <button type="submit" disabled={busy || !charId}>
+                <button type="submit" disabled={busy || (role !== 'mestre' && !charId)}>
                   Criar e Entrar
                 </button>
               </form>
@@ -220,6 +255,8 @@ export default function Lobby({ player, characters, gameData, onBack, onOpenBatt
                     <div>
                       <strong>{b.name}</strong>
                       <span className="tag">{b.mode === 'equipes' ? 'Equipes A×B' : b.mode === 'mestre' ? 'Mestre vs Jogadores' : 'Todos contra todos'}</span>
+                      {b.hostRole === 'mestre' && <span className="tag">👑 Somente Mestre</span>}
+                      {b.hostRole === 'mestre_jogador' && <span className="tag">👑 Mestre Jogador</span>}
                       <span className="tag">
                         {b.players}/20 jogadores
                       </span>

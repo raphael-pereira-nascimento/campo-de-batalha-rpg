@@ -329,6 +329,26 @@ export function rollDamage(diceSides, diceQty, bonus) {
   return { rolls, total };
 }
 
+// Multiplicadores de vida/mana vindos de passivas (raças + habilidades extras).
+export function applyMaxMults(stats, efeitos = {}) {
+  return {
+    ...stats,
+    hpMax: Math.max(1, Math.round(stats.hpMax * (efeitos.hpMaxMult || 1))),
+    mpMax: Math.max(1, Math.round(stats.mpMax * (efeitos.manaMaxMult || 1))),
+  };
+}
+
+// Soma os efeitos mecânicos das passivas extras compradas com pontos excedentes.
+export function efeitosDeHabilidades(habilidades) {
+  const out = {};
+  for (const h of habilidades || []) {
+    if (h.tipo === 'passiva_extra' && h.efeito) {
+      for (const [k, v] of Object.entries(h.efeito)) out[k] = (out[k] || 0) + v;
+    }
+  }
+  return out;
+}
+
 // ── Helpers para o Arsenal / Compendium ─────────────────
 
 export const WEAPON_CATEGORIES = {

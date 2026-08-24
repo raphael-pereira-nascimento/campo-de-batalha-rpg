@@ -1,13 +1,48 @@
 import { io } from 'socket.io-client';
 import { gameData } from './offline/gameData.js';
-import { isOffline, saveOfflinePlayer, getOfflinePlayer, getOfflineCharacters, saveOfflineCharacter, getOfflineWallet, addOfflineCoins, getOfflineGems, addOfflineGem, removeOfflineGem } from './offline/storage.js';
+import { isOffline, setServerStatus, saveOfflinePlayer, getOfflinePlayer, getOfflineCharacters, saveOfflineCharacter, getOfflineWallet, addOfflineCoins, getOfflineGems, addOfflineGem, removeOfflineGem } from './offline/storage.js';
 import { offlineBattle } from './offline/battle.js';
 import { MONSTERS } from './game/monsters.js';
+import { EQUIPMENT, POTIONS, deriveStats, applyMaxMults, efeitosDeHabilidades } from './game/data.js';
+
+// Soma os efeitos mecânicos das raças + passivas extras da ficha.
+function efeitosDaFicha(charOrPayload) {
+  const out = {};
+  for (const r of charOrPayload.races || []) {
+    for (const [k, v] of Object.entries(r.efeito || {})) out[k] = (out[k] || 0) + v;
+  }
+  for (const [k, v] of Object.entries(efeitosDeHabilidades(charOrPayload.habilidades))) {
+    out[k] = (out[k] || 0) + v;
+  }
+  return out;
+}
 
 const API = import.meta.env.VITE_API_URL || '';
 const SOCKET = import.meta.env.VITE_SOCKET_URL || undefined;
 
 let socket = null;
+
+// Sonda de conexão: chamada uma única vez na inicialização (main.jsx).
+// Se o backend não responder, o app inteiro opera em modo offline.
+// Duas tentativas porque o Render gratuito pode estar "acordando".
+export function initConnection() {
+  if (!API) return Promise.resolve(false);
+  const ping = (ms) => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), ms);
+    return fetch(API + '/api/health', { signal: ctrl.signal })
+      .then((r) => r.ok)
+      .catch(() => false)
+      .finally(() => clearTimeout(t));
+  };
+  return ping(10000)
+    .then((ok) => (ok ? true : ping(20000)))
+    .then((ok) => {
+      setServerStatus(ok ? 'up' : 'down');
+      console.info(`[conexao] servidor ${ok ? 'online' : 'indisponível — modo local ativado'}`);
+      return ok;
+    });
+}
 
 const TOKEN_KEY = 'cbr_token';
 
@@ -23,6 +58,12 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem('cbr_player');
   localStorage.removeItem('cbr_player_name');
+}
+
+// Cópia local de potionItem (mesma estrutura do servidor).
+function potionItem(id) {
+  const p = POTIONS[id];
+  return { id, nome: p.nome, tipo: 'pocao', cura: p.cura || null, mana: p.mana || null };
 }
 
 /* ─── Mock Socket for offline mode ─── */
@@ -133,10 +174,15 @@ export function getSocket() {
 }
 
 async function request(url, options = {}) {
-  const res = await fetch(API + url, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
+  let res;
+  try {
+    res = await fetch(API + url, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    });
+  } catch {
+    throw new Error('Servidor indisponível. Recarregue a página — se persistir, o modo local será usado no próximo acesso.');
+  }
   const json = await res.json().catch(() => ({ ok: false, error: 'Resposta inválida' }));
   if (!res.ok || json.ok === false) {
     throw new Error(json.error || 'Erro na requisição');
@@ -171,7 +217,29 @@ export const api = {
     if (isOffline()) {
       const chars = getOfflineCharacters();
       const id = 'offline-char-' + Date.now();
-      const character = { id, ...payload, playerId: payload.playerId || 'offline', level: payload.level || 1 };
+      const stats = applyMaxMults(
+        deriveStats(payload.classes || [], 1, payload.attributes, payload.equipment || {}, payload.races || []),
+        efeitosDaFicha(payload),
+      );
+      const skills = [...(payload.skills || [])];
+      const character = {
+        id,
+        ...payload,
+        playerId: payload.playerId || 'offline',
+        level: 1,
+        xp: 0,
+        hp_current: stats.hpMax,
+        hp_max: stats.hpMax,
+        mp_current: stats.mpMax,
+        mp_max: stats.mpMax,
+        defesa: stats.defesa,
+        inventory: [
+          potionItem('pocao_cura'),
+          potionItem('pocao_cura'),
+          potionItem('elixir_mana'),
+        ],
+        spells: skills.map((s) => s.id),
+      };
       chars.push(character);
       localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
       return Promise.resolve({ ok: true, character });
@@ -190,8 +258,25 @@ export const api = {
       const chars = getOfflineCharacters();
       const c = chars.find((ch) => ch.id === id);
       if (c) {
+        let item = null;
+        if (itemId) {
+          // Guarda a definição COMPLETA do item (dano/defesa/bônus/slots de gema),
+          // igual ao servidor — antes salvava só { id } e as stats zeravam.
+          const catalog = slot === 'arma' ? EQUIPMENT.armas : EQUIPMENT.armaduras;
+          const def = catalog[itemId];
+          item = def ? { id: itemId, ...def } : null;
+        }
         c.equipment = c.equipment || {};
-        c.equipment[slot] = itemId ? { id: itemId } : undefined;
+        c.equipment[slot] = item;
+        const stats = applyMaxMults(
+          deriveStats(c.classes || [], c.level || 1, c.attributes, c.equipment, c.races || []),
+          efeitosDaFicha(c),
+        );
+        c.hp_max = stats.hpMax;
+        c.mp_max = stats.mpMax;
+        c.hp_current = Math.min(c.hp_current ?? stats.hpMax, stats.hpMax);
+        c.mp_current = Math.min(c.mp_current ?? stats.mpMax, stats.mpMax);
+        c.defesa = stats.defesa;
         localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
       }
       return Promise.resolve({ ok: true, character: c });

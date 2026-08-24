@@ -7,6 +7,8 @@ import {
   EQUIPMENT,
   POTIONS,
   deriveStats,
+  applyMaxMults,
+  efeitosDeHabilidades,
   ATTRIBUTE_KEYS,
   POINTS_TO_DISTRIBUTE,
   MIN_ATTRIBUTE,
@@ -160,8 +162,8 @@ export function validateAttributes(attributes) {
     cleaned[key] = value;
     total += value;
   }
-  if (total !== POINTS_TO_DISTRIBUTE) {
-    throw new Error(`A soma dos atributos deve ser exatamente ${POINTS_TO_DISTRIBUTE}. Você distribuiu ${total}.`);
+  if (total > POINTS_TO_DISTRIBUTE) {
+    throw new Error(`A soma dos atributos não pode passar de ${POINTS_TO_DISTRIBUTE}. Você distribuiu ${total}.`);
   }
   for (const key of ATTRIBUTE_KEYS) {
     if (cleaned[key] < MIN_ATTRIBUTE || cleaned[key] > MAX_ATTRIBUTE) {
@@ -169,6 +171,56 @@ export function validateAttributes(attributes) {
     }
   }
   return cleaned;
+}
+
+// Habilidades compradas com pontos excedentes (idiomas, especialização em arma
+// e passivas extras). O cliente envia o catálogo pronto; aqui só sanitizamos.
+const HABILIDADE_TIPOS = ['idioma', 'especializacao', 'passiva_extra'];
+const CATEGORIAS_ARMA = ['corpo', 'distancia', 'fogo', 'magica'];
+const MAX_HABILIDADES = 6;
+
+export function normalizeHabilidade(h = {}) {
+  const tipo = HABILIDADE_TIPOS.includes(h.tipo) ? h.tipo : null;
+  if (!tipo) return null;
+  const clean = {
+    tipo,
+    id: String(h.id || `${tipo}_${Date.now()}`).slice(0, 40),
+    nome: String(h.nome || 'Habilidade').slice(0, 60),
+    custo: clampInt(h.custo ?? 1, 1, 3),
+  };
+  if (tipo === 'especializacao') {
+    if (!CATEGORIAS_ARMA.includes(h.categoria)) return null;
+    clean.categoria = h.categoria;
+  }
+  if (tipo === 'passiva_extra' && isObj(h.efeito)) {
+    const efeito = {};
+    for (const [k, v] of Object.entries(h.efeito)) {
+      const n = Number(v);
+      if (!Number.isNaN(n)) efeito[k] = n;
+    }
+    clean.efeito = efeito;
+  }
+  return clean;
+}
+
+function normalizeHabilidades(list) {
+  const arr = Array.isArray(list) ? list : [];
+  if (arr.length > MAX_HABILIDADES) throw new Error(`Máximo de ${MAX_HABILIDADES} habilidades extras.`);
+  const custoTotal = arr.reduce((s, h) => s + (Number(h.custo) || 0), 0);
+  if (custoTotal > POINTS_TO_DISTRIBUTE) throw new Error('Custo das habilidades excede os pontos disponíveis.');
+  return arr.map(normalizeHabilidade).filter(Boolean);
+}
+
+// Soma dos efeitos raciais + passivas extras (para multiplicadores de HP/MP).
+function efeitosDaFicha(races, habilidades) {
+  const out = {};
+  for (const r of races || []) {
+    for (const [k, v] of Object.entries(r.efeito || {})) out[k] = (out[k] || 0) + v;
+  }
+  for (const [k, v] of Object.entries(efeitosDeHabilidades(habilidades))) {
+    out[k] = (out[k] || 0) + v;
+  }
+  return out;
 }
 
 function presetSkillsFrom(classes) {
@@ -195,7 +247,7 @@ function presetSkillsFrom(classes) {
   return out;
 }
 
-export function buildCharacterData(playerId, { name, attributes, races, classes, passiva, skills, ultimate, especial, equipment, race, raceChoice, class: legacyClass }) {
+export function buildCharacterData(playerId, { name, gender, attributes, races, classes, passiva, skills, ultimate, especial, equipment, habilidades, race, raceChoice, class: legacyClass }) {
   const trimmed = String(name).trim();
   if (!trimmed) throw new Error('Informe o nome do personagem.');
 
@@ -208,13 +260,19 @@ export function buildCharacterData(playerId, { name, attributes, races, classes,
   const normClasses = rawClasses.map(normalizeClassDef);
   if (!normClasses.some((c) => c.primary)) normClasses[0].primary = true;
 
+  const normGender = ['masculino', 'feminino'].includes(gender) ? gender : null;
+  const normHabils = normalizeHabilidades(habilidades);
+
   const attrs = validateAttributes(attributes);
   const equipmentObj = {
     arma: equipment?.arma ? { ...equipment.arma } : null,
     armadura: equipment?.armadura ? { ...equipment.armadura } : null,
   };
 
-  const stats = deriveStats(normClasses, 1, attrs, equipmentObj, normRaces);
+  const stats = applyMaxMults(
+    deriveStats(normClasses, 1, attrs, equipmentObj, normRaces),
+    efeitosDaFicha(normRaces, normHabils),
+  );
   const hpMax = stats.hpMax;
   const mpMax = stats.mpMax;
 
@@ -224,6 +282,7 @@ export function buildCharacterData(playerId, { name, attributes, races, classes,
   return {
     playerId,
     name: trimmed,
+    gender: normGender,
     class: primary.archetype || primary.id,
     race: normRaces[0].id,
     custom_class_name: primary.id !== primary.archetype ? primary.nome : null,
@@ -233,6 +292,7 @@ export function buildCharacterData(playerId, { name, attributes, races, classes,
     skills: skillsList,
     ultimate: normalizeMegaSkill(ultimate),
     especial: normalizeMegaSkill(especial),
+    habilidades: normHabils,
     level: 1,
     xp: 0,
     hp_current: hpMax,
@@ -259,14 +319,15 @@ export async function createCharacter(input) {
   const data = buildCharacterData(input.playerId, input);
   const { rows } = await query(
     `INSERT INTO characters
-      (player_id, name, class, race, custom_class_name, races, classes, passiva, skills, ultimate, especial,
+      (player_id, name, gender, class, race, custom_class_name, races, classes, passiva, skills, ultimate, especial, habilidades,
        level, xp, hp_current, hp_max, mp_current, mp_max,
        attributes, equipment, inventory, spells)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
      RETURNING *`,
     [
       data.playerId,
       data.name,
+      data.gender,
       data.class,
       data.race,
       data.custom_class_name,
@@ -276,6 +337,7 @@ export async function createCharacter(input) {
       JSON.stringify(data.skills),
       JSON.stringify(data.ultimate),
       JSON.stringify(data.especial),
+      JSON.stringify(data.habilidades),
       data.level,
       data.xp,
       data.hp_current,
@@ -317,6 +379,8 @@ function decorateCharacter(row) {
     skills: jsonOrObj(row.skills) || [],
     ultimate: jsonOrObj(row.ultimate) || null,
     especial: jsonOrObj(row.especial) || null,
+    habilidades: jsonOrObj(row.habilidades) || [],
+    gender: row.gender || null,
   };
 }
 
@@ -351,7 +415,10 @@ export async function equipItem(characterId, slot, itemId) {
   }
 
   const equipment = { ...char.equipment, [slot]: item };
-  const stats = deriveStats(char.classes, char.level, char.attributes, equipment, char.races);
+  const stats = applyMaxMults(
+    deriveStats(char.classes, char.level, char.attributes, equipment, char.races),
+    efeitosDaFicha(char.races, char.habilidades),
+  );
   const hpMax = stats.hpMax;
   const mpMax = stats.mpMax;
   await query(
@@ -393,7 +460,10 @@ export async function grantRewards(battle) {
       );
     }
 
-    const stats = deriveStats(char.classes, level, attributes, char.equipment, char.races);
+    const stats = applyMaxMults(
+      deriveStats(char.classes, level, attributes, char.equipment, char.races),
+      efeitosDaFicha(char.races, char.habilidades),
+    );
     const hpMax = stats.hpMax;
     const mpMax = stats.mpMax;
 

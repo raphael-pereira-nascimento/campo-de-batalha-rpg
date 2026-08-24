@@ -10,6 +10,7 @@ import {
   physicalDamage,
   magicDamage,
   rollDamage,
+  efeitosDeHabilidades,
   MAX_PLAYERS_PER_BATTLE,
 } from './data.js';
 import { RACES } from './races.js';
@@ -69,7 +70,8 @@ function raceNamesOf(p) {
   return p.race ? [RACES[p.race]?.nome || p.race] : [];
 }
 
-// Passivas das raças selecionadas somam seus efeitos mecânicos.
+// Passivas das raças selecionadas somam seus efeitos mecânicos,
+// junto das passivas extras compradas com pontos excedentes.
 function efeitosDe(p) {
   if (p.isMonster) return p.monsterDef?.efeitos || {};
   const out = {};
@@ -77,6 +79,9 @@ function efeitosDe(p) {
     for (const [k, v] of Object.entries(race.efeito || {})) {
       out[k] = (out[k] || 0) + v;
     }
+  }
+  for (const [k, v] of Object.entries(efeitosDeHabilidades(p.habilidades))) {
+    out[k] = (out[k] || 0) + v;
   }
   return out;
 }
@@ -128,6 +133,7 @@ export class BattleManager {
       players: b.participants.length,
       maxPlayers: MAX_PLAYERS_PER_BATTLE,
       hostName: b.hostName,
+      hostRole: b.hostRole || null,
     }));
   }
 
@@ -135,8 +141,18 @@ export class BattleManager {
     return this.battles.get(id) || null;
   }
 
-  createBattle({ name, mode, host, hostName, character }) {
+  // Papéis do anfitrião ao entrar no combate:
+  // 'jogador'        → apenas luta com seu personagem
+  // 'mestre_jogador' → controla os inimigos e também luta (padrão no modo mestre)
+  // 'mestre'         → somente mestre: controla os inimigos sem personagem próprio
+  static resolveRole(mode, role) {
+    if (mode !== 'mestre') return 'jogador';
+    return ['mestre', 'mestre_jogador'].includes(role) ? role : 'mestre_jogador';
+  }
+
+  createBattle({ name, mode, host, hostName, character, role }) {
     const normalized = ['todos', 'equipes', 'mestre'].includes(mode) ? mode : 'todos';
+    const normalizedRole = BattleManager.resolveRole(normalized, role);
     const battle = {
       id: randomUUID(),
       name: name || 'Campo de Batalha',
@@ -144,6 +160,7 @@ export class BattleManager {
       status: 'lobby',
       host,
       hostName,
+      hostRole: normalizedRole,
       participants: [],
       turnOrder: [],
       currentTurnIndex: 0,
@@ -153,7 +170,11 @@ export class BattleManager {
       createdAt: Date.now(),
     };
     this.battles.set(battle.id, battle);
-    this._joinCharacter(battle, host, hostName, character, null, 'hero');
+    if (normalizedRole === 'mestre') {
+      battle.log.push(makeLog(`👑 ${hostName} entra como Mestre desta batalha.`));
+    } else {
+      this._joinCharacter(battle, host, hostName, character, null, 'hero');
+    }
     return battle;
   }
 
@@ -214,6 +235,8 @@ export class BattleManager {
       skills: JSON.parse(JSON.stringify(character.skills || [])),
       ultimate: JSON.parse(JSON.stringify(character.ultimate || null)),
       especial: JSON.parse(JSON.stringify(character.especial || null)),
+      gender: character.gender || null,
+      habilidades: JSON.parse(JSON.stringify(character.habilidades || [])),
       inventory: JSON.parse(JSON.stringify(character.inventory || [])),
       hp: stats.hpMax,
       hpMax: stats.hpMax,
@@ -322,7 +345,10 @@ export class BattleManager {
     indices.sort((a, b) => {
       const pa = battle.participants[a];
       const pb = battle.participants[b];
-      return speedOf(pb.attributes, pb.level) - speedOf(pa.attributes, pa.level);
+      // Iniciativa: velocidade + bônus de passivas (ex.: Elfo da Lua).
+      const sa = speedOf(pa.attributes, pa.level) + (efeitosDe(pa).iniciativaBonus || 0) * 10;
+      const sb = speedOf(pb.attributes, pb.level) + (efeitosDe(pb).iniciativaBonus || 0) * 10;
+      return sb - sa;
     });
     let turnOrder = [...indices];
     if (battle.mode === 'mestre') {
@@ -460,6 +486,30 @@ export class BattleManager {
     return mult * statusEffects(p).danoMult;
   }
 
+  _magMult(p) {
+    let mult = efeitosDe(p).danoMagicoMult || 1;
+    if (p.ultimateMode) mult *= 1 + (p.ultimateModeMult || 0);
+    return mult * statusEffects(p).danoMult;
+  }
+
+  // Categoria da arma para a habilidade de especialização.
+  _armaCategoria(weapon) {
+    if (!weapon) return null;
+    if (weapon.tipo === 'arma_fogo') return 'fogo';
+    const alcance = weapon.alcance || 'corpo';
+    if (alcance === 'longo') {
+      return (weapon.bonus?.inteligencia || 0) >= 2 ? 'magica' : 'distancia';
+    }
+    return 'corpo';
+  }
+
+  // Especialização em arma: +10% de dano com a categoria escolhida na criação.
+  _especializacaoMult(p, weapon) {
+    const esp = (p.habilidades || []).find((h) => h.tipo === 'especializacao');
+    if (!esp?.categoria) return 1;
+    return this._armaCategoria(weapon) === esp.categoria ? 1.1 : 1;
+  }
+
   _lifesteal(battle, p, damageDealt) {
     const pct = efeitosDe(p).rouboVida || 0;
     if (pct <= 0 || !p.alive) return;
@@ -487,6 +537,9 @@ export class BattleManager {
     const efeito = efeitosDe(target);
     if (kind === 'physical' && efeito.reducaoDanoFisico) {
       baseDamage = Math.round(baseDamage * (1 - efeito.reducaoDanoFisico));
+    }
+    if (kind === 'magic' && efeito.reducaoDanoMagico) {
+      baseDamage = Math.round(baseDamage * (1 - efeito.reducaoDanoMagico));
     }
     const reduced = Math.max(0, baseDamage - target.defesa);
     const finalDamage = reduced === 0 ? Math.max(1, Math.round(baseDamage * 0.1)) : reduced;
@@ -608,7 +661,7 @@ export class BattleManager {
       battle.log.push(makeLog(`💨 ${p.charName} erra o ataque em ${target.charName}. (d20 = ${res.roll}, precisava de ${res.chance})`, 'miss'));
       return;
     }
-    const dmg = physicalDamage(p, weapon, this._physMult(p));
+    const dmg = physicalDamage(p, weapon, this._physMult(p) * this._especializacaoMult(p, weapon));
     const total = res.crit ? dmg.total * 2 : dmg.total;
     battle.log.push(
       makeLog(
@@ -699,7 +752,7 @@ export class BattleManager {
       dmg = rollDamage(6, qty, Math.round(base * mult));
     } else {
       dmg = magicDamage(p, { poder: skill.poder / 100 });
-      dmg.total = Math.round(dmg.total * (1 + (p.ultimateMode ? p.ultimateModeMult : 0)));
+      dmg.total = Math.round(dmg.total * this._magMult(p));
     }
     const total = res.crit ? dmg.total * 2 : dmg.total;
     battle.log.push(
@@ -767,7 +820,7 @@ export class BattleManager {
       dmg = rollDamage(6, qty, Math.round(base * mult));
     } else {
       dmg = magicDamage(p, { poder: skill.poder / 100 });
-      dmg.total = Math.round(dmg.total * (1 + (p.ultimateMode ? p.ultimateModeMult : 0)) * statusEffects(p).danoMult);
+      dmg.total = Math.round(dmg.total * this._magMult(p));
     }
     const total = res.crit ? dmg.total * 2 : dmg.total;
     battle.log.push(

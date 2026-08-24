@@ -443,53 +443,175 @@ label {
   padding: 20px;
   min-height: 400px;
 }
-.ff-grid {
+/* ── Campo de batalha estilo Final Fantasy ───── */
+.ff-stage {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 14px;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px;
+  align-items: center;
+  min-height: 380px;
 }
-.teams {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+.ff-side {
+  display: flex;
+  flex-direction: column;
   gap: 16px;
 }
-.team-col h3 {
+.ff-side-label {
+  margin: 0;
   text-align: center;
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
   color: var(--accent-2);
-  margin: 0 0 10px;
 }
-.team-chars {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+.enemies-side .ff-side-label {
+  color: var(--red);
+}
+.ff-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 10px;
+}
+.ff-divider {
+  font-size: 26px;
+  opacity: 0.55;
+  filter: drop-shadow(0 0 10px rgba(230, 57, 70, 0.6));
+}
+.ff-lineup {
+  min-height: 380px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-end;
+  align-content: center;
   gap: 12px;
 }
-.battle-card {
-  background: var(--panel-2);
-  border: 1px solid var(--border);
+.ff-fighter {
+  position: relative;
+  width: 152px;
+  padding: 20px 8px 10px;
   border-radius: 14px;
-  padding: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  text-align: center;
   cursor: pointer;
-  transition: transform 0.1s, box-shadow 0.15s;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
-.battle-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+.ff-fighter:hover {
+  border-color: var(--border);
+  background: rgba(124, 92, 255, 0.07);
 }
-.battle-card.current {
+.ff-fighter.current {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent), 0 0 20px rgba(124, 92, 255, 0.35);
+  background: rgba(124, 92, 255, 0.12);
+  box-shadow: 0 0 20px rgba(124, 92, 255, 0.3);
 }
-.battle-card.targeted {
+.ff-fighter.targeted {
   border-color: var(--red);
+  background: rgba(230, 57, 70, 0.1);
 }
-.battle-card.dead {
+.ff-fighter.monster:hover {
+  border-color: #5a2a3a;
+  background: rgba(90, 42, 58, 0.15);
+}
+.ff-fighter.dead {
   opacity: 0.55;
 }
-.battle-card-head {
+.ff-turn-arrow {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  font-size: 15px;
+  color: var(--accent-2);
+  visibility: hidden;
+  animation: ff-arrow 0.9s ease-in-out infinite;
+}
+.ff-fighter.current .ff-turn-arrow {
+  visibility: visible;
+}
+@keyframes ff-arrow {
+  0%,
+  100% {
+    transform: translate(-50%, 0);
+  }
+  50% {
+    transform: translate(-50%, 6px);
+  }
+}
+.ff-sprite {
+  display: inline-block;
+  font-size: 52px;
+  line-height: 1.15;
+  filter: drop-shadow(0 8px 6px rgba(0, 0, 0, 0.55));
+  animation: ff-idle 3.2s ease-in-out infinite;
+}
+.ff-fighter.boss .ff-sprite {
+  font-size: 66px;
+}
+.ff-sprite.mirrored {
+  animation-name: ff-idle-mirrored;
+}
+.ff-fighter.dead .ff-sprite {
+  animation: none;
+  filter: grayscale(1) brightness(0.5);
+  transform: rotate(90deg) translateY(8px);
+}
+@keyframes ff-idle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+@keyframes ff-idle-mirrored {
+  0%,
+  100% {
+    transform: scaleX(-1) translateY(0);
+  }
+  50% {
+    transform: scaleX(-1) translateY(-4px);
+  }
+}
+.ff-name {
+  font-size: 13px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ff-fighter .tag {
+  margin-right: 0;
+}
+.ff-fighter .statbar-label {
+  font-size: 10px;
+}
+.ff-fighter .statbar-track {
+  height: 9px;
+}
+.ff-fighter .bar-track {
+  height: 7px;
+}
+.ff-fighter .bar-num {
+  min-width: 30px;
+  font-size: 10px;
+}
+.ff-fighter .mega-bars {
+  margin-top: 2px;
+  gap: 2px;
+}
+.ff-badges {
   display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 3px;
+  justify-content: center;
+  margin-top: 2px;
 }
 .current-tag {
   background: var(--accent);
@@ -605,27 +727,6 @@ label {
 }
 
 /* mestre */
-.mestre-arena {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-.side-col h3 {
-  text-align: center;
-  color: var(--accent-2);
-  margin: 0 0 10px;
-}
-.enemies-col h3 {
-  color: var(--red);
-}
-.monster-card {
-  border-color: #5a2a3a;
-  background: #241a26;
-}
-.boss-card {
-  border-color: var(--red);
-  box-shadow: 0 0 14px rgba(230, 57, 70, 0.35);
-}
 .boss-tag {
   background: rgba(230, 57, 70, 0.2);
   color: #ffb3ba;
@@ -917,13 +1018,19 @@ button.danger {
     grid-template-columns: 1fr;
   }
   .form-row,
-  .teams,
-  .mestre-arena,
   .registry-grid {
     grid-template-columns: 1fr;
   }
   .attr-grid {
     grid-template-columns: repeat(3, 1fr);
+  }
+  .ff-stage {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+  .ff-divider {
+    justify-self: center;
+    transform: rotate(90deg);
   }
 }
 
@@ -1208,3 +1315,122 @@ button.danger {
   padding-bottom: 8px;
 }
 
+
+/* ─── Gênero na criação de ficha ─── */
+.gender-options {
+  display: flex;
+  gap: 12px;
+}
+.gender-option {
+  flex: 1;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 15px;
+}
+.gender-option.selected {
+  border-color: var(--accent);
+  background: rgba(124, 92, 255, 0.15);
+}
+.gender-icon {
+  color: var(--accent-2);
+  font-weight: bold;
+}
+
+/* ─── Habilidades compradas com pontos excedentes ─── */
+.ability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.ability-chip {
+  text-align: left;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.ability-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─── Números de dano flutuantes na arena ─── */
+.ff-fighter {
+  position: relative;
+}
+.float-num {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-weight: 800;
+  font-size: 20px;
+  pointer-events: none;
+  animation: floatUp 1.4s ease-out forwards;
+  z-index: 5;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+}
+.float-dmg {
+  color: #ff5d5d;
+}
+.float-heal {
+  color: #58e07c;
+}
+@keyframes floatUp {
+  0% {
+    opacity: 0;
+    translate: 0 8px;
+    scale: 0.7;
+  }
+  20% {
+    opacity: 1;
+    scale: 1.15;
+  }
+  100% {
+    opacity: 0;
+    translate: 0 -34px;
+    scale: 1;
+  }
+}
+
+/* ─── Timer de turno ─── */
+.turn-timer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.turn-timer-clock {
+  font-weight: 700;
+  min-width: 52px;
+}
+.turn-timer-clock.urgent {
+  color: var(--red);
+  animation: pulseUrgent 1s infinite;
+}
+.turn-timer-track {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.turn-timer-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transition: width 1s linear;
+}
+@keyframes pulseUrgent {
+  50% {
+    opacity: 0.4;
+  }
+}

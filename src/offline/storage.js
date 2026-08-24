@@ -11,8 +11,17 @@ function nextId() {
   return id;
 }
 
+// Estado do servidor backend: 'off' (sem URL configurada), 'probing', 'up', 'down'.
+// O modo offline é qualquer estado que não seja 'up' — assim, se o servidor
+// não responder na inicialização, o app cai no modo local sem quebrar.
+let _serverStatus = import.meta.env.VITE_API_URL ? 'probing' : 'off';
+
 export function isOffline() {
-  return !import.meta.env.VITE_API_URL;
+  return _serverStatus !== 'up';
+}
+
+export function setServerStatus(status) {
+  if (['off', 'probing', 'up', 'down'].includes(status)) _serverStatus = status;
 }
 
 export function getOfflinePlayer() {

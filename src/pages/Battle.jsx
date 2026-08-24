@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, getSocket, emitAck } from '../api.js';
 import StatBar from '../components/StatBar.jsx';
 
 const CLASS_ICONS = { guerreiro: '🛡️', mago: '🔮', arqueiro: '🏹', clerigo: '✝️', assassino: '🗡️', paladino: '⚔️' };
 const MONSTER_ICON = '👾';
 const BOSS_ICON = '👹';
+const TURN_SECONDS = 45;
 
 export default function Battle({ battleId, player, gameData, onExit, onBackToSheets }) {
   const [battle, setBattle] = useState(null);
@@ -16,7 +17,11 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
   const [busy, setBusy] = useState(false);
   const [monsterPick, setMonsterPick] = useState('');
   const [customMonsters, setCustomMonsters] = useState([]);
+  const [floats, setFloats] = useState([]);
+  const [secondsLeft, setSecondsLeft] = useState(TURN_SECONDS);
   const logRef = useRef(null);
+  const hpPrevRef = useRef({});
+  const floatIdRef = useRef(0);
 
   useEffect(() => {
     const socket = getSocket();
@@ -54,6 +59,30 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [battle?.log?.length]);
 
+  // Números flutuantes: compara HP antes/depois a cada atualização da batalha.
+  const registerFloat = useCallback((key, delta) => {
+    floatIdRef.current += 1;
+    const f = { id: floatIdRef.current, key, delta };
+    setFloats((prev) => [...prev.slice(-12), f]);
+    setTimeout(() => setFloats((prev) => prev.filter((x) => x.id !== f.id)), 1500);
+  }, []);
+
+  useEffect(() => {
+    if (!battle?.participants) return;
+    const prev = hpPrevRef.current;
+    for (const p of battle.participants) {
+      const key = p.characterId || p.uid;
+      if (key == null || !p.alive && p.hp === 0 && prev[key] === undefined) {
+        if (key != null) prev[key] = 0;
+        continue;
+      }
+      if (key == null) continue;
+      const old = prev[key];
+      if (old !== undefined && old !== p.hp) registerFloat(key, p.hp - old);
+      prev[key] = p.hp;
+    }
+  }, [battle, registerFloat]);
+
   const participants = battle?.participants || [];
   const currentIdx = battle?.turnOrder?.[battle.currentTurnIndex];
   const currentChar = currentIdx !== undefined ? participants[currentIdx] : null;
@@ -62,11 +91,52 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
   const currentIsMine = !!currentChar && currentChar.playerId === player.id;
   const isMyTurn = currentIsMine || isMasterTurn;
 
+  // Timer de turno: se o tempo acabar, o personagem defende automaticamente.
+  const turnKey = battle?.status === 'in_progress' && isMyTurn ? `${battle.turno}-${battle.currentTurnIndex}` : null;
+
+  useEffect(() => {
+    if (!turnKey) return;
+    setSecondsLeft(TURN_SECONDS);
+    const t = setInterval(() => {
+      setSecondsLeft((s) => {
+        if (s <= 1) {
+          clearInterval(t);
+          act({ type: 'defend' });
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turnKey]);
+
   const myChars = useMemo(() => participants.filter((p) => p.playerId === player.id), [participants, player.id]);
   const active = currentIsMine ? currentChar : isMasterTurn ? currentChar : myChars[0];
 
   const heroes = useMemo(() => participants.filter((p) => !p.isMonster), [participants]);
   const enemies = useMemo(() => participants.filter((p) => p.isMonster), [participants]);
+  const teamA = useMemo(() => participants.filter((p) => p.team === 'A'), [participants]);
+  const teamB = useMemo(() => participants.filter((p) => p.team === 'B'), [participants]);
+
+  // Formação estilo Final Fantasy: dois lados frente a frente.
+  // No modo livre (sem lados), todos ficam lado a lado em uma linha única.
+  const formation = useMemo(() => {
+    if (!battle) return null;
+    if (battle.mode === 'mestre') {
+      return {
+        left: { label: '👹 Inimigos', fighters: enemies },
+        right: { label: '🛡️ Aventureiros', fighters: heroes },
+      };
+    }
+    if (battle.mode === 'equipes') {
+      return {
+        left: { label: '⚔️ Equipe B', fighters: teamB },
+        right: { label: '🛡️ Equipe A', fighters: teamA },
+      };
+    }
+    return null;
+  }, [battle, heroes, enemies, teamA, teamB]);
 
   const aliveTargets = useMemo(() => {
     if (!battle) return [];
@@ -190,6 +260,8 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
             <span className={`status-chip status-${battle.status}`}>
               {battle.status === 'in_progress' ? 'Em andamento' : battle.status === 'finished' ? 'Finalizada' : 'Aguardando...'}
             </span>
+            {isHost && battle.hostRole === 'mestre' && <span className="tag">👁️ Somente Mestre</span>}
+            {isHost && battle.hostRole === 'mestre_jogador' && <span className="tag">👑 Mestre Jogador</span>}
           </h1>
         </div>
         <button className="ghost" onClick={leave}>
@@ -199,46 +271,40 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
 
       <div className="battle-layout">
         <div className="arena">
-          {battle.mode === 'mestre' ? (
-            <div className="mestre-arena">
-              <div className="side-col heroes-col">
-                <h3>Aventureiros</h3>
-                <div className="team-chars">
-                  {heroes.map((p) => (
-                    <CharCard key={p.characterId} p={p} current={currentChar} gameData={gameData} selectTarget={() => setTargetId(p.characterId)} selected={targetId === p.characterId} />
-                  ))}
-                  {heroes.length === 0 && <p className="muted">Nenhum aventureiro ainda.</p>}
-                </div>
-              </div>
-              <div className="side-col enemies-col">
-                <h3>Inimigos <span className="muted small">(controlados pelo mestre)</span></h3>
-                <div className="team-chars">
-                  {enemies.map((p) => (
-                    <CharCard key={p.characterId} p={p} current={currentChar} gameData={gameData} selectTarget={() => setTargetId(p.characterId)} selected={targetId === p.characterId} />
-                  ))}
-                  {enemies.length === 0 && <p className="muted">Nenhum inimigo ainda.</p>}
-                </div>
-              </div>
-            </div>
-          ) : battle.mode === 'equipes' ? (
-            <div className="teams">
-              {['A', 'B'].map((t) => (
-                <div key={t} className="team-col">
-                  <h3>Equipe {t}</h3>
-                  <div className="team-chars">
-                    {participants
-                      .filter((p) => p.team === t)
-                      .map((p) => (
-                        <CharCard key={p.characterId} p={p} current={currentChar} gameData={gameData} selectTarget={() => setTargetId(p.characterId)} selected={targetId === p.characterId} />
-                      ))}
-                  </div>
-                </div>
-              ))}
+          {formation ? (
+            <div className="ff-stage">
+              <FfSide
+                side={formation.left}
+                mirrored
+                current={currentChar}
+                gameData={gameData}
+                selectedId={targetId}
+                floats={floats}
+                onSelect={(id) => setTargetId(id)}
+              />
+              <div className="ff-divider" aria-hidden="true">⚔️</div>
+              <FfSide
+                side={formation.right}
+                current={currentChar}
+                gameData={gameData}
+                selectedId={targetId}
+                floats={floats}
+                onSelect={(id) => setTargetId(id)}
+              />
             </div>
           ) : (
-            <div className="ff-grid">
-              {participants.map((p) => (
-                <CharCard key={p.characterId} p={p} current={currentChar} gameData={gameData} selectTarget={() => setTargetId(p.characterId)} selected={targetId === p.characterId} />
+            <div className="ff-lineup">
+              {participants.map((p, i) => (
+                <FfFighter
+                  key={p.characterId}
+                  p={p}
+                  index={i}
+                  current={currentChar}
+                  gameData={gameData}
+                  floats={floats}
+                  selected={targetId === p.characterId}
+                  selectTarget={() => setTargetId(p.characterId)}
+                />
               ))}
             </div>
           )}
@@ -329,6 +395,18 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
               <h2>
                 {isMasterTurn ? `Turno do inimigo: ${active.charName}` : `Turno de ${active.charName}`}
               </h2>
+              <div className="turn-timer">
+                <span className={`turn-timer-clock${secondsLeft <= 10 ? ' urgent' : ''}`}>
+                  ⏱ {secondsLeft}s
+                </span>
+                <div className="turn-timer-track">
+                  <div
+                    className="turn-timer-fill"
+                    style={{ width: `${Math.max(0, (secondsLeft / TURN_SECONDS) * 100)}%` }}
+                  />
+                </div>
+              </div>
+              <p className="muted small">O tempo acabou? O personagem defende automaticamente.</p>
               {isMasterTurn && <p className="muted small">Você é o mestre: decida a ação deste inimigo ao vivo.</p>}
               {error && <div className="error">{error}</div>}
 
@@ -477,9 +555,11 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
           {battle.status === 'in_progress' && (!active || !isMyTurn) && (
             <div className="panel">
               <p className="muted">
-                {myChars.length || isMasterTurn
-                  ? `Aguardando o turno de ${currentChar ? currentChar.charName : '...'}...`
-                  : 'Você não está nesta batalha.'}
+                {isHost && battle.mode === 'mestre' && myChars.length === 0
+                  ? `👁️ Você é o Somente Mestre: aguardando o combate entre os aventureiros e seus inimigos${currentChar ? ` — vez de ${currentChar.charName}` : ''}.`
+                  : myChars.length || isMasterTurn
+                    ? `Aguardando o turno de ${currentChar ? currentChar.charName : '...'}...`
+                    : 'Você não está nesta batalha.'}
               </p>
               {error && <div className="error">{error}</div>}
             </div>
@@ -509,36 +589,76 @@ function TargetSelect({ targets, value, onChange }) {
   );
 }
 
-function CharCard({ p, current, gameData, selectTarget, selected }) {
-  const isCurrent = current && (current.characterId === p.characterId || current.uid === p.uid);
-  const hpPct = (p.hp / p.hpMax) * 100;
+function FfSide({ side, mirrored, current, gameData, selectedId, floats, onSelect }) {
+  return (
+    <div className={`ff-side${mirrored ? ' enemies-side' : ''}`}>
+      <h3 className="ff-side-label">{side.label}</h3>
+      <div className="ff-row">
+        {side.fighters.map((p, i) => (
+          <FfFighter
+            key={p.characterId}
+            p={p}
+            index={i}
+            mirrored={mirrored}
+            current={current}
+            gameData={gameData}
+            floats={floats}
+            selected={selectedId === p.characterId}
+            selectTarget={() => onSelect(p.characterId)}
+          />
+        ))}
+        {side.fighters.length === 0 && <p className="muted small">Aguardando combatentes...</p>}
+      </div>
+    </div>
+  );
+}
+
+function FfFighter({ p, index, mirrored, current, gameData, floats = [], selected, selectTarget }) {
+  const isCurrent = !!current && (current.characterId === p.characterId || current.uid === p.uid);
   const icon = p.isMonster ? (p.isBoss ? BOSS_ICON : MONSTER_ICON) : CLASS_ICONS[p.cls] || '🧙';
-  const label = p.isMonster ? p.monsterName : p.custom_class_name || gameData.classes?.[p.cls]?.nome;
-  const races = !p.isMonster && Array.isArray(p.races) && p.races.length ? p.races : !p.isMonster && gameData.races?.[p.race] ? [gameData.races[p.race]] : [];
+  const myFloats = floats.filter((f) => f.key === (p.characterId || p.uid));
+  const races =
+    !p.isMonster && Array.isArray(p.races) && p.races.length
+      ? p.races
+      : !p.isMonster && gameData.races?.[p.race]
+        ? [gameData.races[p.race]]
+        : [];
   return (
     <div
-      className={['char-card battle-card', isCurrent ? 'current' : '', p.alive ? '' : 'dead', selected ? 'targeted' : '', p.isMonster ? 'monster-card' : '', p.isBoss ? 'boss-card' : ''].filter(Boolean).join(' ')}
+      className={[
+        'ff-fighter',
+        isCurrent ? 'current' : '',
+        p.alive ? '' : 'dead',
+        selected ? 'targeted' : '',
+        p.isMonster ? 'monster' : '',
+        p.isBoss ? 'boss' : '',
+      ].filter(Boolean).join(' ')}
       onClick={selectTarget}
     >
-      <div className="battle-card-head">
-        <span className="class-icon">{icon}</span>
-        <div>
-          <strong>{p.charName}</strong>
-          <span className="tag">{label}</span>
-          {races.map((r) => (
-            <span className="tag" key={r.id || r.nome}>{r.nome}</span>
-          ))}
-          {p.isBoss && <span className="tag boss-tag">☠️ CHEFE</span>}
-          {p.team && <span className="tag">Eq. {p.team}</span>}
-          {isCurrent && <span className="tag current-tag">▶ Turno</span>}
-        </div>
-      </div>
+      <span className="ff-turn-arrow" aria-hidden="true">▼</span>
+      <span className={`ff-sprite${mirrored ? ' mirrored' : ''}`} style={{ animationDelay: `${(index % 5) * -0.6}s` }}>
+        {icon}
+      </span>
+      <strong className="ff-name">
+        {!p.isMonster && p.gender && (
+          <span className="gender-icon" title={p.gender === 'feminino' ? 'Feminino' : 'Masculino'}>
+            {p.gender === 'feminino' ? '♀' : '♂'}
+          </span>
+        )}
+        {p.charName}
+      </strong>
+      {myFloats.map((f) => (
+        <span key={f.id} className={`float-num ${f.delta >= 0 ? 'float-heal' : 'float-dmg'}`}>
+          {f.delta > 0 ? `+${f.delta}` : f.delta}
+        </span>
+      ))}
+      {p.isBoss && <span className="tag boss-tag">☠️ CHEFE</span>}
+      {p.team && <span className="tag">Eq. {p.team}</span>}
+      {isCurrent && <span className="tag current-tag">▶ Turno</span>}
       {p.alive ? (
         <>
           <StatBar label="HP" value={p.hp} max={p.hpMax} color="#e63946" />
-          <StatBar label="MP" value={p.mp} max={p.mpMax} color="#4a90e2" />
-          {p.ultimateMode && <span className="tag ult-mode-tag">🔥 Modo Ultimate ({p.ultimateModeTurns}t · +{Math.round((p.ultimateModeMult || 0) * 100)}%)</span>}
-          {p.kills > 0 && <span className="tag">⚔️ {p.kills} abates</span>}
+          {!p.isMonster && <StatBar label="MP" value={p.mp} max={p.mpMax} color="#4a90e2" />}
           {!p.isMonster && (
             <div className="mega-bars">
               <span className="bar-row">
@@ -557,25 +677,26 @@ function CharCard({ p, current, gameData, selectTarget, selected }) {
               </span>
             </div>
           )}
+          {races.map((r) => (
+            <span className="tag" key={r.id || r.nome}>{r.nome}</span>
+          ))}
+          {p.ultimateMode && <span className="tag ult-mode-tag">🔥 Ultimate ({p.ultimateModeTurns}t)</span>}
+          {p.kills > 0 && <span className="tag">⚔️ {p.kills}</span>}
+          <div className="ff-badges">
+            {p.defense && <span className="tag">🛡️</span>}
+            {p.dodge && <span className="tag">💨</span>}
+            {(p.statuses || []).map((s) => {
+              const def = gameData.statuses?.[s.id];
+              return (
+                <span className={`tag status-tag${s.id === 'congelamento' ? ' cc-tag' : ''}`} key={s.id} title={def?.desc || s.nome}>
+                  {def?.icon || '✦'}{s.turnos > 0 ? ` ${s.turnos}t` : ''}
+                </span>
+              );
+            })}
+          </div>
         </>
       ) : (
         <div className="dead-label">☠️ Derrotado</div>
-      )}
-      {hpPct > 0 && (
-        <div className="defense-badges">
-          {p.defense && <span className="tag">🛡️</span>}
-          {p.dodge && <span className="tag">💨</span>}
-          {p.buffTurns > 0 && <span className="tag">🔮</span>}
-          {(p.statuses || []).map((s) => {
-            const def = gameData.statuses?.[s.id];
-            return (
-              <span className={`tag status-tag${s.id === 'congelamento' ? ' cc-tag' : ''}`} key={s.id} title={def?.desc || s.nome}>
-                {def?.icon || '✦'} {s.nome}
-                {s.turnos > 0 ? ` · ${s.turnos}t` : ''}
-              </span>
-            );
-          })}
-        </div>
       )}
     </div>
   );

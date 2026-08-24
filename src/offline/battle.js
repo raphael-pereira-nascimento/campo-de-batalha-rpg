@@ -77,6 +77,7 @@ class OfflineBattle {
     });
 
     this.battleId = battle.id;
+    battle.hostRole = null;
     return battle.id;
   }
 

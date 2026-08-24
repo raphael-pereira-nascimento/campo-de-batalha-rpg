@@ -8,6 +8,8 @@ Jogue **online** (com backend + PostgreSQL) ou **offline** (100% no browser, sem
 
 - **Sistema de Batalha por Turnos** com dados (d20), críticos, esquiva, defesa e 8 status effects
 - **3 Modos de Jogo**: Livre (free-for-all), Equipes e Mestre vs Jogadores
+- **Papéis no Combate**: escolha entrar como Somente Jogador, Mestre Jogador (controla inimigos e luta) ou Somente Mestre (controla apenas os inimigos)
+- **Arena estilo Final Fantasy**: personagens lado a lado frente a frente, sem locomoção de tabuleiro
 - **Modo Solo Offline** — batalhe contra monstros controlados por IA sem servidor
 - **Criação de Personagem** com multi-raças, multi-classes, golpes customizados, ultimate e especial
 - **23 Raças jogáveis** com bônus de atributo e passivas mecânicas

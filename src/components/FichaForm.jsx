@@ -11,10 +11,17 @@ import {
   MAX_CLASSES,
   SKILL_TYPES,
   CONDITION_TYPES,
+  GENDER_OPTIONS,
+  HABILIDADE_CUSTOS,
+  IDIOMAS,
+  ESPECIALIZACOES_ARMAS,
+  PASSIVAS_EXTRAS,
 } from '../config.js';
+import { applyGenderToRace } from '../game/races.js';
 
 const STEP_NAMES = [
   'Identidade',
+  'Gênero',
   'Raças',
   'Classes',
   'Passiva',
@@ -23,6 +30,7 @@ const STEP_NAMES = [
   'Ultimate',
   'Equipamento',
   'Atributos',
+  'Habilidades',
   'Resumo',
 ];
 
@@ -74,6 +82,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
+  const [gender, setGender] = useState('masculino');
   const [races, setRaces] = useState([]);
   const [classes, setClasses] = useState([]);
   const [passiva, setPassiva] = useState('');
@@ -82,6 +91,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
   const [especial, setEspecial] = useState(null);
   const [equipment, setEquipment] = useState({ arma: null, armadura: null });
   const [attrs, setAttrs] = useState(emptyAttrs());
+  const [habilidades, setHabilidades] = useState([]);
   const [customRaces, setCustomRaces] = useState([]);
   const [customEquipment, setCustomEquipment] = useState([]);
   const [customSkills, setCustomSkills] = useState([]);
@@ -95,7 +105,8 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
   }, []);
 
   const used = Object.values(attrs).reduce((a, b) => a + b, 0);
-  const remaining = POINTS - used;
+  const abilityCost = habilidades.reduce((s, h) => s + (h.custo || 0), 0);
+  const remaining = POINTS - used - abilityCost;
 
   const stats = useMemo(() => {
     const eff = effFor(attrs, races, classes, equipment);
@@ -109,8 +120,9 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
 
   const canAdvance = () => {
     if (step === 0) return name.trim().length > 0;
-    if (step === 1) return races.length >= 1;
-    if (step === 2) return classes.length >= 1;
+    if (step === 1) return !!gender;
+    if (step === 2) return races.length >= 1;
+    if (step === 3) return classes.length >= 1;
     return true;
   };
 
@@ -134,9 +146,9 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
   };
 
   const submit = async () => {
-    if (used !== POINTS) {
-      setError(`Distribua exatamente ${POINTS} pontos. Faltam/sobram: ${POINTS - used}`);
-      setStep(8);
+    if (remaining < 0) {
+      setError(`Pontos excedidos: atributos + habilidades somam ${POINTS - remaining}.`);
+      setStep(9);
       return;
     }
     setLoading(true);
@@ -145,6 +157,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
       await api.createCharacter({
         playerId: player.id,
         name,
+        gender,
         attributes: attrs,
         races,
         classes,
@@ -153,6 +166,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
         ultimate,
         especial,
         equipment: { arma: equipment.arma || null, armadura: equipment.armadura || null },
+        habilidades,
       });
       onCreated();
     } catch (err) {
@@ -196,10 +210,33 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
           )}
 
           {step === 1 && (
+            <div className="stack">
+              <p className="muted small">
+                O gênero ajusta a expressão racial: cada raça tem bônus e passivas naturais
+                diferentes para ♂ masculino e ♀ feminino. Veja os detalhes no passo de Raças.
+              </p>
+              <div className="gender-options">
+                {GENDER_OPTIONS.map((g) => (
+                  <button
+                    key={g.id}
+                    type="button"
+                    className={`gender-option ${gender === g.id ? 'selected' : ''}`}
+                    onClick={() => setGender(g.id)}
+                  >
+                    <span className="gender-icon">{g.icon}</span>
+                    <span>{g.nome}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
             <RacesStep
               gameData={gameData}
               customRaces={customRaces}
               races={races}
+              gender={gender}
               onAdd={addRace}
               onRemove={(id) => setRaces((prev) => prev.filter((r) => r !== id))}
               penaltyPct={penaltyPct}
@@ -207,7 +244,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
             />
           )}
 
-          {step === 2 && (
+          {step === 3 && (
             <ClassesStep
               gameData={gameData}
               customClasses={customClasses}
@@ -221,7 +258,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
             />
           )}
 
-          {step === 3 && (
+          {step === 4 && (
             <div className="stack">
               <p className="muted small">
                 Uma passiva exclusiva do personagem, além das passivas das raças e classes.
@@ -233,11 +270,11 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
             </div>
           )}
 
-          {step === 4 && (
+          {step === 5 && (
             <SkillsStep skills={skills} setSkills={setSkills} customSkills={customSkills} player={player} />
           )}
 
-          {step === 5 && (
+          {step === 6 && (
             <MegaSkillStep
               title="Golpe Especial (estilo KOF)"
               value={especial}
@@ -246,7 +283,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
             />
           )}
 
-          {step === 6 && (
+          {step === 7 && (
             <MegaSkillStep
               title="Ultimate (estilo battleground)"
               value={ultimate}
@@ -255,7 +292,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
             />
           )}
 
-          {step === 7 && (
+          {step === 8 && (
             <EquipStep
               gameData={gameData}
               customEquipment={customEquipment}
@@ -265,9 +302,12 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
             />
           )}
 
-          {step === 8 && (
+          {step === 9 && (
             <div className="stack">
-              <p className="muted small">Distribua os {POINTS} pontos (1 a {MAX} por atributo).</p>
+              <p className="muted small">
+                Distribua até {POINTS} pontos entre atributos (1 a {MAX} por atributo). O que
+                sobrar pode virar habilidades no próximo passo.
+              </p>
               <div className="attrs">
                 {ATTRIBUTES.map((key) => (
                   <div className="attr-row" key={key}>
@@ -286,7 +326,9 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
                 ))}
               </div>
               <div className="form-meta">
-                <span className={remaining === 0 ? 'points ok' : 'points'}>Pontos restantes: {remaining}</span>
+                <span className={remaining === 0 ? 'points ok' : 'points'}>
+                  Pontos restantes: {remaining}
+                </span>
                 <span>
                   Vida máx: <strong>{stats.hpMax}</strong> · Mana máx: <strong>{stats.mpMax}</strong>
                 </span>
@@ -295,9 +337,18 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
             </div>
           )}
 
-          {step === 9 && (
+          {step === 10 && (
+            <AbilitiesStep
+              pontosDisponiveis={remaining}
+              habilidades={habilidades}
+              setHabilidades={setHabilidades}
+            />
+          )}
+
+          {step === 11 && (
             <Summary
               name={name}
+              gender={gender}
               races={races}
               classes={classes}
               passiva={passiva}
@@ -305,6 +356,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
               ultimate={ultimate}
               especial={especial}
               equipment={equipment}
+              habilidades={habilidades}
               stats={stats}
             />
           )}
@@ -314,13 +366,13 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
           <button type="button" className="ghost" onClick={step === 0 ? onCancel : () => { setError(''); setStep(step - 1); }}>
             {step === 0 ? 'Cancelar' : '← Voltar'}
           </button>
-          {step < 9 ? (
+          {step < 11 ? (
             <button type="button" onClick={() => canAdvance() ? (setError(''), setStep(step + 1)) : setError('Preencha o necessário para avançar.')}>
               Próximo →
             </button>
           ) : (
-            <button type="button" onClick={submit} disabled={loading || used !== POINTS || !name.trim()}>
-              {loading ? 'Criando...' : 'Criar Personagem'}
+            <button type="button" onClick={submit} disabled={loading || remaining < 0 || !name.trim()}>
+              {loading ? 'Criando...' : remaining > 0 ? `Criar Personagem (${remaining} pt não gasto${remaining > 1 ? 's' : ''})` : 'Criar Personagem'}
             </button>
           )}
         </div>
@@ -329,7 +381,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
   );
 }
 
-function RacesStep({ gameData, customRaces, races, onAdd, onRemove, penaltyPct, player }) {
+function RacesStep({ gameData, customRaces, races, gender, onAdd, onRemove, penaltyPct, player }) {
   const [pick, setPick] = useState('');
   const [choice, setChoice] = useState('forca');
   const [creating, setCreating] = useState(false);
@@ -338,13 +390,22 @@ function RacesStep({ gameData, customRaces, races, onAdd, onRemove, penaltyPct, 
 
   const allRaces = [...Object.values(gameData.races || {}), ...customRaces];
   const picked = allRaces.find((r) => r.id === pick);
+  const pickedGender = picked ? applyGenderToRace(picked, gender) : null;
 
   const doAdd = () => {
     if (!pick) return;
     const isCustom = customRaces.some((r) => r.id === pick);
-    const def = isCustom
-      ? { id: pick, nome: picked.nome, bonus: picked.bonus, passiva: picked.passiva, efeito: picked.efeito || {}, source: 'registry' }
-      : { id: pick, nome: picked.nome, bonus: picked.bonus, passiva: picked.passiva, efeito: picked.efeito || {}, source: 'preset', choice };
+    // O gênero é aplicado à raça aqui: bônus/passivas específicas ficam gravadas na ficha.
+    const merged = applyGenderToRace(picked, gender);
+    const def = {
+      id: pick,
+      nome: merged.nome,
+      bonus: merged.bonus,
+      passiva: merged.passiva,
+      efeito: merged.efeito || {},
+      source: isCustom ? 'registry' : 'preset',
+      choice,
+    };
     onAdd(def);
     setPick('');
   };
@@ -410,6 +471,21 @@ function RacesStep({ gameData, customRaces, races, onAdd, onRemove, penaltyPct, 
           {creating ? 'Fechar' : '✍️ Criar nova raça'}
         </button>
       </div>
+
+      {pickedGender && (
+        <div className="info-box">
+          <strong>{pickedGender.nome}</strong> ({GENDER_OPTIONS.find((g) => g.id === gender)?.icon} {gender}) —{' '}
+          {pickedGender.passiva || 'sem passiva definida.'}
+          {'generos' in (picked || {}) && picked.generos[gender]?.bonus && (
+            <span className="tag" style={{ marginLeft: 8 }}>
+              Bônus de gênero:{' '}
+              {Object.entries(picked.generos[gender].bonus)
+                .map(([k, v]) => `${ATTRIBUTE_NAMES[k] || k} +${v}`)
+                .join(', ')}
+            </span>
+          )}
+        </div>
+      )}
 
       {creating && (
         <div className="inline-create">
@@ -1016,11 +1092,102 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player 
   );
 }
 
-function Summary({ name, races, classes, passiva, skills, ultimate, especial, equipment, stats }) {
+function AbilitiesStep({ pontosDisponiveis, habilidades, setHabilidades }) {
+  const has = (id) => habilidades.some((h) => h.id === id);
+
+  const addIdioma = (lang) => {
+    if (has(lang.id) || pontosDisponiveis < HABILIDADE_CUSTOS.idioma) return;
+    setHabilidades((prev) => [
+      ...prev,
+      { tipo: 'idioma', id: lang.id, nome: lang.nome, custo: HABILIDADE_CUSTOS.idioma },
+    ]);
+  };
+
+  const addEspecializacao = (esp) => {
+    if (has(esp.id) || pontosDisponiveis < HABILIDADE_CUSTOS.especializacao) return;
+    setHabilidades((prev) => [
+      ...prev,
+      {
+        tipo: 'especializacao',
+        id: esp.id,
+        nome: `Especialista: ${esp.nome}`,
+        categoria: esp.categoria,
+        custo: HABILIDADE_CUSTOS.especializacao,
+      },
+    ]);
+  };
+
+  const addPassiva = (p) => {
+    if (has(p.id) || pontosDisponiveis < p.custo) return;
+    setHabilidades((prev) => [
+      ...prev,
+      { tipo: 'passiva_extra', id: p.id, nome: p.nome, desc: p.desc, efeito: p.efeito, custo: p.custo },
+    ]);
+  };
+
+  const remove = (id) => setHabilidades((prev) => prev.filter((h) => h.id !== id));
+
+  return (
+    <div className="stack">
+      <p className="muted small">
+        Sobraram <strong>{pontosDisponiveis}</strong> ponto(s) de atributo? Gaste-os aqui em
+        habilidades especiais. Idiomas custam {HABILIDADE_CUSTOS.idioma} ponto, especialização em
+        arma {HABILIDADE_CUSTOS.especializacao} e passivas extras {HABILIDADE_CUSTOS.passiva_extra}.
+      </p>
+
+      <h4>🗣️ Idiomas ({HABILIDADE_CUSTOS.idioma} pt)</h4>
+      <div className="ability-grid">
+        {IDIOMAS.map((l) => (
+          <button key={l.id} type="button" className="ability-chip" onClick={() => addIdioma(l)} disabled={has(l.id) || pontosDisponiveis < HABILIDADE_CUSTOS.idioma}>
+            + {l.nome}
+          </button>
+        ))}
+      </div>
+
+      <h4>⚔️ Especialização em arma ({HABILIDADE_CUSTOS.especializacao} pt)</h4>
+      <div className="ability-grid">
+        {ESPECIALIZACOES_ARMAS.map((e) => (
+          <button key={e.id} type="button" className="ability-chip" title={e.desc} onClick={() => addEspecializacao(e)} disabled={has(e.id) || pontosDisponiveis < HABILIDADE_CUSTOS.especializacao}>
+            + {e.nome}
+          </button>
+        ))}
+      </div>
+
+      <h4>✨ Passivas extras ({HABILIDADE_CUSTOS.passiva_extra} pt)</h4>
+      <div className="ability-grid">
+        {PASSIVAS_EXTRAS.map((p) => (
+          <button key={p.id} type="button" className="ability-chip" title={p.desc} onClick={() => addPassiva(p)} disabled={has(p.id) || pontosDisponiveis < p.custo}>
+            + {p.nome} — {p.desc}
+          </button>
+        ))}
+      </div>
+
+      <div className="chosen-list">
+        {habilidades.map((h) => (
+          <div className="chosen-chip" key={h.id}>
+            <strong>{h.nome}</strong>
+            <span className="tag">{h.custo} pt</span>
+            {h.desc && <span className="muted small">{h.desc}</span>}
+            <button className="ghost remove-x" onClick={() => remove(h.id)}>✕</button>
+          </div>
+        ))}
+        {habilidades.length === 0 && (
+          <p className="muted">Nenhuma habilidade extra comprada.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Summary({ name, gender, races, classes, passiva, skills, ultimate, especial, equipment, habilidades, stats }) {
   const raceBonus = raceBonusTotal(races);
+  const g = GENDER_OPTIONS.find((x) => x.id === gender);
   return (
     <div className="stack summary">
-      <h3>{name || 'Sem nome'}</h3>
+      <h3>{name || 'Sem nome'} {g ? <span className="gender-icon">{g.icon}</span> : ''}</h3>
+      <p>
+        <strong>Gênero:</strong> {g ? g.nome : '—'}
+      </p>
       <p>
         <strong>Raças:</strong>{' '}
         {races.map((r) => `${r.nome}${'escolha' in (r.bonus || {}) ? ` (+1 ${ATTRIBUTE_NAMES[r.choice || 'forca']})` : ''}`).join(' + ') || '—'}
@@ -1034,6 +1201,11 @@ function Summary({ name, races, classes, passiva, skills, ultimate, especial, eq
         {ATTRIBUTES.filter((k) => raceBonus[k]).map((k) => `${ATTRIBUTE_NAMES[k]} ${raceBonus[k] > 0 ? '+' : ''}${raceBonus[k]}`).join(' · ') || 'nenhum'}
       </p>
       {passiva && <p><strong>Passiva:</strong> {passiva}</p>}
+      {habilidades.length > 0 && (
+        <p className="muted small">
+          Habilidades extras: {habilidades.map((h) => `${h.nome} (${h.custo}pt)`).join(', ')}
+        </p>
+      )}
       {skills.length > 0 && (
         <p className="muted small">Golpes próprios: {skills.map((s) => s.nome).join(', ')}</p>
       )}

@@ -74,13 +74,17 @@ export function setupSockets(httpServer) {
       }
     });
 
-    socket.on('createBattle', async ({ name, mode, characterId }, ack) => {
+    socket.on('createBattle', async ({ name, mode, role, characterId }, ack) => {
       try {
         assertAuthed();
-        const character = await getCharacter(characterId);
-        if (!character) throw new Error('Personagem não encontrado.');
-        if (character.player_id !== me()) throw new Error('Este personagem não é seu.');
-        const battle = manager.createBattle({ name, mode, host: me(), hostName: socket.data.playerName || 'Anfitrião', character });
+        const resolvedRole = BattleManager.resolveRole(mode, role);
+        let character = null;
+        if (resolvedRole !== 'mestre') {
+          character = await getCharacter(characterId);
+          if (!character) throw new Error('Personagem não encontrado.');
+          if (character.player_id !== me()) throw new Error('Este personagem não é seu.');
+        }
+        const battle = manager.createBattle({ name, mode, role: resolvedRole, host: me(), hostName: socket.data.playerName || 'Anfitrião', character });
         socket.join(battle.id);
         publishBattle(io, manager, battle);
         ack({ ok: true, battleId: battle.id });
@@ -214,6 +218,7 @@ function serializeBattle(battle) {
     status: battle.status,
     host: battle.host,
     hostName: battle.hostName,
+    hostRole: battle.hostRole || null,
     winner: battle.winner,
     participants: battle.participants,
     turnOrder: battle.turnOrder,
