@@ -1,6 +1,7 @@
 const PLAYER_KEY = 'cbr_offline_player';
 const CHAR_KEY = 'cbr_offline_chars';
 const WALLET_KEY = 'cbr_offline_wallet';
+const GEMS_KEY = 'cbr_offline_gems';
 
 let _idCounter = parseInt(localStorage.getItem('cbr_offline_id') || '1', 10);
 function nextId() {
@@ -54,4 +55,36 @@ export function addOfflineCoins(amount) {
   const current = getOfflineWallet();
   localStorage.setItem(WALLET_KEY, String(current + amount));
   return current + amount;
+}
+
+// ── Gemas offline ──────────────────────────────────
+
+function _getAllGems() {
+  const raw = localStorage.getItem(GEMS_KEY);
+  return raw ? JSON.parse(raw) : {};
+}
+
+function _saveAllGems(gems) {
+  localStorage.setItem(GEMS_KEY, JSON.stringify(gems));
+}
+
+export function getOfflineGems(characterId) {
+  const all = _getAllGems();
+  return all[characterId] || [];
+}
+
+export function addOfflineGem(characterId, gemId) {
+  const all = _getAllGems();
+  if (!all[characterId]) all[characterId] = [];
+  all[characterId].push(gemId);
+  _saveAllGems(all);
+}
+
+export function removeOfflineGem(characterId, gemId) {
+  const all = _getAllGems();
+  const gems = all[characterId] || [];
+  const idx = gems.indexOf(gemId);
+  if (idx !== -1) gems.splice(idx, 1);
+  all[characterId] = gems;
+  _saveAllGems(all);
 }

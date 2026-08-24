@@ -18,6 +18,9 @@ import {
   getWallet,
   formatCoins,
   SHOP_ITEMS,
+  getCharacterGems,
+  socketGem,
+  unsocketGem,
 } from './services/characters.js';
 import { CLASSES, SPELLS, EQUIPMENT, POTIONS, STATUS_DEFS } from './game/data.js';
 import { RACES } from './game/races.js';
@@ -162,6 +165,35 @@ app.post('/api/characters/:id/equip', requireAuth, async (req, res) => {
   try {
     const { slot, itemId } = req.body;
     const character = await equipItem(req.params.id, slot, itemId);
+    res.json({ ok: true, character });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/characters/:id/gems', requireAuth, async (req, res) => {
+  try {
+    const gems = await getCharacterGems(req.params.id);
+    res.json({ ok: true, gems });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/characters/:id/socket', requireAuth, async (req, res) => {
+  try {
+    const { slot, gemId } = req.body;
+    const character = await socketGem(req.params.id, slot, gemId);
+    res.json({ ok: true, character });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.delete('/api/characters/:id/socket', requireAuth, async (req, res) => {
+  try {
+    const { slot } = req.body;
+    const character = await unsocketGem(req.params.id, slot);
     res.json({ ok: true, character });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });

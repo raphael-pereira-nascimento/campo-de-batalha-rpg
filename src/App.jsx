@@ -5,6 +5,7 @@ import Characters from './pages/Characters.jsx';
 import Lobby from './pages/Lobby.jsx';
 import Battle from './pages/Battle.jsx';
 import Registry from './pages/Registry.jsx';
+import Compendium from './pages/Compendium.jsx';
 
 export default function App() {
   const [view, setView] = useState('home');
@@ -124,6 +125,7 @@ export default function App() {
         onRefresh={refreshCharacters}
         onEnterLobby={() => setView('lobby')}
         onOpenRegistry={() => setView('registry')}
+        onOpenCompendium={() => setView('compendium')}
         onLogout={handleLogout}
       />
     );
@@ -131,6 +133,10 @@ export default function App() {
 
   if (view === 'registry') {
     return <Registry player={player} gameData={gameData} onBack={() => setView('characters')} />;
+  }
+
+  if (view === 'compendium') {
+    return <Compendium onBack={() => setView('characters')} />;
   }
 
   if (view === 'lobby') {

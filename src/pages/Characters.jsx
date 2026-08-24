@@ -2,7 +2,7 @@ import { useState } from 'react';
 import FichaForm from '../components/FichaForm.jsx';
 import CharacterSheet from '../components/CharacterSheet.jsx';
 
-export default function Characters({ player, characters, gameData, customClasses = [], onRefresh, onEnterLobby, onOpenRegistry, onLogout }) {
+export default function Characters({ player, characters, gameData, customClasses = [], onRefresh, onEnterLobby, onOpenRegistry, onOpenCompendium, onLogout }) {
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState(null);
 
@@ -20,6 +20,7 @@ export default function Characters({ player, characters, gameData, customClasses
         </div>
         <div className="topbar-actions">
           <button onClick={() => setCreating(true)}>+ Nova Ficha</button>
+          <button className="ghost" onClick={onOpenCompendium}>⚔️ Arsenal</button>
           <button className="ghost" onClick={onOpenRegistry}>
             📜 Registro do Mundo
           </button>

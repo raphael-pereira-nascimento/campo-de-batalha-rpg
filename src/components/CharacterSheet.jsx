@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { ATTRIBUTES, ATTRIBUTE_NAMES } from '../config.js';
+import { GEMS, GEM_RARITY } from '../game/gems.js';
 import StatBar from './StatBar.jsx';
 
 const CLASS_ICONS = {
@@ -28,6 +29,8 @@ function skillFromSpell(s) {
 export default function CharacterSheet({ character, gameData, onChanged }) {
   const [busy, setBusy] = useState(null);
   const [customEquipment, setCustomEquipment] = useState([]);
+  const [characterGems, setCharacterGems] = useState([]);
+  const [socketModal, setSocketModal] = useState(null); // { equipSlot, slotIndex }
 
   useEffect(() => {
     api
@@ -35,6 +38,13 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
       .then((d) => setCustomEquipment(d.equipment || []))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    api
+      .getCharacterGems(character.id)
+      .then((d) => setCharacterGems(d.gems || []))
+      .catch(() => {});
+  }, [character.id]);
 
   const cls = character.classes?.[0] ? gameData.classes[character.classes[0].archetype] : gameData.classes[character.class];
   const races = character.races || [];
@@ -51,6 +61,35 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
     try {
       const d = await api.equipItem(character.id, slot, itemId);
       onChanged(d.character);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleSocket = async (equipSlot, slotIndex, gemId) => {
+    setBusy('socket');
+    try {
+      const d = await api.socketGem(character.id, `${equipSlot}_${slotIndex}`, gemId);
+      if (d.character) onChanged(d.character);
+      const gems = await api.getCharacterGems(character.id);
+      setCharacterGems(gems.gems || []);
+      setSocketModal(null);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleUnsocket = async (equipSlot, slotIndex) => {
+    setBusy('unsocket');
+    try {
+      const d = await api.unsocketGem(character.id, `${equipSlot}_${slotIndex}`);
+      if (d.character) onChanged(d.character);
+      const gems = await api.getCharacterGems(character.id);
+      setCharacterGems(gems.gems || []);
     } catch (e) {
       alert(e.message);
     } finally {
@@ -222,6 +261,58 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
             )}
           </div>
         )}
+
+        {(character.equipment?.arma || character.equipment?.armadura) && (
+          <div style={{ marginTop: 8 }}>
+            {['arma', 'armadura'].map((equipSlot) => {
+              const item = character.equipment?.[equipSlot];
+              if (!item) return null;
+              const slots = item.socketSlots || 0;
+              const socketedGems = item.socketedGems || [];
+              if (slots === 0) return null;
+              return (
+                <div key={equipSlot} style={{ marginBottom: 8 }}>
+                  <small style={{ color: 'var(--muted)', fontSize: 11 }}>
+                    Slots — {item.nome}
+                  </small>
+                  <div className="socket-slots" style={{ marginTop: 4 }}>
+                    {Array.from({ length: slots }, (_, i) => {
+                      const gemId = socketedGems[i];
+                      const gem = gemId ? GEMS[gemId] : null;
+                      return (
+                        <div
+                          key={i}
+                          className={`socket-slot ${gem ? 'filled' : ''} ${gem ? `gem-rarity-${gem?.raridade || 'comum'}` : ''}`}
+                          title={gem ? gem.nome : 'Slot vazio'}
+                          onClick={() => {
+                            if (gem) return;
+                            setSocketModal({ equipSlot, slotIndex: i });
+                          }}
+                        >
+                          {gem ? '💎' : '+'}
+                          {gem && (
+                            <>
+                              <span className="slot-gem-name">{gem.nome}</span>
+                              <span
+                                className="remove-gem"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUnsocket(equipSlot, i);
+                                }}
+                              >
+                                ✕
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="sheet-section">
@@ -234,6 +325,42 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
           ))}
         </div>
       </div>
+
+      {socketModal && (
+        <div className="modal-backdrop" onClick={() => setSocketModal(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>💎 Inserir Gema</h2>
+            <p className="muted">
+              Slot: {socketModal.equipSlot} #{socketModal.slotIndex + 1}
+            </p>
+            {characterGems.length === 0 ? (
+              <p className="muted">Nenhuma gema disponível no inventário.</p>
+            ) : (
+              <div className="gem-select-grid">
+                {characterGems.map((gemId) => {
+                  const gem = GEMS[gemId];
+                  if (!gem) return null;
+                  const rarity = GEM_RARITY[gem.raridade] || GEM_RARITY.comum;
+                  return (
+                    <div
+                      key={gemId}
+                      className="gem-select-card"
+                      style={{ borderColor: rarity.cor }}
+                      onClick={() => handleSocket(socketModal.equipSlot, socketModal.slotIndex, gemId)}
+                    >
+                      <div className="gem-name" style={{ color: rarity.cor }}>💎 {gem.nome}</div>
+                      <div className="gem-desc">{gem.descricao}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div className="modal-actions">
+              <button className="ghost" onClick={() => setSocketModal(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

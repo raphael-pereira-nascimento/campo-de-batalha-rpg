@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client';
 import { gameData } from './offline/gameData.js';
-import { isOffline, saveOfflinePlayer, getOfflinePlayer, getOfflineCharacters, saveOfflineCharacter, getOfflineWallet, addOfflineCoins } from './offline/storage.js';
+import { isOffline, saveOfflinePlayer, getOfflinePlayer, getOfflineCharacters, saveOfflineCharacter, getOfflineWallet, addOfflineCoins, getOfflineGems, addOfflineGem, removeOfflineGem } from './offline/storage.js';
 import { offlineBattle } from './offline/battle.js';
 import { MONSTERS } from './game/monsters.js';
 
@@ -285,6 +285,57 @@ export const api = {
   deleteCustomSkill: (id) => {
     if (isOffline()) return Promise.resolve({ ok: true });
     return auth(`/api/custom-skills/${id}`, { method: 'DELETE' });
+  },
+
+  // ── Gemas ──────────────────────────────────────────
+
+  getCharacterGems: (characterId) => {
+    if (isOffline()) {
+      return Promise.resolve({ ok: true, gems: getOfflineGems(characterId) });
+    }
+    return auth(`/api/characters/${characterId}/gems`);
+  },
+  socketGem: (characterId, slot, gemId) => {
+    if (isOffline()) {
+      const chars = getOfflineCharacters();
+      const c = chars.find((ch) => ch.id === characterId);
+      if (!c) return Promise.reject(new Error('Personagem não encontrado.'));
+      const [equipSlot, slotIndexStr] = slot.split('_');
+      const slotIndex = parseInt(slotIndexStr, 10);
+      const item = c.equipment?.[equipSlot];
+      if (!item) return Promise.reject(new Error('Nenhum equipamento.'));
+      const socketedGems = item.socketedGems || [];
+      if (socketedGems[slotIndex]) return Promise.reject(new Error('Slot ocupado.'));
+      const gems = getOfflineGems(characterId);
+      const gemIdx = gems.indexOf(gemId);
+      if (gemIdx === -1) return Promise.reject(new Error('Gema não encontrada.'));
+      removeOfflineGem(characterId, gemId);
+      socketedGems[slotIndex] = gemId;
+      c.equipment[equipSlot] = { ...item, socketedGems };
+      localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
+      return Promise.resolve({ ok: true, character: c });
+    }
+    return auth(`/api/characters/${characterId}/socket`, { method: 'POST', body: JSON.stringify({ slot, gemId }) });
+  },
+  unsocketGem: (characterId, slot) => {
+    if (isOffline()) {
+      const chars = getOfflineCharacters();
+      const c = chars.find((ch) => ch.id === characterId);
+      if (!c) return Promise.reject(new Error('Personagem não encontrado.'));
+      const [equipSlot, slotIndexStr] = slot.split('_');
+      const slotIndex = parseInt(slotIndexStr, 10);
+      const item = c.equipment?.[equipSlot];
+      if (!item) return Promise.reject(new Error('Nenhum equipamento.'));
+      const socketedGems = item.socketedGems || [];
+      const gemId = socketedGems[slotIndex];
+      if (!gemId) return Promise.reject(new Error('Slot vazio.'));
+      addOfflineGem(characterId, gemId);
+      socketedGems[slotIndex] = null;
+      c.equipment[equipSlot] = { ...item, socketedGems };
+      localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
+      return Promise.resolve({ ok: true, character: c });
+    }
+    return auth(`/api/characters/${characterId}/socket`, { method: 'DELETE', body: JSON.stringify({ slot }) });
   },
 };
 

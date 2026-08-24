@@ -461,3 +461,84 @@ export const SHOP_ITEMS = {
   pocao_cura_grande: { nome: 'Poção de Cura Grande', tipo: 'item', preco: 120, cura: 60, desc: 'Restaura 60 de HP.' },
   elixir_mana_grande: { nome: 'Elixir de Mana Grande', tipo: 'item', preco: 100, mana: 50, desc: 'Restaura 50 de MP.' },
 };
+
+// ── Sistema de Gemas ──────────────────────────────────
+
+export async function getCharacterGems(characterId) {
+  const { rows } = await query(
+    'SELECT gem_id FROM character_gems WHERE character_id = $1 ORDER BY created_at ASC',
+    [characterId],
+  );
+  return rows.map((r) => r.gem_id);
+}
+
+export async function addGemToInventory(characterId, gemId) {
+  await query(
+    'INSERT INTO character_gems (character_id, gem_id) VALUES ($1, $2)',
+    [characterId, gemId],
+  );
+}
+
+export async function socketGem(characterId, slotKey, gemId) {
+  const char = await getCharacter(characterId);
+  if (!char) throw new Error('Personagem não encontrado.');
+
+  const [equipSlot, slotIndexStr] = slotKey.split('_');
+  const slotIndex = parseInt(slotIndexStr, 10);
+  const item = char.equipment?.[equipSlot];
+  if (!item) throw new Error('Nenhum equipamento neste slot.');
+  const maxSlots = item.socketSlots || 0;
+  if (slotIndex < 0 || slotIndex >= maxSlots) throw new Error('Slot inválido.');
+
+  // Check gem is in inventory
+  const gems = await getCharacterGems(characterId);
+  const gemIdx = gems.indexOf(gemId);
+  if (gemIdx === -1) throw new Error('Gema não encontrada no inventário.');
+
+  // Check slot is empty
+  const socketedGems = item.socketedGems || [];
+  if (socketedGems[slotIndex]) throw new Error('Slot já possui uma gema.');
+
+  // Remove gem from inventory
+  await query(
+    'DELETE FROM character_gems WHERE id = (SELECT id FROM character_gems WHERE character_id = $1 AND gem_id = $2 LIMIT 1)',
+    [characterId, gemId],
+  );
+
+  // Add to socketed gems
+  socketedGems[slotIndex] = gemId;
+  const updatedEquipment = { ...char.equipment, [equipSlot]: { ...item, socketedGems } };
+  await query(
+    'UPDATE characters SET equipment = $1 WHERE id = $2',
+    [JSON.stringify(updatedEquipment), characterId],
+  );
+
+  return getCharacter(characterId);
+}
+
+export async function unsocketGem(characterId, slotKey) {
+  const char = await getCharacter(characterId);
+  if (!char) throw new Error('Personagem não encontrado.');
+
+  const [equipSlot, slotIndexStr] = slotKey.split('_');
+  const slotIndex = parseInt(slotIndexStr, 10);
+  const item = char.equipment?.[equipSlot];
+  if (!item) throw new Error('Nenhum equipamento neste slot.');
+
+  const socketedGems = item.socketedGems || [];
+  const gemId = socketedGems[slotIndex];
+  if (!gemId) throw new Error('Slot vazio.');
+
+  // Add gem back to inventory
+  await addGemToInventory(characterId, gemId);
+
+  // Remove from socketed gems
+  socketedGems[slotIndex] = null;
+  const updatedEquipment = { ...char.equipment, [equipSlot]: { ...item, socketedGems } };
+  await query(
+    'UPDATE characters SET equipment = $1 WHERE id = $2',
+    [JSON.stringify(updatedEquipment), characterId],
+  );
+
+  return getCharacter(characterId);
+}

@@ -952,3 +952,259 @@ button.danger {
   margin-top: 8px;
 }
 
+/* ── Arsenal / Compendium ─────────────────────── */
+
+.compendium-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.compendium-tabs button {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  font-size: 14px;
+  padding: 8px 18px;
+  border-radius: 10px;
+}
+.compendium-tabs button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.compendium-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.weapon-card,
+.gem-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: transform 0.1s, box-shadow 0.15s;
+}
+.weapon-card:hover,
+.gem-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.weapon-card-head,
+.gem-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.weapon-icon,
+.gem-icon {
+  font-size: 28px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  background: var(--panel-2);
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.weapon-name,
+.gem-name {
+  font-weight: 700;
+  font-size: 16px;
+}
+.weapon-tipo,
+.gem-tipo {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.weapon-stats,
+.gem-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.weapon-stat,
+.gem-stat {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.weapon-stat strong,
+.gem-stat strong {
+  color: var(--text);
+}
+
+.weapon-desc,
+.gem-desc {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 4px 0 0;
+  line-height: 1.4;
+}
+
+/* ── Socket slots ─────────────────────────────── */
+
+.socket-slots {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.socket-slot {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px dashed var(--border);
+  background: var(--panel-2);
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  position: relative;
+}
+.socket-slot:hover {
+  border-color: var(--accent);
+  background: rgba(124, 92, 255, 0.12);
+}
+.socket-slot.filled {
+  border-style: solid;
+  border-color: var(--accent);
+  background: rgba(124, 92, 255, 0.18);
+}
+.socket-slot .slot-gem-name {
+  font-size: 10px;
+  position: absolute;
+  bottom: -18px;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.socket-slot .remove-gem {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--red);
+  color: #fff;
+  font-size: 10px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.socket-slot:hover .remove-gem {
+  opacity: 1;
+}
+
+/* gem rarity borders */
+.gem-rarity-comum    { border-color: #9aa0c0; }
+.gem-rarity-incomum  { border-color: #3ddc84; }
+.gem-rarity-rara     { border-color: #4a90e2; }
+.gem-rarity-epica    { border-color: #7c5cff; }
+.gem-rarity-lendaria { border-color: #ffd166; }
+
+/* gem effects in compendium */
+.gem-effects {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+.gem-effect {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 3px 0;
+}
+.gem-effect-type {
+  color: var(--accent);
+  font-weight: 600;
+  min-width: 64px;
+}
+
+.gem-biome,
+.gem-price {
+  font-size: 12px;
+  color: var(--muted);
+}
+.gem-fusao {
+  font-size: 12px;
+  color: var(--accent-2);
+}
+.gem-drop-list {
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* ── Gem selection modal ──────────────────────── */
+
+.gem-select-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+.gem-select-card {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.1s;
+}
+.gem-select-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.gem-select-card .gem-name {
+  font-size: 14px;
+}
+.gem-select-card .gem-desc {
+  font-size: 12px;
+}
+
+/* ── Weapon state badges ──────────────────────── */
+
+.state-badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid;
+  font-weight: 600;
+}
+.state-otima       { border-color: #3ddc84; color: #3ddc84; }
+.state-manutencao  { border-color: #f5c542; color: #f5c542; }
+.state-danificada  { border-color: #ff6b35; color: #ff6b35; }
+.state-quebrada    { border-color: #dc3545; color: #dc3545; }
+
+/* ── Compendium section headers ───────────────── */
+
+.compendium-section {
+  margin-bottom: 24px;
+}
+.compendium-section h3 {
+  margin: 0 0 12px;
+  color: var(--accent-2);
+  font-size: 16px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
