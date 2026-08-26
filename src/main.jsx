@@ -21,3 +21,8 @@ initConnection().finally(() => {
     </React.StrictMode>,
   );
 });
+
+// Registra o service worker apenas em produção (PWA instalável).
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}

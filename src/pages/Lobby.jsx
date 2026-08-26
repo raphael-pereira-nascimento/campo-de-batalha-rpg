@@ -15,6 +15,7 @@ export default function Lobby({ player, characters, gameData, onBack, onOpenBatt
 
   const [soloMonster, setSoloMonster] = useState('manequim');
   const [soloCount, setSoloCount] = useState(1);
+  const [aiEnabled, setAiEnabled] = useState(true);
 
   useEffect(() => {
     if (isOffline()) return;
@@ -44,6 +45,7 @@ export default function Lobby({ player, characters, gameData, onBack, onOpenBatt
           mode: 'mestre',
           playerId: player.id,
           character,
+          aiEnabled,
         });
         onOpenBattle(ack.battleId);
         onEnterBattle();
@@ -83,6 +85,7 @@ export default function Lobby({ player, characters, gameData, onBack, onOpenBatt
         mode: 'mestre',
         playerId: player.id,
         character,
+        aiEnabled,
       });
 
       for (let i = 0; i < soloCount; i++) {
@@ -172,6 +175,10 @@ export default function Lobby({ player, characters, gameData, onBack, onOpenBatt
                     onChange={(e) => setSoloCount(Math.max(1, Math.min(5, +e.target.value)))}
                   />
                 </label>
+                <label className="check-label inline ai-toggle">
+                  <input type="checkbox" checked={aiEnabled} onChange={(e) => setAiEnabled(e.target.checked)} />
+                  🤖 IA dos inimigos (atacam sozinhos)
+                </label>
                 {error && <div className="error">{error}</div>}
                 <button type="submit" disabled={busy || !charId}>
                   ⚔️ Lutar!
@@ -238,6 +245,12 @@ export default function Lobby({ player, characters, gameData, onBack, onOpenBatt
                   <p className="muted small">
                     Você será o <strong>Somente Mestre</strong>: monta e controla os inimigos ao vivo, mas seu personagem não entra no combate.
                   </p>
+                )}
+                {(role === 'mestre' || role === 'mestre_jogador') && (
+                  <label className="check-label inline ai-toggle">
+                    <input type="checkbox" checked={aiEnabled} onChange={(e) => setAiEnabled(e.target.checked)} />
+                    🤖 IA dos monstros (atacam sozinhos entre turnos do mestre)
+                  </label>
                 )}
                 {error && <div className="error">{error}</div>}
                 <button type="submit" disabled={busy || (role !== 'mestre' && !charId)}>

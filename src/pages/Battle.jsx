@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, getSocket, emitAck } from '../api.js';
+import { api, getSocket, emitAck, isOffline, applyOfflineRewards } from '../api.js';
 import StatBar from '../components/StatBar.jsx';
+import { playLogKind, play, isMuted, toggleMute } from '../utils/sfx.js';
 
 const CLASS_ICONS = { guerreiro: '🛡️', mago: '🔮', arqueiro: '🏹', clerigo: '✝️', assassino: '🗡️', paladino: '⚔️' };
 const MONSTER_ICON = '👾';
@@ -19,6 +20,7 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
   const [customMonsters, setCustomMonsters] = useState([]);
   const [floats, setFloats] = useState([]);
   const [secondsLeft, setSecondsLeft] = useState(TURN_SECONDS);
+  const [muted, setMuted] = useState(isMuted());
   const logRef = useRef(null);
   const hpPrevRef = useRef({});
   const floatIdRef = useRef(0);
@@ -111,6 +113,26 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turnKey]);
 
+  // Sons: ao detectar novas linhas de log, toca o som correspondente ao 'kind'.
+  const logLenPrevRef = useRef(0);
+  useEffect(() => {
+    if (!battle?.log) return;
+    const prev = logLenPrevRef.current;
+    if (battle.log.length > prev) {
+      for (let i = prev; i < battle.log.length; i++) playLogKind(battle.log[i].kind);
+      logLenPrevRef.current = battle.log.length;
+    }
+  }, [battle?.log?.length]);
+
+  // Som de vitória ao fim da batalha.
+  const prevStatusRef = useRef(null);
+  useEffect(() => {
+    if (!battle) return;
+    const prev = prevStatusRef.current;
+    if (prev === 'in_progress' && battle.status === 'finished') play('victory');
+    prevStatusRef.current = battle.status;
+  }, [battle]);
+
   const myChars = useMemo(() => participants.filter((p) => p.playerId === player.id), [participants, player.id]);
   const active = currentIsMine ? currentChar : isMasterTurn ? currentChar : myChars[0];
 
@@ -155,12 +177,13 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
     setBusy(true);
     setError('');
     try {
-      await emitAck('battleAction', {
+      const result = await emitAck('battleAction', {
         battleId,
         characterId: active.characterId,
         playerId: player.id,
         action: payload,
       });
+      if (result.battle) setBattle(result.battle);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -181,7 +204,8 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
     setBusy(true);
     setError('');
     try {
-      await emitAck('startBattle', { battleId, playerId: player.id });
+      const result = await emitAck('startBattle', { battleId, playerId: player.id });
+      if (result.battle) setBattle(result.battle);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -195,12 +219,13 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
     setError('');
     try {
       const isCustom = monsterPick.startsWith('custom_');
-      await emitAck('addMonster', {
+      const result = await emitAck('addMonster', {
         battleId,
         playerId: player.id,
         monsterId: isCustom ? undefined : monsterPick,
         customMonsterId: isCustom ? monsterPick.slice(7) : undefined,
       });
+      if (result.battle) setBattle(result.battle);
       setMonsterPick('');
     } catch (err) {
       setError(err.message);
@@ -266,6 +291,13 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
         </div>
         <button className="ghost" onClick={leave}>
           ← Sair
+        </button>
+        <button
+          className="ghost sfx-toggle"
+          onClick={() => { const m = toggleMute(); setMuted(m); }}
+          title={muted ? 'Ativar som' : 'Silenciar'}
+        >
+          {muted ? '🔇' : '🔊'}
         </button>
       </header>
 
@@ -369,12 +401,7 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
           )}
 
           {battle.status === 'finished' && (
-            <div className="win-banner">
-              <h2>🏆 {battle.winner} venceu!</h2>
-              <button className="ghost" onClick={onBackToSheets}>
-                Ver minhas fichas
-              </button>
-            </div>
+            <VictoryPanel battle={battle} player={player} onExit={onBackToSheets} />
           )}
         </div>
 
@@ -389,6 +416,10 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
               ))}
             </div>
           </div>
+
+          {battle.status === 'in_progress' && (
+            <QuickChat battle={battle} player={player} />
+          )}
 
           {battle.status === 'in_progress' && active && isMyTurn && (
             <div className="panel action-panel">
@@ -609,6 +640,82 @@ function FfSide({ side, mirrored, current, gameData, selectedId, floats, onSelec
         ))}
         {side.fighters.length === 0 && <p className="muted small">Aguardando combatentes...</p>}
       </div>
+    </div>
+  );
+}
+
+const QUICK_PHRASES = [
+  { id: 'grito', text: 'Grito de Guerra! 💥' },
+  { id: 'curar', text: 'Preciso de cura! 💚' },
+  { id: 'foco', text: 'Foco! 🎯' },
+  { id: 'atacar', text: 'Ataquem juntos! ⚔️' },
+  { id: 'cuidado', text: 'Cuidado! 🛡️' },
+  { id: 'obrigado', text: 'Obrigado! 🤝' },
+  { id: 'trocar', text: 'Vamos trocar de alvo! 🔄' },
+  { id: 'rir', text: 'Hahaha! 😄' },
+  { id: 'desafio', text: 'Isso é tudo que tem? 😤' },
+  { id: 'rendicao', text: 'Não desista! 💪' },
+];
+
+function QuickChat({ battle, player }) {
+  const send = (phrase) => {
+    getSocket().emit('quickChat', { battleId: battle.id, phrase: phrase.text });
+  };
+
+  useEffect(() => {
+    const socket = getSocket();
+    const handler = (data) => {
+      const charName = data.charName || data.playerName || '???';
+      battle.log.push({ id: Date.now() + Math.random(), kind: 'chat', text: `💬 ${charName}: "${data.phrase}"` });
+    };
+    socket.on('quickChatMessage', handler);
+    return () => socket.off('quickChatMessage', handler);
+  }, [battle]);
+
+  return (
+    <div className="quick-chat-bar">
+      {QUICK_PHRASES.map((p) => (
+        <button key={p.id} className="quick-chat-bubble" onClick={() => send(p)} title={p.text}>
+          {p.text}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function VictoryPanel({ battle, player, onExit }) {
+  const rewardsRef = useRef(false);
+  const winners = (battle.participants || []).filter((p) => p.alive && !p.isMonster);
+
+  // Aplica recompensas uma única vez ao montar (offline: salva no localStorage).
+  useEffect(() => {
+    if (rewardsRef.current) return;
+    rewardsRef.current = true;
+    if (!isOffline()) return;
+    for (const p of winners) {
+      if (p.playerId === player.id) {
+        applyOfflineRewards(p.characterId, p.xpGained || 0, p.kills || 0);
+      }
+    }
+  }, [winners, player.id]);
+
+  return (
+    <div className="panel victory-panel">
+      <h2>🏆 {battle.winner} venceu!</h2>
+      <div className="reward-list">
+        {winners.map((p) => {
+          const coins = 100 + (p.kills || 0) * 25;
+          return (
+            <div key={p.characterId} className="reward-row">
+              <span className="reward-name">{p.charName}</span>
+              <span className="reward-tag reward-xp">+{p.xpGained || 0} XP</span>
+              <span className="reward-tag reward-coins">+{coins} ℛ</span>
+              {p.kills > 0 && <span className="reward-tag">⚔️ {p.kills} abate{p.kills > 1 ? 's' : ''}</span>}
+            </div>
+          );
+        })}
+      </div>
+      <button onClick={onExit} style={{ marginTop: 12 }}>Ver minhas fichas</button>
     </div>
   );
 }

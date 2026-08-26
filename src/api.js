@@ -95,7 +95,7 @@ class MockSocket {
 
     if (event === 'createBattle') {
       try {
-        const battleId = offlineBattle.create(payload.playerId, payload.character, payload.mode || 'mestre');
+        const battleId = offlineBattle.create(payload.playerId, payload.character, payload.mode || 'mestre', payload.aiEnabled);
         if (ack) ack({ ok: true, battleId });
       } catch (e) {
         if (ack) ack({ ok: false, error: e.message });
@@ -106,7 +106,8 @@ class MockSocket {
     if (event === 'addMonster') {
       try {
         offlineBattle.addMonster(payload.monsterId || payload.monsterPick);
-        if (ack) ack({ ok: true });
+        const state = offlineBattle.getState();
+        if (ack) ack({ ok: true, battle: state });
       } catch (e) {
         if (ack) ack({ ok: false, error: e.message });
       }
@@ -117,7 +118,8 @@ class MockSocket {
       (async () => {
         try {
           offlineBattle.start();
-          if (ack) ack({ ok: true });
+          const state = offlineBattle.getState();
+          if (ack) ack({ ok: true, battle: state });
         } catch (e) {
           if (ack) ack({ ok: false, error: e.message });
         }
@@ -129,7 +131,8 @@ class MockSocket {
       (async () => {
         try {
           await offlineBattle.playerAction(payload.characterId, payload.action);
-          if (ack) ack({ ok: true });
+          const state = offlineBattle.getState();
+          if (ack) ack({ ok: true, battle: state });
         } catch (e) {
           if (ack) ack({ ok: false, error: e.message });
         }
@@ -142,6 +145,14 @@ class MockSocket {
       return;
     }
 
+    if (event === 'quickChat') {
+      const charName = 'Jogador';
+      const listeners = this._listeners?.quickChatMessage || [];
+      for (const fn of listeners) fn({ charName, phrase: payload.phrase });
+      if (ack) ack({ ok: true });
+      return;
+    }
+
     if (event === 'leaveBattle') {
       if (ack) ack({ ok: true });
       return;
@@ -150,6 +161,37 @@ class MockSocket {
 }
 
 const mockSocket = new MockSocket();
+
+// Aplica recompensas de batalha a um personagem offline (espelho do grantRewards do servidor).
+export function applyOfflineRewards(charId, xpGained, wins = 0) {
+  if (!isOffline()) return;
+  const chars = getOfflineCharacters();
+  const c = chars.find((ch) => ch.id === charId);
+  if (!c) return;
+  let xp = (c.xp || 0) + xpGained;
+  let level = c.level || 1;
+  while (xp >= level * 100) { xp -= level * 100; level += 1; }
+  const levelsGained = level - (c.level || 1);
+  const attributes = { ...c.attributes };
+  if (levelsGained > 0) {
+    const primary = (c.classes || []).find((cl) => cl.primary) || (c.classes || [])[0] || {};
+    const upAttr = primary.levelUp || 'forca';
+    attributes[upAttr] = Math.min((attributes[upAttr] || 0) + levelsGained, 14);
+  }
+  const stats = applyMaxMults(
+    deriveStats(c.classes || [], level, attributes, c.equipment || {}, c.races || []),
+    efeitosDaFicha(c),
+  );
+  c.level = level;
+  c.xp = xp;
+  c.wins = (c.wins || 0) + wins;
+  c.hp_max = stats.hpMax;
+  c.mp_max = stats.mpMax;
+  c.hp_current = Math.min(c.hp_current ?? stats.hpMax, stats.hpMax);
+  c.mp_current = Math.min(c.mp_current ?? stats.mpMax, stats.mpMax);
+  c.attributes = attributes;
+  localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
+}
 
 /* ─── Socket (online or mock) ─── */
 export function getSocket() {
@@ -288,6 +330,16 @@ export const api = {
       return Promise.resolve(gameData);
     }
     return request('/api/gamedata');
+  },
+  getRanking: () => {
+    if (isOffline()) {
+      const chars = getOfflineCharacters().map((c) => ({
+        id: c.id, name: c.name, level: c.level || 1, xp: c.xp || 0, wins: c.wins || 0, gender: c.gender, race: c.race, class: c.class,
+      }));
+      chars.sort((a, b) => (b.wins - a.wins) || (b.xp - a.xp));
+      return Promise.resolve({ ok: true, ranking: chars.slice(0, 20) });
+    }
+    return request('/api/ranking');
   },
   getWallet: () => {
     if (isOffline()) {

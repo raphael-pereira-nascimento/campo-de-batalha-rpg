@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { api, getSocket, getPlayer, getToken, logout, isOffline } from './api.js';
 import Home from './pages/Home.jsx';
 import Characters from './pages/Characters.jsx';
-import Lobby from './pages/Lobby.jsx';
-import Battle from './pages/Battle.jsx';
-import Registry from './pages/Registry.jsx';
-import Compendium from './pages/Compendium.jsx';
+
+const Lobby = lazy(() => import('./pages/Lobby.jsx'));
+const Battle = lazy(() => import('./pages/Battle.jsx'));
+const Registry = lazy(() => import('./pages/Registry.jsx'));
+const Compendium = lazy(() => import('./pages/Compendium.jsx'));
+const TableBattle = lazy(() => import('./pages/TableBattle.jsx'));
 
 export default function App() {
   const [view, setView] = useState('home');
@@ -126,21 +128,32 @@ export default function App() {
         onEnterLobby={() => setView('lobby')}
         onOpenRegistry={() => setView('registry')}
         onOpenCompendium={() => setView('compendium')}
+        onOpenTableBattle={() => setView('tableBattle')}
         onLogout={handleLogout}
       />
     );
   }
 
   if (view === 'registry') {
-    return <Registry player={player} gameData={gameData} onBack={() => setView('characters')} />;
+    return <Suspense fallback={<div className="loading">Carregando...</div>}>
+      <Registry player={player} gameData={gameData} onBack={() => setView('characters')} />
+    </Suspense>;
   }
 
   if (view === 'compendium') {
-    return <Compendium onBack={() => setView('characters')} />;
+    return <Suspense fallback={<div className="loading">Carregando...</div>}>
+      <Compendium onBack={() => setView('characters')} />
+    </Suspense>;
+  }
+
+  if (view === 'tableBattle') {
+    return <Suspense fallback={<div className="loading">Carregando mesa...</div>}>
+      <TableBattle onBack={() => setView('characters')} />
+    </Suspense>;
   }
 
   if (view === 'lobby') {
-    return (
+    return <Suspense fallback={<div className="loading">Carregando...</div>}>
       <Lobby
         player={player}
         characters={characters}
@@ -149,10 +162,10 @@ export default function App() {
         onOpenBattle={(id) => setBattleId(id)}
         onEnterBattle={() => setView('battle')}
       />
-    );
+    </Suspense>;
   }
 
-  return (
+  return <Suspense fallback={<div className="loading">Carregando batalha...</div>}>
     <Battle
       battleId={battleId}
       player={player}
@@ -163,5 +176,5 @@ export default function App() {
       }}
       onBackToSheets={() => setView('characters')}
     />
-  );
+  </Suspense>;
 }

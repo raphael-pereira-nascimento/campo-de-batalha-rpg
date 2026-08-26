@@ -473,7 +473,7 @@ export async function grantRewards(battle) {
     await query(
       `UPDATE characters
        SET xp = $1, level = $2, hp_max = $3, mp_max = $4, hp_current = $5, mp_current = $6,
-           attributes = $7
+           attributes = $7, wins = wins + 1
        WHERE id = $8`,
       [
         newXp,

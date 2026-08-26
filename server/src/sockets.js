@@ -74,7 +74,7 @@ export function setupSockets(httpServer) {
       }
     });
 
-    socket.on('createBattle', async ({ name, mode, role, characterId }, ack) => {
+    socket.on('createBattle', async ({ name, mode, role, characterId, aiEnabled }, ack) => {
       try {
         assertAuthed();
         const resolvedRole = BattleManager.resolveRole(mode, role);
@@ -84,7 +84,7 @@ export function setupSockets(httpServer) {
           if (!character) throw new Error('Personagem não encontrado.');
           if (character.player_id !== me()) throw new Error('Este personagem não é seu.');
         }
-        const battle = manager.createBattle({ name, mode, role: resolvedRole, host: me(), hostName: socket.data.playerName || 'Anfitrião', character });
+        const battle = manager.createBattle({ name, mode, role: resolvedRole, host: me(), hostName: socket.data.playerName || 'Anfitrião', character, aiEnabled });
         socket.join(battle.id);
         publishBattle(io, manager, battle);
         ack({ ok: true, battleId: battle.id });
@@ -185,6 +185,15 @@ export function setupSockets(httpServer) {
       } catch (err) {
         ack({ ok: false, error: err.message });
       }
+    });
+
+    socket.on('quickChat', ({ battleId, phrase }) => {
+      try {
+        assertAuthed();
+        if (!phrase || typeof phrase !== 'string') return;
+        const charName = socket.data.playerName || '???';
+        io.to(battleId).emit('quickChatMessage', { charName, playerName: charName, phrase: phrase.slice(0, 100) });
+      } catch (_) { /* ignore */ }
     });
 
     socket.on('getHistory', async (ack) => {

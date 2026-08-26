@@ -212,6 +212,20 @@ app.get('/api/gamedata', (_req, res) => {
   });
 });
 
+app.get('/api/ranking', async (_req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT id, name, level, xp, wins, gender, race, class
+       FROM characters
+       ORDER BY wins DESC, xp DESC
+       LIMIT 20`,
+    );
+    res.json({ ok: true, ranking: rows });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // ---- Conteúdo customizado (Fase 3) ----
 
 app.get('/api/custom-classes', async (_req, res) => {

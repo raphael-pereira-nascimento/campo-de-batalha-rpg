@@ -22,7 +22,7 @@ class OfflineBattle {
     this.listeners.filter((l) => l.event === event).forEach((l) => l.fn(data));
   }
 
-  create(playerId, characterData, mode = 'solo') {
+  create(playerId, characterData, mode = 'solo', aiEnabled = true) {
     this.manager = new BattleManager({
       emit: (battle) => {
         if (battle) this._emit('battleUpdate', { ...battle });
@@ -57,6 +57,7 @@ class OfflineBattle {
       mode: 'mestre',
       host: playerId,
       hostName: playerId,
+      aiEnabled,
       character: {
         id: characterData.id,
         name: characterData.name,

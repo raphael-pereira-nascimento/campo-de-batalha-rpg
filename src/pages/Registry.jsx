@@ -9,6 +9,7 @@ export default function Registry({ player, gameData, onBack }) {
   const [races, setRaces] = useState([]);
   const [equipment, setEquipment] = useState([]);
   const [skills, setSkills] = useState([]);
+  const [ranking, setRanking] = useState([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -34,6 +35,12 @@ export default function Registry({ player, gameData, onBack }) {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    if (tab === 'ranking') {
+      api.getRanking().then((d) => setRanking(d.ranking || [])).catch(() => {});
+    }
+  }, [tab]);
 
   return (
     <div className="page">
@@ -64,6 +71,9 @@ export default function Registry({ player, gameData, onBack }) {
           <button className={tab === 'monsters' ? 'active' : ''} onClick={() => setTab('monsters')}>
             Monstros
           </button>
+          <button className={tab === 'ranking' ? 'active' : ''} onClick={() => setTab('ranking')}>
+            🏆 Ranking
+          </button>
         </div>
 
         {error && <div className="error">{error}</div>}
@@ -82,6 +92,30 @@ export default function Registry({ player, gameData, onBack }) {
         )}
         {tab === 'monsters' && (
           <MonsterRegistry player={player} monsters={monsters} gameData={gameData} onChanged={() => { setError(''); load(); }} setError={setError} />
+        )}
+        {tab === 'ranking' && (
+          <section className="panel">
+            <h2>🏆 Ranking dos Aventureiros</h2>
+            {ranking.length === 0 && <p className="muted">Nenhum personagem registrado ainda.</p>}
+            {ranking.length > 0 && (
+              <table className="ranking-table">
+                <thead>
+                  <tr><th>#</th><th>Nome</th><th>Nv.</th><th>XP</th><th>Vitórias</th></tr>
+                </thead>
+                <tbody>
+                  {ranking.map((r, i) => (
+                    <tr key={r.id}>
+                      <td>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`}</td>
+                      <td>{r.name}{r.gender === 'feminino' ? ' ♀' : r.gender === 'masculino' ? ' ♂' : ''}</td>
+                      <td>{r.level}</td>
+                      <td>{r.xp}</td>
+                      <td>{r.wins}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
         )}
       </div>
     </div>
@@ -209,12 +243,17 @@ function MonsterRegistry({ player, monsters, gameData, onChanged, setError }) {
     nome: '',
     nivel: 1,
     attributes: { forca: 3, inteligencia: 1, resistencia: 3, destreza: 1, reflexos: 1 },
-    arma: { nome: '', danoBase: 6 },
+    arma: { nome: '', danoBase: 6, elemento: 'fisico' },
     spells: [],
     passiva: '',
     escala_chefe: false,
     multiplicador_hp: 3,
+    elemento: 'fisico',
+    fraquezas: [],
+    resistencias: [],
   });
+  const ELEMENTOS = ['fisico', 'fogo', 'agua', 'terra', 'ar', 'luz', 'trevas'];
+  const toggleList = (key, val) => setForm((f) => ({ ...f, [key]: f[key].includes(val) ? f[key].filter((v) => v !== val) : [...f[key], val] }));
 
   const setAttr = (k) => (e) =>
     setForm((f) => ({ ...f, attributes: { ...f.attributes, [k]: Number(e.target.value) } }));
@@ -229,11 +268,14 @@ function MonsterRegistry({ player, monsters, gameData, onChanged, setError }) {
         nome: '',
         nivel: 1,
         attributes: { forca: 3, inteligencia: 1, resistencia: 3, destreza: 1, reflexos: 1 },
-        arma: { nome: '', danoBase: 6 },
+        arma: { nome: '', danoBase: 6, elemento: 'fisico' },
         spells: [],
         passiva: '',
         escala_chefe: false,
         multiplicador_hp: 3,
+        elemento: 'fisico',
+        fraquezas: [],
+        resistencias: [],
       });
       onChanged();
     } catch (err) {
@@ -293,6 +335,28 @@ function MonsterRegistry({ player, monsters, gameData, onChanged, setError }) {
                 <span className="attr-name">{ATTRIBUTE_NAMES[k]}</span>
                 <input type="number" min={1} max={12} value={form.attributes[k]} onChange={setAttr(k)} />
               </div>
+            ))}
+          </div>
+          <label>
+            Elemento do ataque
+            <select value={form.elemento} onChange={(e) => setForm((f) => ({ ...f, elemento: e.target.value }))}>
+              {ELEMENTOS.map((el) => (<option key={el} value={el}>{el}</option>))}
+            </select>
+          </label>
+          <div>
+            <span className="muted small">Fraquezas (dano ×1.5): </span>
+            {ELEMENTOS.filter((e) => e !== 'fisico').map((el) => (
+              <label key={el} className="check-label inline">
+                <input type="checkbox" checked={form.fraquezas.includes(el)} onChange={() => toggleList('fraquezas', el)} /> {el}
+              </label>
+            ))}
+          </div>
+          <div>
+            <span className="muted small">Resistências (dano ×0.5): </span>
+            {ELEMENTOS.filter((e) => e !== 'fisico').map((el) => (
+              <label key={el} className="check-label inline">
+                <input type="checkbox" checked={form.resistencias.includes(el)} onChange={() => toggleList('resistencias', el)} /> {el}
+              </label>
             ))}
           </div>
           <p className="muted small">

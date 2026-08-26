@@ -164,7 +164,7 @@ export class BattleManager {
     return ['mestre', 'mestre_jogador'].includes(role) ? role : 'mestre_jogador';
   }
 
-  createBattle({ name, mode, host, hostName, character, role }) {
+  createBattle({ name, mode, host, hostName, character, role, aiEnabled }) {
     const normalized = ['todos', 'equipes', 'mestre'].includes(mode) ? mode : 'todos';
     const normalizedRole = BattleManager.resolveRole(normalized, role);
     const battle = {
@@ -175,6 +175,7 @@ export class BattleManager {
       host,
       hostName,
       hostRole: normalizedRole,
+      aiEnabled: !!aiEnabled,
       participants: [],
       turnOrder: [],
       currentTurnIndex: 0,
@@ -524,6 +525,16 @@ export class BattleManager {
     return this._armaCategoria(weapon) === esp.categoria ? 1.1 : 1;
   }
 
+  // Multiplicador elemental: monstros podem declarar fraquezas/resistencias.
+  _elemMult(atkElemento, target) {
+    if (!atkElemento || atkElemento === 'fisico') return 1;
+    const fracos = target.fraquezas || [];
+    const resis = target.resistencias || [];
+    if (fracos.includes(atkElemento)) return 1.5;
+    if (resis.includes(atkElemento)) return 0.5;
+    return 1;
+  }
+
   _lifesteal(battle, p, damageDealt) {
     const pct = efeitosDe(p).rouboVida || 0;
     if (pct <= 0 || !p.alive) return;
@@ -676,10 +687,14 @@ export class BattleManager {
       return;
     }
     const dmg = physicalDamage(p, weapon, this._physMult(p) * this._especializacaoMult(p, weapon));
-    const total = res.crit ? dmg.total * 2 : dmg.total;
+    let total = res.crit ? dmg.total * 2 : dmg.total;
+    const atkElem = weapon?.elemento || 'fisico';
+    const elemM = this._elemMult(atkElem, target);
+    total = Math.round(total * elemM);
+    const elemTag = elemM > 1 ? ` ⚡${atkElem} fragiliza!` : elemM < 1 ? ` 🛡${atkElem} resistido!` : '';
     battle.log.push(
       makeLog(
-        `${res.crit ? '✨ CRÍTICO! ' : ''}⚔️ ${p.charName} ataca ${target.charName} com ${weaponName}: dados [${dmg.rolls.join(', ')}] + bônus = ${total} de dano.`,
+        `${res.crit ? '✨ CRÍTICO! ' : ''}⚔️ ${p.charName} ataca ${target.charName} com ${weaponName}: dados [${dmg.rolls.join(', ')}] + bônus = ${total} de dano.${elemTag}`,
         'attack',
       ),
     );
@@ -768,10 +783,14 @@ export class BattleManager {
       dmg = magicDamage(p, { poder: skill.poder / 100 });
       dmg.total = Math.round(dmg.total * this._magMult(p));
     }
-    const total = res.crit ? dmg.total * 2 : dmg.total;
+    const total0 = res.crit ? dmg.total * 2 : dmg.total;
+    const skElem = skill.elemento || 'fisico';
+    const skElemM = this._elemMult(skElem, target);
+    const total = Math.round(total0 * skElemM);
+    const skElemTag = skElemM > 1 ? ` ⚡${skElem} fragiliza!` : skElemM < 1 ? ` 🛡${skElem} resistido!` : '';
     battle.log.push(
       makeLog(
-        `${res.crit ? '✨ CRÍTICO! ' : ''}✨ ${p.charName} usa ${skill.nome} em ${target.charName}: ${total} de dano (${skill.poder}%).`,
+        `${res.crit ? '✨ CRÍTICO! ' : ''}✨ ${p.charName} usa ${skill.nome} em ${target.charName}: ${total} de dano (${skill.poder}%).${skElemTag}`,
         'attack',
       ),
     );
@@ -836,10 +855,14 @@ export class BattleManager {
       dmg = magicDamage(p, { poder: skill.poder / 100 });
       dmg.total = Math.round(dmg.total * this._magMult(p));
     }
-    const total = res.crit ? dmg.total * 2 : dmg.total;
+    const total0m = res.crit ? dmg.total * 2 : dmg.total;
+    const meElem = skill.elemento || 'fisico';
+    const meElemM = this._elemMult(meElem, target);
+    const total = Math.round(total0m * meElemM);
+    const meElemTag = meElemM > 1 ? ` ⚡${meElem} fragiliza!` : meElemM < 1 ? ` 🛡${meElem} resistido!` : '';
     battle.log.push(
       makeLog(
-        `${res.crit ? '✨ CRÍTICO! ' : ''}💫 ${p.charName} desfere ${skill.nome} em ${target.charName}: ${total} de dano (${skill.poder}%)!`,
+        `${res.crit ? '✨ CRÍTICO! ' : ''}💫 ${p.charName} desfere ${skill.nome} em ${target.charName}: ${total} de dano (${skill.poder}%)!${meElemTag}`,
         'attack',
       ),
     );
@@ -902,6 +925,7 @@ export class BattleManager {
     if (hasStatus(p, 'congelamento')) {
       battle.log.push(makeLog(`🧊 ${p.charName} está congelado e pula o turno.`));
       this._advanceTurn(battle);
+      this._aiLoop(battle);
       this.emit(battle);
       return battle;
     }
@@ -1003,8 +1027,24 @@ export class BattleManager {
     if (!ended) {
       this._advanceTurn(battle);
     }
+    if (!this._checkEnd(battle)) {
+      this._aiLoop(battle);
+    }
     this.emit(battle);
     return battle;
+  }
+
+  // Executa turnos da IA em sequência até ser turno de jogador ou a batalha acabar.
+  _aiLoop(battle) {
+    if (!battle.aiEnabled) return;
+    let limit = battle.turnOrder.length * 2;
+    while (limit-- > 0) {
+      const cur = this._current(battle);
+      if (!cur || !cur.alive || !cur.isMonster) return;
+      this._aiAction(battle, cur);
+      if (this._checkEnd(battle)) return;
+      this._advanceTurn(battle);
+    }
   }
 
   _advanceTurn(battle) {
@@ -1021,6 +1061,30 @@ export class BattleManager {
         return;
       }
     } while (attempts > 0);
+  }
+
+  // IA simples: ataca o herói com menor HP%; usa skill se tiver MP.
+  _aiAction(battle, p) {
+    const heroes = battle.participants.filter((h) => !h.isMonster && h.alive);
+    if (!heroes.length) return;
+    const target = heroes.reduce((a, b) => (a.hp / a.hpMax) < (b.hp / b.hpMax) ? a : b);
+    this._resolveTurnGains(battle, p);
+    if (!p.alive) {
+      battle.log.push(makeLog(`☠️ ${p.charName} sucumbe aos efeitos de status.`, 'death'));
+      return;
+    }
+    if (p.spells?.length && p.mp > 0) {
+      const usable = (p.spells || []).filter((sid) => {
+        const sk = SPELLS[sid];
+        return sk && (sk.custo || 0) <= p.mp;
+      });
+      if (usable.length) {
+        this._resolveSkill(p, target, usable[0], battle);
+        return;
+      }
+    }
+    const weapon = p.equipment.arma ? EQUIPMENT.armas[p.equipment.arma.id] : null;
+    this._resolveAttack(battle, p, target, weapon);
   }
 
   _checkEnd(battle) {

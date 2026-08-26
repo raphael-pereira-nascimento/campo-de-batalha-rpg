@@ -65,31 +65,33 @@ export const CLASSES = {
   },
 };
 
+export const ELEMENTOS = ['fisico', 'fogo', 'agua', 'terra', 'ar', 'luz', 'trevas'];
+
 export const SPELLS = {
   golpe_sangrento: { nome: 'Golpe Sangrento', tipo: 'ataque', custo: 5, poder: 2.0, desc: 'Ataque físico brutal com força aumentada.', status: { tipo: 'sangramento', turnos: 2, dano: 6 } },
   grito_de_guerra: { nome: 'Grito de Guerra', tipo: 'buff', custo: 6, poder: 0.15, desc: 'Aumenta o dano físico de todos os aliados.' },
   muralha: { nome: 'Muralha', tipo: 'defesa', custo: 6, poder: 0.25, desc: 'Reduz o dano recebido nesta rodada.' },
 
-  bola_de_fogo: { nome: 'Bola de Fogo', tipo: 'ataque', custo: 8, poder: 2.4, desc: 'Explosão de fogo devastadora.', status: { tipo: 'queimadura', turnos: 3, dano: 5 } },
-  raio: { nome: 'Raio', tipo: 'ataque', custo: 6, poder: 1.8, desc: 'Descarga elétrica precisa.' },
-  gelo: { nome: 'Gelo', tipo: 'ataque', custo: 7, poder: 1.6, desc: 'Congela o alvo e reduz a velocidade dele.', status: { tipo: 'congelamento', turnos: 2 } },
+  bola_de_fogo: { nome: 'Bola de Fogo', tipo: 'ataque', custo: 8, poder: 2.4, desc: 'Explosão de fogo devastadora.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3, dano: 5 } },
+  raio: { nome: 'Raio', tipo: 'ataque', custo: 6, poder: 1.8, desc: 'Descarga elétrica precisa.', elemento: 'ar' },
+  gelo: { nome: 'Gelo', tipo: 'ataque', custo: 7, poder: 1.6, desc: 'Congela o alvo e reduz a velocidade dele.', elemento: 'agua', status: { tipo: 'congelamento', turnos: 2 } },
   escudo_arcano: { nome: 'Escudo Arcano', tipo: 'defesa', custo: 7, poder: 0.3, desc: 'Barreira mágica que absorve dano.' },
 
-  tiro_preciso: { nome: 'Tiro Preciso', tipo: 'ataque', custo: 4, poder: 1.5, desc: 'Dano crítico elevado.' },
-  chuva_de_flechas: { nome: 'Chuva de Flechas', tipo: 'ataque', custo: 9, poder: 2.2, desc: 'Acerta todos os inimigos.' },
-  flecha_ardente: { nome: 'Flecha Ardente', tipo: 'ataque', custo: 6, poder: 1.9, desc: 'Flecha em chamas que causa queimadura.', status: { tipo: 'queimadura', turnos: 3, dano: 6 } },
+  tiro_preciso: { nome: 'Tiro Preciso', tipo: 'ataque', custo: 4, poder: 1.5, desc: 'Dano crítico elevado.', elemento: 'fisico' },
+  chuva_de_flechas: { nome: 'Chuva de Flechas', tipo: 'ataque', custo: 9, poder: 2.2, desc: 'Acerta todos os inimigos.', elemento: 'fisico' },
+  flecha_ardente: { nome: 'Flecha Ardente', tipo: 'ataque', custo: 6, poder: 1.9, desc: 'Flecha em chamas que causa queimadura.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3, dano: 6 } },
 
-  cura: { nome: 'Cura', tipo: 'cura', custo: 6, poder: 2.0, desc: 'Restaura HP com base na inteligência.' },
-  cura_massa: { nome: 'Cura em Massa', tipo: 'cura', custo: 12, poder: 1.2, desc: 'Cura todos os aliados vivos.' },
-  luz_sagrada: { nome: 'Luz Sagrada', tipo: 'ataque', custo: 7, poder: 1.9, desc: 'Dano divino contra um inimigo.' },
-  benção: { nome: 'Benção', tipo: 'buff', custo: 5, poder: 0.1, desc: 'Aumenta o dano mágico dos aliados.' },
+  cura: { nome: 'Cura', tipo: 'cura', custo: 6, poder: 2.0, desc: 'Restaura HP com base na inteligência.', elemento: 'luz' },
+  cura_massa: { nome: 'Cura em Massa', tipo: 'cura', custo: 12, poder: 1.2, desc: 'Cura todos os aliados vivos.', elemento: 'luz' },
+  luz_sagrada: { nome: 'Luz Sagrada', tipo: 'ataque', custo: 7, poder: 1.9, desc: 'Dano divino contra um inimigo.', elemento: 'luz' },
+  benção: { nome: 'Benção', tipo: 'buff', custo: 5, poder: 0.1, desc: 'Aumenta o dano mágico dos aliados.', elemento: 'luz' },
 
-  golpe_preciso: { nome: 'Golpe Preciso', tipo: 'ataque', custo: 5, poder: 1.6, desc: 'Ataque certeiro que tem alta chance de crítico.' },
-  veneno: { nome: 'Veneno', tipo: 'ataque', custo: 6, poder: 1.4, desc: 'Envenena o alvo, causando dano contínuo.', status: { tipo: 'veneno', turnos: 3, dano: 4 } },
+  golpe_preciso: { nome: 'Golpe Preciso', tipo: 'ataque', custo: 5, poder: 1.6, desc: 'Ataque certeiro que tem alta chance de crítico.', elemento: 'fisico' },
+  veneno: { nome: 'Veneno', tipo: 'ataque', custo: 6, poder: 1.4, desc: 'Envenena o alvo, causando dano contínuo.', elemento: 'trevas', status: { tipo: 'veneno', turnos: 3, dano: 4 } },
   sombra: { nome: 'Sombra', tipo: 'defesa', custo: 5, poder: 0.3, desc: 'Desaparece nas sombras, reduzindo muito o dano recebido.' },
 
-  golpe_sagrado: { nome: 'Golpe Sagrado', tipo: 'ataque', custo: 7, poder: 2.0, desc: 'Espada envolta em luz sagrada.' },
-  escudo_divino: { nome: 'Escudo Divino', tipo: 'defesa', custo: 7, poder: 0.3, desc: 'Barreira sagrada que absorve dano.' },
+  golpe_sagrado: { nome: 'Golpe Sagrado', tipo: 'ataque', custo: 7, poder: 2.0, desc: 'Espada envolta em luz sagrada.', elemento: 'luz' },
+  escudo_divino: { nome: 'Escudo Divino', tipo: 'defesa', custo: 7, poder: 0.3, desc: 'Barreira sagrada que absorve dano.', elemento: 'luz' },
 };
 
 export const EQUIPMENT = {

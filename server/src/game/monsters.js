@@ -22,10 +22,12 @@ export const MONSTERS = {
     tipo: 'inimigo',
     nivel: 3,
     attributes: { forca: 4, inteligencia: 1, resistencia: 3, destreza: 2, reflexos: 2 },
-    arma: { nome: 'Espada Enferrujada', danoBase: 8 },
+    arma: { nome: 'Espada Enferrujada', danoBase: 8, elemento: 'fisico' },
     spells: [],
     passiva: 'Sem carne: não sangra.',
     efeitos: { imune: ['sangramento'] },
+    fraquezas: ['luz'],
+    resistencias: ['trevas'],
   },
   zumbi: {
     id: 'zumbi',
@@ -44,10 +46,12 @@ export const MONSTERS = {
     tipo: 'inimigo',
     nivel: 5,
     attributes: { forca: 5, inteligencia: 2, resistencia: 6, destreza: 1, reflexos: 2 },
-    arma: { nome: 'Punho de Pedra', danoBase: 10 },
+    arma: { nome: 'Punho de Pedra', danoBase: 10, elemento: 'terra' },
     spells: [],
     passiva: 'Pele de rocha: reduz 20% do dano físico recebido.',
     efeitos: { reducaoDanoFisico: 0.2, imune: ['sangramento', 'veneno'] },
+    fraquezas: ['agua'],
+    resistencias: ['fogo', 'fisico'],
   },
   golem_pedra: {
     id: 'golem_pedra',
@@ -55,12 +59,14 @@ export const MONSTERS = {
     tipo: 'chefe',
     nivel: 25,
     attributes: { forca: 8, inteligencia: 4, resistencia: 9, destreza: 1, reflexos: 3 },
-    arma: { nome: 'Martelo de Rocha', danoBase: 16 },
+    arma: { nome: 'Martelo de Rocha', danoBase: 16, elemento: 'terra' },
     spells: ['muralha'],
     passiva: 'Colosso: atinge vários inimigos, não sangra e não pode ser derrubado facilmente.',
     efeitos: { danoFisicoMult: 1.15, imune: ['sangramento', 'veneno'] },
     escalaChefe: true,
     multiplicadorHP: 2.5,
+    fraquezas: ['agua', 'ar'],
+    resistencias: ['terra', 'fisico'],
   },
 
   goblin: {
@@ -69,10 +75,12 @@ export const MONSTERS = {
     tipo: 'inimigo',
     nivel: 2,
     attributes: { forca: 2, inteligencia: 1, resistencia: 2, destreza: 4, reflexos: 4 },
-    arma: { nome: 'Adaga Tortas', danoBase: 6 },
+    arma: { nome: 'Adaga Tortas', danoBase: 6, elemento: 'fisico' },
     spells: [],
     passiva: 'Ligeiro: esquiva 15% mais e envenena com suas lâminas.',
     efeitos: { esquivaBonus: 0.15, ataqueStatus: { tipo: 'veneno', turnos: 3, dano: 3 } },
+    fraquezas: ['luz'],
+    resistencias: ['trevas'],
   },
   lobo: {
     id: 'lobo',
@@ -162,7 +170,7 @@ export function buildMonster(def, playerHpSum = 0) {
     attributes: { ...def.attributes },
     equipment: {
       arma: def.arma
-        ? { id: def.id + '_arma', nome: def.arma.nome, danoBase: def.arma.danoBase }
+        ? { id: def.id + '_arma', nome: def.arma.nome, danoBase: def.arma.danoBase, elemento: def.arma.elemento || null }
         : null,
       armadura: null,
     },
@@ -206,5 +214,8 @@ export function buildMonster(def, playerHpSum = 0) {
     passiva: def.passiva || '',
     monsterDef: def,
     xpValue: monsterXp(def),
+    fraquezas: def.fraquezas || [],
+    resistencias: def.resistencias || [],
+    elemento: def.elemento || null,
   };
 }
