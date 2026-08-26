@@ -148,7 +148,7 @@ export default function App() {
 
   if (view === 'tableBattle') {
     return <Suspense fallback={<div className="loading">Carregando mesa...</div>}>
-      <TableBattle onBack={() => setView('characters')} />
+      <TableBattle onBack={() => setView('characters')} characters={characters} gameData={gameData} />
     </Suspense>;
   }
 

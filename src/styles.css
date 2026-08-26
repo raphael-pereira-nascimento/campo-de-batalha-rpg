@@ -1562,34 +1562,79 @@ button.danger {
 }
 
 /* ─── Batalha de Mesa ─── */
-.table-battle-grid {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
+.table-battle-layout {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 16px;
+  align-items: start;
 }
-.table-battle-grid th {
-  text-align: left;
-  padding: 6px 8px;
-  color: var(--accent-2);
+.table-battle-main { display: flex; flex-direction: column; gap: 16px; }
+.table-battle-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: 70px;
+}
+
+.fighter-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 10px;
+}
+.fighter-card {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.2s;
+}
+.fighter-card:hover { border-color: var(--accent); }
+.fighter-card.fighter-dead { opacity: 0.4; }
+.fighter-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.fighter-card-name { font-weight: 700; font-size: 14px; }
+.fighter-card-stats-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.fighter-card-stat {
   font-size: 11px;
-  text-transform: uppercase;
-  border-bottom: 1px solid var(--border);
+  font-weight: 700;
+  color: var(--accent-2);
+  background: var(--panel);
+  padding: 2px 7px;
+  border-radius: 6px;
 }
-.table-battle-grid td {
-  padding: 6px 8px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-  vertical-align: middle;
+.fighter-card-bars { display: flex; flex-direction: column; gap: 6px; }
+.fighter-card-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
-.table-battle-grid tr.fighter-dead td { opacity: 0.45; }
-.table-battle-grid tr:hover td { background: rgba(255,255,255,0.02); }
-.fighter-name-cell { font-weight: 600; min-width: 100px; }
-.stat-num { text-align: center; font-weight: 700; font-size: 14px; color: var(--accent-2); }
+.bar-label {
+  font-size: 11px;
+  font-weight: 700;
+  width: 22px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.fighter-card-effects { display: flex; flex-wrap: wrap; gap: 4px; }
 
 .stat-bar-wrap {
   position: relative;
   display: flex;
   align-items: center;
   gap: 4px;
+  flex: 1;
+  min-width: 0;
 }
 .stat-bar {
   position: absolute;
@@ -1612,11 +1657,12 @@ button.danger {
   text-align: center;
   position: relative;
   z-index: 1;
+  flex-shrink: 0;
 }
 .stat-input:focus { border-color: var(--accent); outline: none; }
-.stat-max { color: var(--muted); font-size: 11px; position: relative; z-index: 1; }
+.stat-max { color: var(--muted); font-size: 11px; position: relative; z-index: 1; flex-shrink: 0; }
 
-.stat-btns { display: flex; gap: 3px; margin-top: 3px; }
+.stat-btns { display: flex; gap: 3px; flex-shrink: 0; }
 .stat-btn {
   font-size: 10px;
   padding: 1px 6px;
@@ -1689,14 +1735,14 @@ button.danger {
   color: var(--muted);
 }
 .attack-selects select {
-  min-width: 160px;
+  min-width: 140px;
   padding: 8px;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--panel-2);
   color: var(--fg);
 }
-.vs-text { color: var(--accent); font-weight: 700; font-size: 14px; padding-bottom: 8px; }
+.vs-text { color: var(--accent); font-weight: 700; font-size: 18px; padding-bottom: 6px; }
 .attack-info {
   display: flex;
   flex-direction: column;
@@ -1710,6 +1756,7 @@ button.danger {
   display: flex;
   align-items: center;
   gap: 16px;
+  flex-wrap: wrap;
 }
 .dice-btn {
   font-size: 18px;
@@ -1758,26 +1805,86 @@ button.danger {
 .dice-result.miss .dice-label { color: #ef4444; }
 .dice-result.crit .dice-label { color: #f59e0b; }
 
-/* ─── Painel de Buffs ─── */
-.buff-panel {
+/* ─── Sidebar: Buffs/Debuffs ─── */
+.buff-panel-sidebar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: flex-end;
+  flex-direction: column;
+  gap: 10px;
 }
-.buff-panel label {
+.buff-panel-sidebar label {
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-size: 12px;
   color: var(--muted);
 }
-.buff-panel select,
-.buff-panel input {
+.buff-panel-sidebar select,
+.buff-panel-sidebar input {
   padding: 6px 8px;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--panel-2);
   color: var(--fg);
   font-size: 13px;
+}
+
+.custom-effects-list { display: flex; flex-direction: column; gap: 6px; }
+.custom-effect-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.custom-effect-item.buff { background: #16653422; border: 1px solid #16653455; color: #86efac; }
+.custom-effect-item.debuff { background: #7f1d1d22; border: 1px solid #7f1d1d55; color: #fca5a5; }
+
+.custom-effect-form {
+  display: flex;
+  gap: 4px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.custom-effect-form input,
+.custom-effect-form select {
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--fg);
+  font-size: 12px;
+}
+
+/* ─── Responsivo Mobile ─── */
+@media (max-width: 900px) {
+  .table-battle-layout {
+    grid-template-columns: 1fr;
+  }
+  .table-battle-sidebar {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px;
+  }
+}
+@media (max-width: 600px) {
+  .fighter-cards-grid {
+    grid-template-columns: 1fr;
+  }
+  .attack-selects { flex-direction: column; align-items: stretch; }
+  .attack-selects select { min-width: 0; width: 100%; }
+  .vs-text { text-align: center; }
+  .dice-area { justify-content: center; flex-direction: column; }
+  .dice-btn { width: 100%; }
+  .table-battle-form { flex-direction: column; align-items: stretch; }
+  .table-battle-form input, .table-battle-form select { width: 100%; }
+  .table-battle-sidebar {
+    grid-template-columns: 1fr;
+  }
+  .stat-btns { flex-wrap: wrap; }
+  .fighter-card-bar-row { flex-wrap: wrap; }
+  .fighter-card-stat { font-size: 10px; }
+  .custom-effect-form { flex-direction: column; }
+  .custom-effect-form input, .custom-effect-form select { width: 100%; }
 }
