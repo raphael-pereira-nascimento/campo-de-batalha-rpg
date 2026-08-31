@@ -1148,3 +1148,184 @@ export function gemEffectSlots(id) {
   if (!g?.efeitos) return [];
   return Object.keys(g.efeitos);
 }
+
+// ────────────────────────────────────────────────────────────────
+// SISTEMA DE FUSÃO DE PEDRAS (GemForge)
+// Estrutura do Mestre: gemas com estado 'bruta'/'polido', custo da
+// fusão EXCLUSIVAMENTE em Mana (custoFusaoMana) e tabela de receitas.
+// ────────────────────────────────────────────────────────────────
+
+export const gemas = [
+  {
+    id: 'obsidiana',
+    nome: 'Obsidiana',
+    tipo: 'Elemental (Fogo/Escuridão)',
+    raridade: 'Rara',
+    preco: { ouro: 5 },
+    estado: 'polido',
+    bioma: ['Terrenos Vulcânicos'],
+    custoFusaoMana: 30,
+    efeitos: {
+      armadura: { resistenciaFogo: 35, resistenciaEscuridao: 35, debuff: { danoImpacto: 15 } },
+      arma: { danoLamina: 15, danoMagiaFogo: 20 },
+      acessorio: { resistenciaFogo: 25, resistenciaMaldicao: 25 },
+      golem: { imunidadeFogo: true, imunidadeEscuridao: true, fraquezaImpacto: 25 }
+    },
+    fusoesCompativeis: ['agataDeFogo', 'rubi', 'granada'],
+    descricao: 'Pedra vulcânica elemental. Precisa ser encantada antes da forja.'
+  },
+  {
+    id: 'agataDeFogo',
+    nome: 'Ágata de Fogo',
+    tipo: 'Elemental (Fogo)',
+    raridade: 'Incomum',
+    preco: { ouro: 3 },
+    estado: 'polido',
+    bioma: ['Terrenos Vulcânicos'],
+    custoFusaoMana: 20,
+    efeitos: {
+      armadura: { resistenciaFogo: 30 },
+      arma: { chanceIncendiar: true },
+      acessorio: { resistenciaCalor: true },
+      golem: { golpeExplosaoFogo: true }
+    },
+    fusoesCompativeis: ['rubi', 'obsidiana', 'granada'],
+    descricao: 'Pedra elemental de fogo. Aquece o ambiente ao redor.'
+  },
+  {
+    id: 'rubi',
+    nome: 'Rubi',
+    tipo: 'Elemental (Fogo/Sangue)',
+    raridade: 'Épica',
+    preco: { ouro: 7 },
+    estado: 'bruta',
+    bioma: ['Terrenos Vulcânicos', 'Masmorra'],
+    custoFusaoMana: 50,
+    efeitos: {
+      armadura: { resistenciaFogo: 35, debuff: { danoGelo: 20 } },
+      arma: { danoFogo: 30, efeitoQueimadura: true },
+      acessorio: { vidaMaxima: 15 },
+      golem: { ataqueExplosaoFogo: true, debuff: { perdaEnergiaFrio: true } }
+    },
+    fusoesCompativeis: ['diamante', 'obsidiana', 'pedraDeSangue', 'agataDeFogo'],
+    descricao: 'Pedra elemental de fogo e sangue. Bruta, necessita de polimento.'
+  },
+  {
+    id: 'pedraDeSangue',
+    nome: 'Pedra de Sangue',
+    tipo: 'Proibida (Sangue/Dor)',
+    raridade: 'Mítica',
+    preco: { ouropla: 2 },
+    estado: 'polido',
+    bioma: ['Masmorra', 'Pântano'],
+    custoFusaoMana: 100,
+    efeitos: {
+      armadura: { curaAoMatar: 5, debuff: { perdaVidaPorMinuto: 2 } },
+      arma: { danoSangramento: 35, danoMagiaDor: 25 },
+      acessorio: { detectarFeridos: true },
+      golem: { absorverSangue: true }
+    },
+    fusoesCompativeis: ['rubi', 'onix', 'lagrimasVermelhas'],
+    descricao: 'Pedra proibida. Causa dano ao usuário, mas amplifica a magia de dor.'
+  }
+];
+
+// Tabela de Receitas de Fusão Conhecidas
+export const receitasFusao = [
+  {
+    ingredientes: ['obsidiana', 'agataDeFogo'],
+    resultado: {
+      id: 'obsidianaArdente',
+      nome: 'Obsidiana Ardente',
+      raridade: 'Épica',
+      custoManaTotal: 50,
+      efeitos: {
+        arma: { danoFogo: 55 },
+        debuff: { danoLeveAmbienteFrio: true }
+      },
+      descricao: 'Fusão estável. Aumenta drasticamente o dano de fogo, mas o usuário sofre em ambientes frios.'
+    }
+  },
+  {
+    ingredientes: ['rubi', 'pedraDeSangue'],
+    resultado: {
+      id: 'rubiAbissal',
+      nome: 'Rubi Abissal',
+      raridade: 'Lendário',
+      custoManaTotal: 150,
+      efeitos: {
+        arma: { drenoVida: true, danoFogo: 40 },
+        debuff: { dorContinuaPosBatalha: true }
+      },
+      descricao: 'Fusão estável, mas perigosa. Drena vida inimiga, mas causa dor contínua ao usuário após batalhas longas.'
+    }
+  }
+];
+
+export function getGemaById(id) {
+  return gemas.find((g) => g.id === id) || null;
+}
+
+// Retorna true se a gema do sistema de fusão está em estado bruta.
+export function gemaIsBruta(id) {
+  const g = getGemaById(id);
+  return !!g && g.estado === 'bruta';
+}
+
+// Converte um objeto de efeitos (chave -> valor) em pares legíveis p/ exibição.
+export function efeitosParaLista(efeitos) {
+  const list = [];
+  for (const [k, v] of Object.entries(efeitos || {})) {
+    if (k === 'debuff') {
+      list.push({ tipo: 'debuff', label: `❌ ${v === true ? k : `${k} ${v}`}` });
+      continue;
+    }
+    if (typeof v === 'boolean') list.push({ tipo: 'buff', label: `✨ ${k}` });
+    else list.push({ tipo: 'buff', label: `✨ ${k}: +${v}` });
+  }
+  return list;
+}
+
+// ── LÓGICA DE FUSÃO ────────────────────────────────────────────
+// Retorna { ok, resultado?|motivo? } descrevendo a compatibilidade.
+export function verificarFusao(gemaA, gemaB) {
+  if (!gemaA || !gemaB) {
+    return { ok: false, motivo: 'Selecione duas gemas para verificar a fusão.' };
+  }
+  if (gemaA.id === gemaB.id) {
+    return { ok: false, motivo: 'Não é possível fundir uma gema com ela mesma.' };
+  }
+
+  // REGRA DE OURO: pedras brutas bloqueiam a fusão.
+  if (gemaA.estado === 'bruta' || gemaB.estado === 'bruta') {
+    return {
+      ok: false,
+      bruta: true,
+      motivo: '⚠️ Pedras brutas precisam ser polidas antes de serem fundidas!',
+    };
+  }
+
+  // Compatibilidade: o id de uma deve estar em fusoesCompativeis da outra.
+  const compatA = (gemaA.fusoesCompativeis || []).includes(gemaB.id);
+  const compatB = (gemaB.fusoesCompativeis || []).includes(gemaA.id);
+  const compativel = compatA && compatB;
+
+  // Busca o resultado na tabela de receitas (ordem dos ingredientes indiferente).
+  const receita = receitasFusao.find((r) => {
+    const [x, y] = r.ingredientes;
+    return (
+      (x === gemaA.id && y === gemaB.id) ||
+      (x === gemaB.id && y === gemaA.id)
+    );
+  });
+
+  if (!compativel || !receita) {
+    return {
+      ok: false,
+      instavel: true,
+      motivo: 'Fusão Instável: Custo de Mana triplicado e 50% de chance de destruir as gemas',
+    };
+  }
+
+  return { ok: true, resultado: receita.resultado };
+}

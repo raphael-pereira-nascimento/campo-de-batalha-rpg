@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { ATTRIBUTES, ATTRIBUTE_NAMES } from '../config.js';
-import { GEMS, GEM_RARITY } from '../game/gems.js';
+import { GEMS, GEM_RARITY, gemIsRaw } from '../game/gems.js';
 import StatBar from './StatBar.jsx';
 
 const CLASS_ICONS = {
@@ -31,6 +31,8 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
   const [customEquipment, setCustomEquipment] = useState([]);
   const [characterGems, setCharacterGems] = useState([]);
   const [socketModal, setSocketModal] = useState(null); // { equipSlot, slotIndex }
+  const [dragGem, setDragGem] = useState(null); // gemId sendo arrastada
+  const [dropSlot, setDropSlot] = useState(null); // { equipSlot, slotIndex } alvo
 
   useEffect(() => {
     api
@@ -116,6 +118,38 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
           .map((k) => `${ATTRIBUTE_NAMES[k]} ${item.bonus?.[k] > 0 ? '+' : ''}${item.bonus?.[k] || 0}${item.penalidade?.[k] ? ` / -${Math.abs(item.penalidade[k])}` : ''}`)
           .join(', ') || 'sem bônus'
       : '';
+
+  // Deltas de atributos vindos das gemas socketadas (por slot de equipamento).
+  // Positivo = buff (verde), negativo = debuff (vermelho). Gemas brutas não contam.
+  const gemAttrDeltas = () => {
+    const acc = {};
+    for (const equipSlot of ['arma', 'armadura']) {
+      const item = character.equipment?.[equipSlot];
+      if (!item) continue;
+      for (const gemId of item.socketedGems || []) {
+        const gem = GEMS[gemId];
+        if (!gem || gemIsRaw(gemId)) continue;
+        const fx = gem.efeitos?.[equipSlot];
+        if (!fx?.bonus) continue;
+        for (const [k, v] of Object.entries(fx.bonus)) acc[k] = (acc[k] || 0) + v;
+      }
+    }
+    return acc;
+  };
+
+  // Total de efeitos de gemas equipadas por slot (para exibição descritiva).
+  const gemSlotEffects = (equipSlot) => {
+    const item = character.equipment?.[equipSlot];
+    if (!item) return [];
+    const out = [];
+    for (const gemId of item.socketedGems || []) {
+      const gem = GEMS[gemId];
+      if (!gem || gemIsRaw(gemId)) continue;
+      const fx = gem.efeitos?.[equipSlot];
+      if (fx?.desc) out.push({ gemId, desc: fx.desc, bonus: fx.bonus || {} });
+    }
+    return out;
+  };
 
   return (
     <div className="sheet">
@@ -273,20 +307,38 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
               return (
                 <div key={equipSlot} style={{ marginBottom: 8 }}>
                   <small style={{ color: 'var(--muted)', fontSize: 11 }}>
-                    Slots — {item.nome}
+                    Slots — {item.nome} ({equipSlot === 'arma' ? item.danoBase ? 'Arma' : 'Arma' : 'Armadura'})
                   </small>
                   <div className="socket-slots" style={{ marginTop: 4 }}>
                     {Array.from({ length: slots }, (_, i) => {
                       const gemId = socketedGems[i];
                       const gem = gemId ? GEMS[gemId] : null;
+                      const isDropTarget = dropSlot?.equipSlot === equipSlot && dropSlot?.slotIndex === i;
                       return (
                         <div
                           key={i}
-                          className={`socket-slot ${gem ? 'filled' : ''} ${gem ? `gem-rarity-${gem?.raridade || 'comum'}` : ''}`}
+                          className={`socket-slot ${gem ? 'filled' : ''} ${gem ? `gem-rarity-${gem?.raridade || 'comum'}` : ''} ${isDropTarget && !gem ? 'drop-target' : ''}`}
                           title={gem ? gem.nome : 'Slot vazio'}
                           onClick={() => {
                             if (gem) return;
                             setSocketModal({ equipSlot, slotIndex: i });
+                          }}
+                          onDragOver={(e) => {
+                            if (gem) return;
+                            e.preventDefault();
+                            setDropSlot({ equipSlot, slotIndex: i });
+                          }}
+                          onDragLeave={() =>
+                            setDropSlot((s) => (s?.equipSlot === equipSlot && s?.slotIndex === i ? null : s))
+                          }
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            setDropSlot(null);
+                            if (gem) return;
+                            const gid = e.dataTransfer.getData('text/gem-id') || dragGem;
+                            if (gid && !gemIsRaw(gid)) handleSocket(equipSlot, i, gid);
+                            else if (gid) alert('⚠️ Requer polimento antes de usar');
+                            setDragGem(null);
                           }}
                         >
                           {gem ? '💎' : '+'}
@@ -313,6 +365,36 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
             })}
           </div>
         )}
+
+        {/* Efeitos de gemas equipadas — buffs em verde, debuffs em vermelho */}
+        {(() => {
+          const deltas = gemAttrDeltas();
+          const entries = Object.entries(deltas);
+          if (entries.length === 0) return null;
+          return (
+            <div className="sheet-section">
+              <h4>Efeitos das Gemas</h4>
+              <div className="attr-grid">
+                {entries.map(([k, v]) => (
+                  <div className={`attr-chip gem-stat ${v >= 0 ? 'gem-buff' : 'gem-debuff'}`} key={k}>
+                    <span>{ATTRIBUTE_NAMES[k] || k}</span>
+                    <strong>{v > 0 ? '+' : ''}{v}</strong>
+                  </div>
+                ))}
+              </div>
+              <div className="gem-effects">
+                {['arma', 'armadura'].map((slot) =>
+                  gemSlotEffects(slot).map(({ gemId, desc }) => (
+                    <div className="gem-effect" key={slot + gemId}>
+                      <span className="gem-effect-type">💎 {GEMS[gemId]?.nome}</span>
+                      <span>{desc}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       <div className="sheet-section">
@@ -341,15 +423,60 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
                   const gem = GEMS[gemId];
                   if (!gem) return null;
                   const rarity = GEM_RARITY[gem.raridade] || GEM_RARITY.comum;
+                  const raw = gemIsRaw(gemId);
+                  const hasEffect = !!gem.efeitos?.[socketModal.equipSlot];
                   return (
                     <div
                       key={gemId}
-                      className="gem-select-card"
-                      style={{ borderColor: rarity.cor }}
-                      onClick={() => handleSocket(socketModal.equipSlot, socketModal.slotIndex, gemId)}
+                      className={`gem-select-card dark-fantasy ${raw ? 'gem-raw' : ''} ${!hasEffect ? 'gem-incompativel' : ''}`}
+                      style={{ borderColor: raw ? '#6b5b3e' : rarity.cor }}
+                      draggable={!raw && hasEffect}
+                      onDragStart={(e) => {
+                        if (raw || !hasEffect) return;
+                        e.dataTransfer.setData('text/gem-id', gemId);
+                        setDragGem(gemId);
+                      }}
+                      onDragEnd={() => setDragGem(null)}
+                      title={
+                        raw
+                          ? '⚠️ Requer polimento antes de usar'
+                          : !hasEffect
+                          ? `Esta gema não se encaixa em ${socketModal.equipSlot}`
+                          : `${gem.nome} — clique para equipar ou arraste para um slot`
+                      }
+                      onClick={() => {
+                        if (raw) return alert('⚠️ Requer polimento antes de usar');
+                        if (!hasEffect) return alert(`Esta gema não se encaixa em ${socketModal.equipSlot}`);
+                        handleSocket(socketModal.equipSlot, socketModal.slotIndex, gemId);
+                      }}
                     >
-                      <div className="gem-name" style={{ color: rarity.cor }}>💎 {gem.nome}</div>
-                      <div className="gem-desc">{gem.descricao}</div>
+                      <div className="gem-card-head">
+                        <span className="gem-icon">💎</span>
+                        <div>
+                          <div className="gem-name" style={{ color: rarity.cor }}>{gem.nome}</div>
+                          <div className="gem-rarity-label">{rarity.nome}</div>
+                        </div>
+                      </div>
+                      <div className="gem-biome">🌍 {gem.bioma}</div>
+                      <div className="gem-ef-list">
+                        {['arma', 'armadura', 'acessorio', 'golem'].map((slot) => {
+                          const fx = gem.efeitos?.[slot];
+                          if (!fx?.desc) return null;
+                          return (
+                            <div className={`gem-ef ${slot === socketModal.equipSlot ? 'gem-ef-ativo' : ''}`} key={slot}>
+                              <span className="gem-ef-slot">{slot}</span>
+                              <span className="gem-bonus-line">{fx.desc}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="gem-fusao">◆ Fusões: {gem.fusao?.length ? gem.fusao.join(', ') : '—'}</div>
+                      <div className="gem-select-foot">
+                        <span className={`estado-badge ${raw ? 'estado-bruta' : 'estado-polida'}`}>
+                          {raw ? '⛓ Bruta' : '✨ Polida'}
+                        </span>
+                        {raw && <span className="gem-tooltip">⚠️ Requer polimento</span>}
+                      </div>
                     </div>
                   );
                 })}

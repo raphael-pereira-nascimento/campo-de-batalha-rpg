@@ -3,6 +3,7 @@ import { gameData } from './offline/gameData.js';
 import { isOffline, setServerStatus, saveOfflinePlayer, getOfflinePlayer, getOfflineCharacters, saveOfflineCharacter, getOfflineWallet, addOfflineCoins, getOfflineGems, addOfflineGem, removeOfflineGem } from './offline/storage.js';
 import { offlineBattle } from './offline/battle.js';
 import { MONSTERS } from './game/monsters.js';
+import { gemIsRaw } from './game/gems.js';
 import { EQUIPMENT, POTIONS, deriveStats, applyMaxMults, efeitosDeHabilidades } from './game/data.js';
 
 // Soma os efeitos mecânicos das raças + passivas extras da ficha.
@@ -457,6 +458,7 @@ export const api = {
       const gems = getOfflineGems(characterId);
       const gemIdx = gems.indexOf(gemId);
       if (gemIdx === -1) return Promise.reject(new Error('Gema não encontrada.'));
+      if (gemIsRaw(gemId)) return Promise.reject(new Error('⚠️ Requer polimento antes de usar'));
       removeOfflineGem(characterId, gemId);
       socketedGems[slotIndex] = gemId;
       c.equipment[equipSlot] = { ...item, socketedGems };

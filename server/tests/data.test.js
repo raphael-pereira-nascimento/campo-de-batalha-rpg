@@ -4,7 +4,9 @@ import {
   classBonusTotal,
   effectiveAttributes,
   deriveStats,
+  gemsAttrs,
 } from '../src/game/data.js';
+import { gemIsRaw } from '../src/game/gems.js';
 
 const anao = { id: 'anao', bonus: { forca: 1, resistencia: 1 } };
 const rockman = { id: 'rockman', bonus: { forca: 1, resistencia: 1 } };
@@ -98,5 +100,34 @@ describe('deriveStats — vida/mana pela classe primária', () => {
   it('defesa soma o defesa dos equipamentos', () => {
     const equipment = { armadura: { defesa: 8 }, arma: null };
     expect(deriveStats([], 1, attrs, equipment).defesa).toBe(8);
+  });
+});
+
+describe('gemas — estado bruto/polido e efeitos por slot', () => {
+  it('gemIsRaw retorna true apenas para gemas brutas', () => {
+    expect(gemIsRaw('diamante')).toBe(true); // bruta no catálogo
+    expect(gemIsRaw('obsidiana')).toBe(true); // bruta no catálogo
+    expect(gemIsRaw('lapis_lazuli')).toBe(false);
+    expect(gemIsRaw('ametista')).toBe(false);
+    expect(gemIsRaw('pedra_de_sangue')).toBe(false);
+    expect(gemIsRaw('gem_inexistente')).toBe(false);
+  });
+
+  it('gemsAttrs soma bônus das gemas polidas por slot e ignora gemas brutas', () => {
+    const equipment = {
+      arma: { socketedGems: ['ametista', 'diamante'] }, // ametista polida (int 2), diamante bruta (ignora)
+      armadura: { socketedGems: ['lapis_lazuli'] },      // polida (int 2)
+    };
+    expect(gemsAttrs(equipment)).toEqual({ inteligencia: 4 });
+  });
+
+  it('effectiveAttributes aplica efeitos de gemas socketadas', () => {
+    const attrs = { forca: 5, inteligencia: 3, resistencia: 4, destreza: 3, reflexos: 3 };
+    const equipment = {
+      arma: { socketedGems: ['ametista'] },      // +2 inteligencia
+      armadura: { socketedGems: ['lapis_lazuli'] }, // +2 inteligencia
+    };
+    const eff = effectiveAttributes(attrs, equipment);
+    expect(eff.inteligencia).toBe(7); // 3 + 2 + 2
   });
 });

@@ -1,6 +1,7 @@
 // Dados do jogo: classes, atributos, magias, equipamentos e formulas.
 
 import { RACES } from './races.js';
+import { GEMS } from './gems.js';
 
 export const CLASSES = {
   guerreiro: {
@@ -208,6 +209,26 @@ export function applyRaceBonus(raceId, attributes) {
   return res;
 }
 
+// Soma dos bônus de atributos das gemas socketadas (ignora gemas brutas).
+export function gemsAttrs(equipment = {}, gems = GEMS) {
+  const acc = {};
+  for (const [slot, item] of Object.entries(equipment)) {
+    if (!item) continue;
+    for (const gemId of item.socketedGems || []) {
+      const gem = gems[gemId];
+      if (!gem) continue;
+      if (gem.estado === 'bruta') continue; // bruta não concede efeitos
+      const fx = gem.efeitos?.[slot];
+      if (!fx?.bonus) continue;
+      for (const [k, v] of Object.entries(fx.bonus)) {
+        if (k.startsWith('_')) continue;
+        acc[k] = (acc[k] || 0) + v;
+      }
+    }
+  }
+  return acc;
+}
+
 export function effectiveAttributes(attributes, equipment = {}, races = null, classes = null) {
   const eff = { ...attributes };
   if (Array.isArray(races)) {
@@ -228,6 +249,8 @@ export function effectiveAttributes(attributes, equipment = {}, races = null, cl
       for (const [k, v] of Object.entries(item.penalidade)) eff[k] = (eff[k] || 0) - Math.abs(v);
     }
   }
+  // Bônus das gemas socketadas (buffs positivos / debuffs negativos)
+  for (const [k, v] of Object.entries(gemsAttrs(equipment, GEMS))) eff[k] = (eff[k] || 0) + v;
   for (const key of Object.keys(eff)) {
     if (key.startsWith('_')) continue;
     eff[key] = Math.max(1, eff[key] || 1);

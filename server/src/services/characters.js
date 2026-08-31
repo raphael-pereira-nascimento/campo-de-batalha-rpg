@@ -17,6 +17,7 @@ import {
   STATUS_KEYS,
 } from '../game/data.js';
 import { RACES } from '../game/races.js';
+import { gemIsRaw } from '../game/gems.js';
 import { getCustomEquipment } from './customContent.js';
 import { clampInt, clampFloat } from '../utils.js';
 
@@ -564,6 +565,9 @@ export async function socketGem(characterId, slotKey, gemId) {
   const gems = await getCharacterGems(characterId);
   const gemIdx = gems.indexOf(gemId);
   if (gemIdx === -1) throw new Error('Gema não encontrada no inventário.');
+
+  // Gemas brutas não podem ser socketadas até serem polidas
+  if (gemIsRaw(gemId)) throw new Error('⚠️ Requer polimento antes de usar');
 
   // Check slot is empty
   const socketedGems = item.socketedGems || [];

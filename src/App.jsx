@@ -8,6 +8,7 @@ const Battle = lazy(() => import('./pages/Battle.jsx'));
 const Registry = lazy(() => import('./pages/Registry.jsx'));
 const Compendium = lazy(() => import('./pages/Compendium.jsx'));
 const TableBattle = lazy(() => import('./pages/TableBattle.jsx'));
+const GemForge = lazy(() => import('./pages/GemForge.jsx'));
 
 export default function App() {
   const [view, setView] = useState('home');
@@ -128,6 +129,7 @@ export default function App() {
         onEnterLobby={() => setView('lobby')}
         onOpenRegistry={() => setView('registry')}
         onOpenCompendium={() => setView('compendium')}
+        onOpenGemForge={() => setView('gemForge')}
         onOpenTableBattle={() => setView('tableBattle')}
         onLogout={handleLogout}
       />
@@ -143,6 +145,12 @@ export default function App() {
   if (view === 'compendium') {
     return <Suspense fallback={<div className="loading">Carregando...</div>}>
       <Compendium onBack={() => setView('characters')} />
+    </Suspense>;
+  }
+
+  if (view === 'gemForge') {
+    return <Suspense fallback={<div className="loading">Acesando a forja...</div>}>
+      <GemForge onBack={() => setView('characters')} />
     </Suspense>;
   }
 
