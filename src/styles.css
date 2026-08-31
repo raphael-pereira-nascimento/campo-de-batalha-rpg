@@ -1888,3 +1888,126 @@ button.danger {
   .custom-effect-form { flex-direction: column; }
   .custom-effect-form input, .custom-effect-form select { width: 100%; }
 }
+
+/* ─── Linha do Tempo de Iniciativa ─── */
+.initiative-timeline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(135deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.25);
+}
+.timeline-title {
+  font-size: 20px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.timeline-track {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  flex: 1;
+  padding: 4px 2px;
+  scrollbar-width: thin;
+}
+.timeline-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 56px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background: rgba(255,255,255,0.03);
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.timeline-node .timeline-icon { font-size: 22px; line-height: 1; }
+.timeline-node .timeline-name {
+  font-size: 10px;
+  font-weight: 700;
+  max-width: 56px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.timeline-node.dead { opacity: 0.4; }
+.timeline-node.drunk .timeline-icon { filter: drop-shadow(0 0 4px #f59e0b); }
+.timeline-node.drunk .timeline-name { color: #fbbf24; }
+.timeline-node.active {
+  border-color: var(--accent);
+  background: var(--panel);
+  transform: translateY(-2px) scale(1.06);
+  box-shadow: 0 0 0 2px rgba(110,163,255,0.25), 0 0 18px rgba(110,163,255,0.6);
+  animation: timelineGlow 1.6s ease-in-out infinite;
+}
+.timeline-node.active .timeline-name { color: var(--accent-2); }
+@keyframes timelineGlow {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(110,163,255,0.25), 0 0 14px rgba(110,163,255,0.5); }
+  50% { box-shadow: 0 0 0 3px rgba(110,163,255,0.45), 0 0 26px rgba(110,163,255,0.85); }
+}
+.timeline-next {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--panel-2);
+  color: var(--accent-2);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+.timeline-next:hover { background: var(--border); transform: scale(1.05); }
+
+/* ─── Status Bêbado (ficha de batalha) ─── */
+.drunk-tag {
+  border-color: #b45309;
+  background: #92400e33;
+  color: #fbbf24;
+}
+.drunk-toggle {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+.drunk-toggle:hover { background: var(--border); }
+.drunk-toggle.on {
+  border-color: #b45309;
+  background: #92400e33;
+  color: #fbbf24;
+  box-shadow: 0 0 8px rgba(245,158,11,0.4);
+}
+
+/* ─── Modo Chefe Dinâmico ─── */
+.chefe-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--accent-2);
+  cursor: pointer;
+}
+.chefe-hint {
+  display: block;
+  width: 100%;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .initiative-timeline { flex-wrap: wrap; }
+  .initiative-timeline .timeline-next { width: 100%; }
+  .timeline-node { min-width: 48px; padding: 5px 6px; }
+}

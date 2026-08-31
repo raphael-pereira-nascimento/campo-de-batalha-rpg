@@ -82,7 +82,7 @@ class OfflineBattle {
     return battle.id;
   }
 
-  addMonster(monsterKey) {
+  addMonster(monsterKey, modoChefeDinamico = false) {
     if (!this.battleId) return;
     const def = MONSTERS[monsterKey];
     if (!def) return;
@@ -91,7 +91,19 @@ class OfflineBattle {
       battleId: this.battleId,
       hostId: battle.host,
       monsterDef: def,
+      modoChefeDinamico,
     });
+  }
+
+  toggleDrunk(participantId) {
+    if (!this.battleId) return;
+    const battle = this.manager.getBattle(this.battleId);
+    if (!battle || battle.status !== 'in_progress') return;
+    this.manager.toggleDrunk({
+      battleId: this.battleId,
+      participantId,
+    });
+    this._emit('battleUpdate', { ...this.manager.getBattle(this.battleId) });
   }
 
   start() {

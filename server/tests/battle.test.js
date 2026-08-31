@@ -358,3 +358,117 @@ describe('BattleManager — fluxo completo de ultimate/especial', () => {
     expect(calls.saved).toBeGreaterThan(0);
   });
 });
+
+describe('BattleManager — melhorias do Mestre', () => {
+  it('regenera mana no fim do turno: Math.floor(inteligencia/2)', () => {
+    const { manager } = makeManager();
+    const p = {
+      isMonster: false,
+      alive: true,
+      charName: 'Hero',
+      attributes: { inteligencia: 7 },
+      mp: 10,
+      mpMax: 50,
+    };
+    const gain = manager._regenMana(p);
+    expect(gain).toBe(3);
+    expect(p.mp).toBe(13);
+  });
+
+  it('não regenera mana em monstros', () => {
+    const { manager } = makeManager();
+    const p = { isMonster: true, alive: true, attributes: { inteligencia: 20 }, mp: 1, mpMax: 100 };
+    expect(manager._regenMana(p)).toBe(0);
+    expect(p.mp).toBe(1);
+  });
+
+  it('regen de mana respeita o máximo', () => {
+    const { manager } = makeManager();
+    const p = { isMonster: false, alive: true, attributes: { inteligencia: 20 }, mp: 48, mpMax: 50 };
+    expect(manager._regenMana(p)).toBe(2);
+    expect(p.mp).toBe(50);
+  });
+
+  it('Modo Chefe Dinâmico usa multiplicador 2.0 e acoesPorTurno por nº de jogadores', () => {
+    const { manager } = makeManager();
+    const battle = manager.createBattle({
+      name: 'T',
+      mode: 'mestre',
+      host: 'p1',
+      hostName: 'M',
+      character: makeCharacter({ id: 'c1', name: 'A', attributes: { forca: 5, resistencia: 8, inteligencia: 4, destreza: 5, reflexos: 5 } }),
+    });
+    // Herói HP max
+    const hero = battle.participants[0];
+    // adiciona mais 4 jogadores para totalizar 5 (faixa 5-8 => 2 ações)
+    manager.joinBattle({
+      battleId: battle.id,
+      playerId: 'p2', playerName: '2', character: makeCharacter({ id: 'c2', name: 'B', attributes: { forca: 5, resistencia: 8, inteligencia: 4, destreza: 5, reflexos: 5 } }), team: null,
+    });
+    manager.joinBattle({
+      battleId: battle.id,
+      playerId: 'p3', playerName: '3', character: makeCharacter({ id: 'c3', name: 'C', attributes: { forca: 5, resistencia: 8, inteligencia: 4, destreza: 5, reflexos: 5 } }), team: null,
+    });
+    manager.joinBattle({
+      battleId: battle.id,
+      playerId: 'p4', playerName: '4', character: makeCharacter({ id: 'c4', name: 'D', attributes: { forca: 5, resistencia: 8, inteligencia: 4, destreza: 5, reflexos: 5 } }), team: null,
+    });
+    manager.joinBattle({
+      battleId: battle.id,
+      playerId: 'p5', playerName: '5', character: makeCharacter({ id: 'c5', name: 'E', attributes: { forca: 5, resistencia: 8, inteligencia: 4, destreza: 5, reflexos: 5 } }), team: null,
+    });
+
+    const sumHeroHp = battle.participants.filter((q) => !q.isMonster).reduce((s, h) => s + h.hpMax, 0);
+    manager.addMonster({
+      battleId: battle.id,
+      hostId: 'p1',
+      monsterDef: { id: 'zumbi', nome: 'Zumbi', nivel: 4, attributes: { forca: 5, inteligencia: 1, resistencia: 5, destreza: 1, reflexos: 1 }, arma: { nome: 'G', danoBase: 9 }, spells: [], passiva: '', efeitos: {} },
+      modoChefeDinamico: true,
+    });
+    const boss = battle.participants.find((q) => q.isMonster);
+    expect(boss.isBoss).toBe(true);
+    expect(boss.hpMax).toBe(Math.max(50, Math.round(sumHeroHp * 2.0)));
+    expect(boss.acoesPorTurno).toBe(2); // 5 jogadores => faixa 5-8
+  });
+
+  it('Bêbado ajusta os atributos de rolagem (+1 Força, -1 Destreza/Reflexo)', () => {
+    const { manager } = makeManager();
+    const p = {
+      charName: 'Hero',
+      alive: true,
+      isMonster: false,
+      attributes: { forca: 8, destreza: 5, reflexos: 5, inteligencia: 4 },
+    };
+    const sober = manager._rollAttrs(p);
+    expect(sober.forca).toBe(8);
+    expect(sober.destreza).toBe(5);
+    expect(sober.reflexos).toBe(5);
+
+    const drunk = manager._rollAttrs({ ...p, drunk: true });
+    expect(drunk.forca).toBe(9);
+    expect(drunk.destreza).toBe(4);
+    expect(drunk.reflexos).toBe(4);
+  });
+
+  it('toggleDrunk alterna o status e bloqueia monstros', () => {
+    const { manager } = makeManager();
+    const battle = manager.createBattle({
+      name: 'T', mode: 'mestre', host: 'p1', hostName: 'M',
+      character: makeCharacter({ id: 'c1', name: 'Alfa' }),
+    });
+    manager.addMonster({
+      battleId: battle.id, hostId: 'p1',
+      monsterDef: { id: 'zumbi', nome: 'Zumbi', nivel: 4, attributes: { forca: 5, inteligencia: 1, resistencia: 5, destreza: 1, reflexos: 1 }, arma: { nome: 'G', danoBase: 9 }, spells: [], passiva: '', efeitos: {}, escalaChefe: true, multiplicadorHP: 2 },
+    });
+    manager.startBattle({ battleId: battle.id, playerId: 'p1' });
+    const hero = battle.participants.find((q) => !q.isMonster);
+    const monster = battle.participants.find((q) => q.isMonster);
+    manager.toggleDrunk({ battleId: battle.id, participantId: hero.characterId });
+    expect(hero.drunk).toBe(true);
+    manager.toggleDrunk({ battleId: battle.id, participantId: hero.characterId });
+    expect(hero.drunk).toBe(false);
+    expect(() =>
+      manager.toggleDrunk({ battleId: battle.id, participantId: monster.uid })
+    ).toThrow();
+  });
+});

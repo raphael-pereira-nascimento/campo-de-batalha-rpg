@@ -17,7 +17,9 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
   const [actionType, setActionType] = useState('attack');
   const [busy, setBusy] = useState(false);
   const [monsterPick, setMonsterPick] = useState('');
+  const [chefeDinamico, setChefeDinamico] = useState(false);
   const [customMonsters, setCustomMonsters] = useState([]);
+  const [timelineOffset, setTimelineOffset] = useState(0);
   const [floats, setFloats] = useState([]);
   const [secondsLeft, setSecondsLeft] = useState(TURN_SECONDS);
   const [muted, setMuted] = useState(isMuted());
@@ -92,6 +94,17 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
   const isMasterTurn = battle?.mode === 'mestre' && !!currentChar?.isMonster && isHost;
   const currentIsMine = !!currentChar && currentChar.playerId === player.id;
   const isMyTurn = currentIsMine || isMasterTurn;
+
+  // A linha do tempo destaca a posição avançada localmente; resetamos o
+  // deslocamento sempre que o turno real do servidor muda.
+  useEffect(() => {
+    setTimelineOffset(0);
+  }, [battle?.turno, battle?.currentTurnIndex]);
+
+  const nextTimeline = () => {
+    if (!battle?.turnOrder?.length) return;
+    setTimelineOffset((o) => (o + 1) % battle.turnOrder.length);
+  };
 
   // Timer de turno: se o tempo acabar, o personagem defende automaticamente.
   const turnKey = battle?.status === 'in_progress' && isMyTurn ? `${battle.turno}-${battle.currentTurnIndex}` : null;
@@ -224,9 +237,28 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
         playerId: player.id,
         monsterId: isCustom ? undefined : monsterPick,
         customMonsterId: isCustom ? monsterPick.slice(7) : undefined,
+        modoChefeDinamico: chefeDinamico,
       });
       if (result.battle) setBattle(result.battle);
       setMonsterPick('');
+      setChefeDinamico(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleDrunk = async (p) => {
+    if (!p || p.isMonster) return;
+    setBusy(true);
+    setError('');
+    try {
+      const result = await emitAck('toggleDrunk', {
+        battleId,
+        participantId: p.characterId || p.uid,
+      });
+      if (result.battle) setBattle(result.battle);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -303,6 +335,16 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
 
       <div className="battle-layout">
         <div className="arena">
+          {battle.status === 'in_progress' && battle.turnOrder?.length > 0 && (
+            <InitiativeTimeline
+              participants={participants}
+              turnOrder={battle.turnOrder}
+              currentTurnIndex={battle.currentTurnIndex}
+              offset={timelineOffset}
+              onNext={nextTimeline}
+            />
+          )}
+
           {formation ? (
             <div className="ff-stage">
               <FfSide
@@ -313,6 +355,7 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                 selectedId={targetId}
                 floats={floats}
                 onSelect={(id) => setTargetId(id)}
+                onToggleDrunk={toggleDrunk}
               />
               <div className="ff-divider" aria-hidden="true">⚔️</div>
               <FfSide
@@ -322,6 +365,7 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                 selectedId={targetId}
                 floats={floats}
                 onSelect={(id) => setTargetId(id)}
+                onToggleDrunk={toggleDrunk}
               />
             </div>
           ) : (
@@ -336,6 +380,7 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                   floats={floats}
                   selected={targetId === p.characterId}
                   selectTarget={() => setTargetId(p.characterId)}
+                  onToggleDrunk={toggleDrunk}
                 />
               ))}
             </div>
@@ -364,6 +409,17 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                     </optgroup>
                   )}
                 </select>
+                <label className="check-label inline chefe-toggle">
+                  <input
+                    type="checkbox"
+                    checked={chefeDinamico}
+                    onChange={(e) => setChefeDinamico(e.target.checked)}
+                  />
+                  ☠️ Modo Chefe Dinâmico
+                  <span className="chefe-hint">
+                    HP = soma do HP dos jogadores × 2.0 · ações por nº de jogadores
+                  </span>
+                </label>
                 <button onClick={addMonster} disabled={busy || !monsterPick}>
                   + Adicionar
                 </button>
@@ -620,7 +676,48 @@ function TargetSelect({ targets, value, onChange }) {
   );
 }
 
-function FfSide({ side, mirrored, current, gameData, selectedId, floats, onSelect }) {
+// Linha do Tempo de Iniciativa: mostra os combatentes na ordem exata do turno.
+// O destaque começa no turno atual (currentTurnIndex) e o botão "Próximo Turno"
+// o avança localmente pela lista (offset), até o servidor mudar de turno.
+function InitiativeTimeline({ participants, turnOrder, currentTurnIndex, offset, onNext }) {
+  const base = currentTurnIndex != null ? currentTurnIndex % turnOrder.length : 0;
+  const activePos = (base + offset) % turnOrder.length;
+
+  const unit = (idx) => {
+    const p = participants[idx];
+    if (!p) return null;
+    const icon = p.isMonster ? (p.isBoss ? BOSS_ICON : MONSTER_ICON) : CLASS_ICONS[p.cls] || '🧙';
+    return { p, icon };
+  };
+
+  return (
+    <div className="initiative-timeline">
+      <span className="timeline-title" title="Linha do Tempo de Iniciativa">📋</span>
+      <div className="timeline-track">
+        {turnOrder.map((idx, i) => {
+          const u = unit(idx);
+          if (!u) return null;
+          const isActive = i === activePos;
+          return (
+            <div
+              key={idx + '-' + i}
+              className={`timeline-node${isActive ? ' active' : ''}${u.p.drunk ? ' drunk' : ''}${u.p.alive ? '' : ' dead'}`}
+              title={`${u.p.charName}${u.p.drunk ? ' (bêbado)' : ''}`}
+            >
+              <span className="timeline-icon">{u.icon}</span>
+              <span className="timeline-name">{u.p.charName}</span>
+            </div>
+          );
+        })}
+      </div>
+      <button className="timeline-next" onClick={onNext} title="Mover destaque para o próximo turno">
+        Próximo ▶
+      </button>
+    </div>
+  );
+}
+
+function FfSide({ side, mirrored, current, gameData, selectedId, floats, onSelect, onToggleDrunk }) {
   return (
     <div className={`ff-side${mirrored ? ' enemies-side' : ''}`}>
       <h3 className="ff-side-label">{side.label}</h3>
@@ -636,6 +733,7 @@ function FfSide({ side, mirrored, current, gameData, selectedId, floats, onSelec
             floats={floats}
             selected={selectedId === p.characterId}
             selectTarget={() => onSelect(p.characterId)}
+            onToggleDrunk={onToggleDrunk}
           />
         ))}
         {side.fighters.length === 0 && <p className="muted small">Aguardando combatentes...</p>}
@@ -720,7 +818,7 @@ function VictoryPanel({ battle, player, onExit }) {
   );
 }
 
-function FfFighter({ p, index, mirrored, current, gameData, floats = [], selected, selectTarget }) {
+function FfFighter({ p, index, mirrored, current, gameData, floats = [], selected, selectTarget, onToggleDrunk }) {
   const isCurrent = !!current && (current.characterId === p.characterId || current.uid === p.uid);
   const icon = p.isMonster ? (p.isBoss ? BOSS_ICON : MONSTER_ICON) : CLASS_ICONS[p.cls] || '🧙';
   const myFloats = floats.filter((f) => f.key === (p.characterId || p.uid));
@@ -792,6 +890,7 @@ function FfFighter({ p, index, mirrored, current, gameData, floats = [], selecte
           <div className="ff-badges">
             {p.defense && <span className="tag">🛡️</span>}
             {p.dodge && <span className="tag">💨</span>}
+            {p.drunk && <span className="tag drunk-tag">🍺 Bêbado</span>}
             {(p.statuses || []).map((s) => {
               const def = gameData.statuses?.[s.id];
               return (
@@ -800,6 +899,15 @@ function FfFighter({ p, index, mirrored, current, gameData, floats = [], selecte
                 </span>
               );
             })}
+            {!p.isMonster && onToggleDrunk && (
+              <button
+                className={`drunk-toggle${p.drunk ? ' on' : ''}`}
+                onClick={(e) => { e.stopPropagation(); onToggleDrunk(p); }}
+                title="Alternar status Bêbado (+1 Força, -1 Destreza e Reflexo)"
+              >
+                🍺{p.drunk ? ' ON' : ' OFF'}
+              </button>
+            )}
           </div>
         </>
       ) : (

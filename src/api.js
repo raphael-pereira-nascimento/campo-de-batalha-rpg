@@ -105,7 +105,18 @@ class MockSocket {
 
     if (event === 'addMonster') {
       try {
-        offlineBattle.addMonster(payload.monsterId || payload.monsterPick);
+        offlineBattle.addMonster(payload.monsterId || payload.monsterPick, payload.modoChefeDinamico);
+        const state = offlineBattle.getState();
+        if (ack) ack({ ok: true, battle: state });
+      } catch (e) {
+        if (ack) ack({ ok: false, error: e.message });
+      }
+      return;
+    }
+
+    if (event === 'toggleDrunk') {
+      try {
+        offlineBattle.toggleDrunk(payload.participantId || payload.characterId);
         const state = offlineBattle.getState();
         if (ack) ack({ ok: true, battle: state });
       } catch (e) {

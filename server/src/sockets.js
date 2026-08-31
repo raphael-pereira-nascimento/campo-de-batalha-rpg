@@ -134,7 +134,7 @@ export function setupSockets(httpServer) {
       }
     });
 
-    socket.on('addMonster', async ({ battleId, monsterId, customMonsterId }, ack) => {
+    socket.on('addMonster', async ({ battleId, monsterId, customMonsterId, modoChefeDinamico }, ack) => {
       try {
         assertAuthed();
         let def = null;
@@ -148,9 +148,20 @@ export function setupSockets(httpServer) {
         } else {
           throw new Error('Monstro desconhecido.');
         }
-        const battle = manager.addMonster({ battleId, hostId: me(), monsterDef: def });
+        const battle = manager.addMonster({ battleId, hostId: me(), monsterDef: def, modoChefeDinamico: !!modoChefeDinamico });
         publishBattle(io, manager, battle);
         ack({ ok: true, battleId: battle.id });
+      } catch (err) {
+        ack({ ok: false, error: err.message });
+      }
+    });
+
+    socket.on('toggleDrunk', ({ battleId, participantId }, ack) => {
+      try {
+        assertAuthed();
+        const battle = manager.toggleDrunk({ battleId, participantId });
+        publishBattle(io, manager, battle);
+        ack({ ok: true, battle: serializeBattle(battle) });
       } catch (err) {
         ack({ ok: false, error: err.message });
       }

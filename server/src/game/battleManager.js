@@ -264,13 +264,14 @@ export class BattleManager {
       ultimateModeMult: 0,
       ultimateSkillUsed: false,
       cooldowns: {},
+      drunk: false,
     });
     battle.log.push(
       makeLog(`${playerName} entra na batalha com ${character.name} (${classNameOf(battle.participants[battle.participants.length - 1])})`),
     );
   }
 
-  addMonster({ battleId, hostId, monsterDef }) {
+  addMonster({ battleId, hostId, monsterDef, modoChefeDinamico }) {
     const battle = this.battles.get(battleId);
     if (!battle) throw new Error('Batalha não encontrada.');
     if (battle.mode !== 'mestre') throw new Error('Só é possível adicionar inimigos em batalhas de mestre.');
@@ -283,13 +284,26 @@ export class BattleManager {
     const def = { ...monsterDef, _uid: uid };
     const m = buildMonster(def);
     m.uid = uid;
-    if (m.isBoss) {
-      const heroes = battle.participants.filter((p) => !p.isMonster);
-      const sum = heroes.reduce((s, h) => s + h.hpMax, 0);
-      m.hp = m.hpMax = Math.max(50, Math.round(sum * (def.multiplicadorHP || 3)));
+    const heroes = battle.participants.filter((q) => !q.isMonster);
+    const playerCount = heroes.length;
+    const sumHeroHp = heroes.reduce((s, h) => s + h.hpMax, 0);
+
+    if (modoChefeDinamico) {
+      // Modo Chefe Dinâmico: vira chefe com HP = soma do HP dos jogadores x 2.0
+      // e acoesPorTurno conforme o nº de jogadores (1-4=1, 5-8=2, 9-12=3, 13+=4).
+      m.isBoss = true;
+      m.monsterDef = { ...m.monsterDef, multiplicadorHP: 2.0 };
+      m.hp = m.hpMax = Math.max(50, Math.round(sumHeroHp * 2.0));
+      if (playerCount <= 4) m.acoesPorTurno = 1;
+      else if (playerCount <= 8) m.acoesPorTurno = 2;
+      else if (playerCount <= 12) m.acoesPorTurno = 3;
+      else m.acoesPorTurno = 4;
+    } else if (m.isBoss) {
+      m.hp = m.hpMax = Math.max(50, Math.round(sumHeroHp * (def.multiplicadorHP || 3)));
     }
+    m.monsterDef = { ...m.monsterDef, acoesPorTurno: m.acoesPorTurno };
     battle.participants.push(m);
-    battle.log.push(makeLog(`🐲 ${m.monsterName} entra na batalha pelo lado do mestre!`, 'enemy'));
+    battle.log.push(makeLog(`🐲 ${m.monsterName} entra na batalha pelo lado do mestre!${m.isBoss ? ' (CHEFE)' : ''}`, 'enemy'));
     return battle;
   }
 
@@ -357,7 +371,7 @@ export class BattleManager {
       for (const idx of indices) {
         const p = battle.participants[idx];
         if (p.isBoss) {
-          const count = bossActionsPerTurn(heroes.length);
+          const count = p.acoesPorTurno ?? bossActionsPerTurn(heroes.length);
           for (let i = 1; i < count; i += 1) extra.push(idx);
         }
       }
@@ -454,21 +468,50 @@ export class BattleManager {
     return efeitosDe(attacker).critBonus || 0;
   }
 
+  // Atributos efetivos considerando o status "Bêbado":
+  // +1 em Força, -1 em Destreza e -1 em Reflexo nas rolagens.
+  _rollAttrs(p) {
+    if (!p.drunk) return p.attributes;
+    return {
+      ...p.attributes,
+      forca: (p.attributes?.forca || 0) + 1,
+      destreza: (p.attributes?.destreza || 0) - 1,
+      reflexos: (p.attributes?.reflexos || 0) - 1,
+    };
+  }
+
+  _withDrunk(p) {
+    return { ...p, attributes: this._rollAttrs(p) };
+  }
+
+  // Regeneração de mana no fim do turno: Math.floor(inteligencia / 2),
+  // respeitando o máximo. Retorna o quanto foi recuperado (0 se cheio/morto).
+  _regenMana(p) {
+    if (p.isMonster || !p.alive) return 0;
+    const gain = Math.floor(((p.attributes && p.attributes.inteligencia) || 0) / 2);
+    if (gain <= 0) return 0;
+    const before = p.mp;
+    p.mp = clamp(p.mp + gain, 0, p.mpMax);
+    return Math.max(0, p.mp - before);
+  }
+
   _rollToHit(attacker, defender, kind) {
     const dodgeBonus = this._dodgeBonus(defender);
     const stAtk = statusEffects(attacker);
     const stDef = statusEffects(defender);
     const critThresh = 21 - Math.round(this._critBonus(attacker) * 20);
+    const atkA = this._rollAttrs(attacker);
+    const defA = this._rollAttrs(defender);
     let acc, dodge, chance;
     if (kind === 'magic') {
-      acc = attacker.attributes.inteligencia;
-      dodge = defender.dodge ? defender.attributes.reflexos * 1.5 : defender.attributes.reflexos;
+      acc = atkA.inteligencia;
+      dodge = defender.dodge ? defA.reflexos * 1.5 : defA.reflexos;
       chance = clamp(0.35 + (acc - dodge) * 0.035 - dodgeBonus - stAtk.accPenalty + stDef.dodgePenalty, 0.15, 0.95);
     } else {
-      acc = attacker.attributes.destreza + attacker.attributes.reflexos * 0.5;
+      acc = atkA.destreza + atkA.reflexos * 0.5;
       dodge = defender.dodge
-        ? defender.attributes.destreza + defender.attributes.reflexos
-        : defender.attributes.destreza + defender.attributes.reflexos * 0.5;
+        ? defA.destreza + defA.reflexos
+        : defA.destreza + defA.reflexos * 0.5;
       chance = clamp(0.35 + (acc - dodge) * 0.03 - dodgeBonus - stAtk.accPenalty + stDef.dodgePenalty, 0.15, 0.95);
     }
     const threshold = Math.round(20 * chance);
@@ -671,7 +714,7 @@ export class BattleManager {
       battle.log.push(makeLog(`💨 ${p.charName} erra o ataque em ${target.charName}. (d20 = ${res.roll}, precisava de ${res.chance})`, 'miss'));
       return;
     }
-    const dmg = physicalDamage(p, weapon, this._physMult(p) * this._especializacaoMult(p, weapon));
+    const dmg = physicalDamage(this._withDrunk(p), weapon, this._physMult(p) * this._especializacaoMult(p, weapon));
     let total = res.crit ? dmg.total * 2 : dmg.total;
     const atkElem = weapon?.elemento || 'fisico';
     const elemM = this._elemMult(atkElem, target);
@@ -760,7 +803,7 @@ export class BattleManager {
     }
     let dmg;
     if (skill.tipo === 'fisico') {
-      const base = Math.round(p.attributes.forca * 1.5 * (skill.poder / 100));
+      const base = Math.round(this._rollAttrs(p).forca * 1.5 * (skill.poder / 100));
       const qty = Math.max(1, Math.round(skill.poder / 100));
       const mult = this._physMult(p) * (p.buffPhysical || 1);
       dmg = rollDamage(6, qty, Math.round(base * mult));
@@ -832,7 +875,7 @@ export class BattleManager {
     }
     let dmg;
     if (skill.tipo === 'fisico') {
-      const base = Math.round(p.attributes.forca * 2.2 * (skill.poder / 100));
+      const base = Math.round(this._rollAttrs(p).forca * 2.2 * (skill.poder / 100));
       const qty = Math.max(1, Math.round(skill.poder / 100));
       const mult = this._physMult(p) * (p.buffPhysical || 1);
       dmg = rollDamage(6, qty, Math.round(base * mult));
@@ -1013,11 +1056,32 @@ export class BattleManager {
 
     const ended = this._checkEnd(battle);
     if (!ended) {
+      const regen = this._regenMana(p);
+      if (regen > 0) {
+        battle.log.push(makeLog(`💧 ${p.charName} regenera ${regen} de MP no fim do turno.`, 'heal'));
+      }
       this._advanceTurn(battle);
     }
     if (!this._checkEnd(battle)) {
       this._aiLoop(battle);
     }
+    this.emit(battle);
+    return battle;
+  }
+
+  // Alterna o status "Bêbado" de um combatente (herói) durante a batalha.
+  toggleDrunk({ battleId, participantId }) {
+    const battle = this.battles.get(battleId);
+    if (!battle) throw new Error('Batalha não encontrada.');
+    if (battle.status !== 'in_progress') throw new Error('A batalha não está em andamento.');
+    const p = battle.participants.find(
+      (q) => q.characterId === participantId || q.uid === participantId,
+    );
+    if (!p) throw new Error('Participante não encontrado.');
+    if (p.isMonster) throw new Error('Apenas personagens podem ficar bêbados.');
+    p.drunk = !p.drunk;
+    battle.log.push(makeLog(`🍺 ${p.charName} ${p.drunk ? 'ficou bêbado!' : 'recuperou a sobriedade.'}`));
+    this.saveBattle(battle);
     this.emit(battle);
     return battle;
   }
