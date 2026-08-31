@@ -227,6 +227,7 @@ export const GEMS = {
     descricao: 'A mais resistente das pedras preciosas, brilha com luz pura.',
     tipo: 'ofensiva',
     raridade: 'rara',
+    estado: 'bruta', // requer polimento antes de socketar
     preco: 800,
     bioma: 'montanhas',
     drops: ['Golens de diamante', 'Dragões jovens'],
@@ -235,6 +236,7 @@ export const GEMS = {
       arma:      { desc: '+20% dano perfurante', bonus: { forca: 2 } },
       armadura:  { desc: '+20% defesa geral', bonus: { resistencia: 2 } },
       acessorio: { desc: '+10% resistência mágica', bonus: { inteligencia: 1 } },
+      golem:     { desc: 'Golem ganha +15% armadura e dano', bonus: { resistencia: 3, forca: 1 } },
     },
   },
 
@@ -261,6 +263,7 @@ export const GEMS = {
     descricao: 'Cristal psíquico que amplifica o poder mental.',
     tipo: 'psiquica',
     raridade: 'rara',
+    estado: 'polido',
     preco: 600,
     bioma: 'masmorra',
     drops: ['Espectros', 'Cultistas'],
@@ -269,6 +272,7 @@ export const GEMS = {
       arma:      { desc: 'Magias psíquicas causam +20% dano', bonus: { inteligencia: 2 } },
       armadura:  { desc: '+25% resistência psíquica', bonus: { inteligencia: 1 } },
       acessorio: { desc: 'Melhora concentração mágica', bonus: { inteligencia: 1 } },
+      golem:     { desc: 'Golem amplifica magia psíquica', bonus: { inteligencia: 2 } },
     },
   },
 
@@ -295,6 +299,7 @@ export const GEMS = {
     descricao: 'Pedra sombria que drena a vida dos inimigos.',
     tipo: 'ofensiva',
     raridade: 'rara',
+    estado: 'polido',
     preco: 600,
     bioma: 'masmorra',
     drops: ['Vampiros', 'Criaturas sanguinárias'],
@@ -302,7 +307,8 @@ export const GEMS = {
     efeitos: {
       arma:      { desc: 'Ataques drenam pequena quantidade de vida', bonus: { forca: 1 }, status: { tipo: 'sangramento', chance: 0.15 } },
       armadura:  { desc: 'Regenera vida lentamente após receber dano', bonus: {} },
-      acessorio: { desc: 'Aumenta resistência a dor em 25%', bonus: {} },
+      acessorio: { desc: 'Aumenta resistência a dor em 25%', bonus: { resistencia: 1 } },
+      golem:     { desc: 'Golem drena vida dos inimigos', bonus: { forca: 2 } },
     },
   },
 
@@ -637,6 +643,7 @@ export const GEMS = {
     descricao: 'Vidro vulcânico cortante, afiado como a morte.',
     tipo: 'ofensiva',
     raridade: 'epica',
+    estado: 'bruta', // requer polimento antes de socketar
     preco: 1000,
     bioma: 'vulcanico',
     drops: ['Elementais de magma', 'Dragões jovens'],
@@ -645,6 +652,7 @@ export const GEMS = {
       arma:      { desc: '+30% dano cortante', bonus: { forca: 2, destreza: 1 } },
       armadura:  { desc: '+25% resistência a fogo', bonus: { resistencia: 2 } },
       acessorio: { desc: 'Ignora parcialmente defesa leve', bonus: {} },
+      golem:     { desc: 'Golem fica +25% resistente ao fogo', bonus: { resistencia: 2 } },
     },
   },
 
@@ -654,6 +662,7 @@ export const GEMS = {
     descricao: 'Pedra arcana sagrada, guardiã do conhecimento antigo.',
     tipo: 'psiquica',
     raridade: 'epica',
+    estado: 'polido',
     preco: 1200,
     bioma: 'masmorra',
     drops: ['Arcanistas mortos-vivos', 'Golens mágicos'],
@@ -662,6 +671,7 @@ export const GEMS = {
       arma:      { desc: '+25% dano mágico e +15% mana', bonus: { inteligencia: 3 } },
       armadura:  { desc: '+30% resistência mágica', bonus: { inteligencia: 2 } },
       acessorio: { desc: 'Aumenta mana máxima em 25%', bonus: { inteligencia: 2 } },
+      golem:     { desc: 'Golem mágico conjura +1 feitiço', bonus: { inteligencia: 3 } },
     },
   },
 
@@ -1124,4 +1134,17 @@ export function getGemsByRarity(rarity) {
 
 export function getGemById(id) {
   return GEMS[id] || null;
+}
+
+// Retorna true se a gema está em estado bruto (requer polimento p/ socketar).
+export function gemIsRaw(id) {
+  const g = GEMS[id];
+  return !!g && g.estado === 'bruta';
+}
+
+// Retorna os slots de equipamento em que a gema tem efeito definido.
+export function gemEffectSlots(id) {
+  const g = GEMS[id];
+  if (!g?.efeitos) return [];
+  return Object.keys(g.efeitos);
 }

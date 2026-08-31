@@ -1887,6 +1887,56 @@ button.danger {
   .fighter-card-stat { font-size: 10px; }
   .custom-effect-form { flex-direction: column; }
   .custom-effect-form input, .custom-effect-form select { width: 100%; }
+
+  /* ── Mobile: arena e layout principal ── */
+  .content, .battle-layout { padding: 12px; }
+  .topbar {
+    flex-wrap: wrap;
+    padding: 12px;
+    gap: 8px;
+  }
+  .topbar h1 { font-size: 18px; }
+  .topbar > div { flex-wrap: wrap; gap: 6px; }
+  .topbar-actions, .topbar > div:last-child { justify-content: flex-end; }
+  .battle-layout { grid-template-columns: 1fr; gap: 14px; }
+  .arena { padding: 12px; min-height: 0; }
+  .ff-stage { grid-template-columns: 1fr; gap: 6px; }
+  .ff-divider { transform: rotate(90deg); }
+  .ff-row { gap: 6px; }
+  .ff-fighter {
+    width: 128px;
+    padding: 18px 6px 8px;
+  }
+  .ff-sprite { font-size: 40px; }
+  .ff-fighter.boss .ff-sprite { font-size: 52px; }
+  .ff-name { font-size: 12px; }
+  .side { width: 100%; }
+  .battle-log-panel { max-height: 260px; }
+  .action-tabs { grid-template-columns: repeat(2, 1fr); }
+  .action-tabs button { font-size: 12px; padding: 9px 4px; }
+  .join-controls { flex-direction: column; align-items: stretch; width: 100%; }
+  .join-controls select { width: 100%; }
+  .master-panel .join-controls button { width: 100%; }
+  .lobby-banner { padding: 20px 8px; }
+  .battle-row { flex-direction: column; align-items: stretch; }
+  .home-box { padding: 28px 20px; }
+  .attr-grid { grid-template-columns: repeat(2, 1fr); }
+  .compendium-tabs { flex-wrap: wrap; }
+  .compendium-tabs button { flex: 1 1 auto; padding: 8px 12px; font-size: 13px; }
+}
+
+/* ── Mobile muito pequeno / em pé (celulares comuns 320-414px) ── */
+@media (max-width: 420px) {
+  .ff-fighter { width: 110px; }
+  .ff-sprite { font-size: 34px; }
+  .ff-fighter.boss .ff-sprite { font-size: 44px; }
+  .ff-name { font-size: 11px; }
+  .ff-fighter .mega-bars .bar-num { font-size: 9px; min-width: 24px; }
+  .initiative-timeline { padding: 8px; gap: 6px; }
+  .timeline-node { min-width: 44px; padding: 4px 5px; }
+  .timeline-node .timeline-icon { font-size: 18px; }
+  .topbar h1 { font-size: 16px; }
+  .status-chip { font-size: 10px; padding: 1px 7px; }
 }
 
 /* ─── Linha do Tempo de Iniciativa ─── */
