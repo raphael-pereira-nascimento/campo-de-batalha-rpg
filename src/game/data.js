@@ -1,6 +1,7 @@
 // Dados do jogo: classes, atributos, magias, equipamentos e formulas.
 
 import { RACES } from './races.js';
+import { GEMS } from './gems.js';
 
 export const CLASSES = {
   guerreiro: {
