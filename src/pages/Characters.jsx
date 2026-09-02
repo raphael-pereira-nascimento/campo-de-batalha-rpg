@@ -4,7 +4,7 @@ import CharacterSheet from '../components/CharacterSheet.jsx';
 import { exportarFicha, importarFicha } from '../utils/fichaFile.js';
 import { api } from '../api.js';
 
-export default function Characters({ player, characters, gameData, customClasses = [], onRefresh, onEnterLobby, onOpenRegistry, onOpenCompendium, onOpenGemForge, onOpenTableBattle, onLogout }) {
+export default function Characters({ player, characters, gameData, customClasses = [], onRefresh, onEnterLobby, onOpenRegistry, onOpenCompendium, onOpenGemForge, onOpenToolShop, onOpenTableBattle, onLogout }) {
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState(null);
   const [importError, setImportError] = useState('');
@@ -41,6 +41,7 @@ export default function Characters({ player, characters, gameData, customClasses
           <input type="file" accept=".json,application/json" ref={fileRef} onChange={handleImport} style={{ display: 'none' }} />
           <button className="ghost" onClick={onOpenCompendium}>⚔️ Arsenal</button>
           <button className="ghost" onClick={onOpenGemForge}>🔮 Forja de Gemas</button>
+          <button className="ghost" onClick={onOpenToolShop}>🛠️ Loja de Ferramentas</button>
           <button className="ghost" onClick={onOpenRegistry}>
             📜 Registro do Mundo
           </button>

@@ -8,6 +8,7 @@ import {
   NIVEIS_POLIMENTO,
   gemaPolivel,
   polirPedra,
+  calcularCustoPolimento,
 } from '../../src/game/gems.js';
 
 const obsidiana = getGemaById('obsidiana');
@@ -157,5 +158,74 @@ describe('polirPedra — sistema de polimento', () => {
     expect(res.custoOuro).toBe(100);
     // ouro insuficiente não deve sequer alterar o estado
     expect(gema.estado).toBe('bruta');
+  });
+});
+
+describe('Bônus da profissão Lapidador', () => {
+  const lapidador = { profissao: 'Lapidador' };
+  let mockRandom;
+
+  beforeEach(() => {
+    mockRandom = vi.spyOn(Math, 'random');
+  });
+
+  afterEach(() => {
+    mockRandom.mockRestore();
+  });
+
+  it('calcularCustoPolimento soma +15% e corta 20% da mana para o Lapidador', () => {
+    const lapidada = NIVEIS_POLIMENTO.lapidada; // chance 60, mana 40
+    const custo = calcularCustoPolimento(lapidada, lapidador);
+    expect(custo.chanceSucesso).toBe(75); // 60 + 15
+    expect(custo.custoMana).toBe(32); // floor(40 * 0.8)
+    expect(custo.custoManaOriginal).toBe(40);
+    expect(custo.falhaSegura).toBe(true);
+  });
+
+  it('chance fica capada em 100% mesmo com o bônus', () => {
+    // inventa um nível base alto para testar o cap
+    const alto = { ...NIVEIS_POLIMENTO.lapidada, chanceSucesso: 90, custoMana: 30 };
+    const custo = calcularCustoPolimento(alto, lapidador);
+    expect(custo.chanceSucesso).toBe(100);
+    expect(custo.custoMana).toBe(24); // floor(30 * 0.8)
+  });
+
+  it('jogador sem a profissão não recebe os bônus', () => {
+    const custo = calcularCustoPolimento(NIVEIS_POLIMENTO.lapidada, { profissao: 'Alquimista' });
+    expect(custo.chanceSucesso).toBe(60);
+    expect(custo.custoMana).toBe(40);
+    expect(custo.falhaSegura).toBe(false);
+  });
+
+  it('falha protegida: Lapidador mantém a pedra não-bruta no mesmo estado', () => {
+    mockRandom.mockReturnValue(0.99); // falha garantida
+    const gema = { id: 'agataDeFogo', estado: 'polido' };
+    const res = polirPedra(gema, 1000, lapidador, 200);
+    expect(res.ok).toBe(true);
+    expect(res.sucesso).toBe(false);
+    expect(res.protegido).toBe(true);
+    expect(res.estadoNovo).toBe('polido'); // não degrada
+    // mana é consumido mesmo na falha protegida
+    expect(res.custoMana).toBe(64); // floor(80 * 0.8)
+    expect(res.manaRestante).toBe(136);
+  });
+
+  it('pedra bruta continua destruída na falha (sem proteção)', () => {
+    mockRandom.mockReturnValue(0.99);
+    const gema = { id: 'rubi', estado: 'bruta' };
+    const res = polirPedra(gema, 1000, lapidador, 200);
+    expect(res.ok).toBe(true);
+    expect(res.sucesso).toBe(false);
+    expect(res.protegido).toBe(false);
+    expect(res.estadoNovo).toBe('destruida');
+  });
+
+  it('mana insuficiente bloqueia o polimento', () => {
+    // Lapidador: bruta custa ouro 100 e mana floor(20*0.8)=16
+    const gema = { id: 'rubi', estado: 'bruta' };
+    const res = polirPedra(gema, 1000, lapidador, 10);
+    expect(res.ok).toBe(false);
+    expect(res.precisaMana).toBe(true);
+    expect(res.custoMana).toBe(16);
   });
 });

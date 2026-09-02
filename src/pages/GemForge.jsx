@@ -81,9 +81,12 @@ export default function GemForge({ onBack }) {
   const [gemaBId, setGemaBId] = useState('');
 
   // Cópias mutáveis das gemas disponíveis (para o polimento refletir o novo
-  // estado) + saldo de ouro do jogador.
+  // estado) + saldo de ouro/mana do jogador.
   const [disponiveis, setDisponiveis] = useState(() => gemas.map((g) => ({ ...g })));
   const [ouro, setOuro] = useState(1000);
+  const [mana, setMana] = useState(500);
+  // Jogador de demonstração com a profissão Lapidador (para exibir os bônus).
+  const jogador = { profissao: 'Lapidador' };
   const [polindoGema, setPolindoGema] = useState(null);
 
   const gemaA = useMemo(() => getGemaById(gemaAId), [gemaAId]);
@@ -245,8 +248,15 @@ export default function GemForge({ onBack }) {
         <GemPolisher
           gema={polindoGema}
           ouro={ouro}
+          mana={mana}
+          jogador={jogador}
           onOuroChange={setOuro}
+          onManaChange={setMana}
           onEstadoChange={handleEstadoChange}
+          onPolirFalhaProtegida={(gemaId, manaConsumida) => {
+            // Falha protegida: a pedra não degrada; apenas o mana é consumido.
+            console.log(`Lapidador protegeu ${gemaId}; mana consumido: ${manaConsumida}`);
+          }}
           onClose={() => setPolindoGema(null)}
         />
       )}

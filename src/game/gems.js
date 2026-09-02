@@ -1338,12 +1338,33 @@ export function verificarFusao(gemaA, gemaB) {
 // ────────────────────────────────────────────────────────────────
 
 export const NIVEIS_POLIMENTO = {
-  destruida: { ordem: 0, nome: 'Destruída', corVisual: '#4b4f58', proximoNivel: null, custoOuro: 0, tempoHoras: 0, chanceSucesso: 0, multiplicadorEfeito: 0 },
-  bruta:     { ordem: 1, nome: 'Bruta',     corVisual: '#9aa0c0', proximoNivel: 'lapidada', custoOuro: 100, tempoHoras: 4,  chanceSucesso: 70, multiplicadorEfeito: 0.8 },
-  lapidada:  { ordem: 2, nome: 'Lapidada',  corVisual: '#4a90e2', proximoNivel: 'polido',   custoOuro: 250, tempoHoras: 8,  chanceSucesso: 60, multiplicadorEfeito: 0.9 },
-  polido:    { ordem: 3, nome: 'Polido',    corVisual: '#7c5cff', proximoNivel: 'perfeita', custoOuro: 500, tempoHoras: 16, chanceSucesso: 50, multiplicadorEfeito: 1.0 },
-  perfeita:  { ordem: 4, nome: 'Perfeita',  corVisual: '#ffd166', proximoNivel: null,       custoOuro: 0,   tempoHoras: 0,  chanceSucesso: 0,  multiplicadorEfeito: 1.2 },
+  destruida: { ordem: 0, nome: 'Destruída', corVisual: '#4b4f58', proximoNivel: null, custoOuro: 0, custoMana: 0, tempoHoras: 0, chanceSucesso: 0, multiplicadorEfeito: 0 },
+  bruta:     { ordem: 1, nome: 'Bruta',     corVisual: '#9aa0c0', proximoNivel: 'lapidada', custoOuro: 100, custoMana: 20, tempoHoras: 4,  chanceSucesso: 70, multiplicadorEfeito: 0.8 },
+  lapidada:  { ordem: 2, nome: 'Lapidada',  corVisual: '#4a90e2', proximoNivel: 'polido',   custoOuro: 250, custoMana: 40, tempoHoras: 8,  chanceSucesso: 60, multiplicadorEfeito: 0.9 },
+  polido:    { ordem: 3, nome: 'Polido',    corVisual: '#7c5cff', proximoNivel: 'perfeita', custoOuro: 500, custoMana: 80, tempoHoras: 16, chanceSucesso: 50, multiplicadorEfeito: 1.0 },
+  perfeita:  { ordem: 4, nome: 'Perfeita',  corVisual: '#ffd166', proximoNivel: null,       custoOuro: 0,   custoMana: 0,  tempoHoras: 0,  chanceSucesso: 0,  multiplicadorEfeito: 1.2 },
 };
+
+// Aplica os bônus da profissão 'Lapidador' sobre o custo/chance base de um
+// nível de polimento. Retorna os valores já modificados.
+export function calcularCustoPolimento(nivel, jogador = {}) {
+  const eLapidador = jogador.profissao === 'Lapidador';
+  const chanceSucesso = eLapidador
+    ? Math.min(100, nivel.chanceSucesso + 15)
+    : nivel.chanceSucesso;
+  const custoMana = eLapidador
+    ? Math.floor(nivel.custoMana * 0.8)
+    : nivel.custoMana;
+  return {
+    custoOuro: nivel.custoOuro,
+    custoMana,
+    custoManaOriginal: nivel.custoMana,
+    chanceSucesso,
+    chanceSucessoOriginal: nivel.chanceSucesso,
+    falhaSegura: eLapidador,
+    bonusLapidador: eLapidador,
+  };
+}
 
 // Retorna as informações do nível atual da gema (ou null se inválido).
 export function nivelInfo(estado) {
@@ -1357,35 +1378,55 @@ export function gemaPolivel(estado) {
 }
 
 // Realiza a tentativa de polimento.
-// Entrada: gema (objeto com .estado) e ouroDisponivel (número).
-// Retorno: { ok, sucesso, estadoAnterior, estadoNovo, custoOuro,
-//           multiplicadorAnterior, multiplicadorNovo, ouroRestante, motivo? }
-export function polirPedra(gema, ouroDisponivel) {
+// Entrada: gema (objeto com .estado), ouroDisponivel, jogador (opcional) e
+//          manaDisponivel (opcional — se omitido, considera mana suficiente).
+// Retorno: { ok, sucesso, protegido, estadoAnterior, estadoNovo, custoOuro,
+//           custoMana, multiplicadorAnterior, multiplicadorNovo, ouroRestante,
+//           bonusLapidador, motivo? }
+export function polirPedra(gema, ouroDisponivel, jogador = {}, manaDisponivel) {
   if (!gema) return { ok: false, motivo: 'Gema não encontrada.' };
   const atual = NIVEIS_POLIMENTO[gema.estado];
   if (!atual) return { ok: false, motivo: 'Estado inválido.' };
   if (!atual.proximoNivel) {
     return { ok: false, motivo: 'A pedra já está no nível máximo de polimento.' };
   }
-  if (ouroDisponivel < atual.custoOuro) {
+
+  const custo = calcularCustoPolimento(atual, jogador);
+
+  if (ouroDisponivel < custo.custoOuro) {
     return {
       ok: false,
       precisaOuro: true,
-      custoOuro: atual.custoOuro,
+      custoOuro: custo.custoOuro,
       ouroDisponivel,
-      motivo: `Ouro insuficiente: precisa de ${atual.custoOuro}, você tem ${ouroDisponivel}.`,
+      motivo: `Ouro insuficiente: precisa de ${custo.custoOuro}, você tem ${ouroDisponivel}.`,
+    };
+  }
+  if (manaDisponivel !== undefined && manaDisponivel < custo.custoMana) {
+    return {
+      ok: false,
+      precisaMana: true,
+      custoMana: custo.custoMana,
+      manaDisponivel,
+      motivo: `Mana insuficiente: precisa de ${custo.custoMana}, você tem ${manaDisponivel}.`,
     };
   }
 
-  const ouroRestante = ouroDisponivel - atual.custoOuro;
+  const ouroRestante = ouroDisponivel - custo.custoOuro;
+  const manaConsumida = custo.custoMana;
 
-  // Rola o dado virtual contra a chance de sucesso.
-  const sucesso = Math.random() < atual.chanceSucesso / 100;
+  // Rola o dado virtual contra a chance de sucesso (já com bônus).
+  const sucesso = Math.random() < custo.chanceSucesso / 100;
 
   let estadoNovo;
+  let protegido = false;
   if (sucesso) {
     // Sobe um nível (atual.proximoNivel já é o id do próximo nível).
     estadoNovo = atual.proximoNivel;
+  } else if (custo.falhaSegura && gema.estado !== 'bruta') {
+    // Falha segura do Lapidador: a pedra não degrada (exceto bruta).
+    protegido = true;
+    estadoNovo = gema.estado;
   } else {
     // Degrada: perfeita → polido, polido → lapidada, lapidada → bruta, bruta → destruída.
     const anteriorKv = Object.entries(NIVEIS_POLIMENTO).find(
@@ -1399,11 +1440,15 @@ export function polirPedra(gema, ouroDisponivel) {
   return {
     ok: true,
     sucesso,
+    protegido,
     estadoAnterior: gema.estado,
     estadoNovo,
-    custoOuro: atual.custoOuro,
+    custoOuro: custo.custoOuro,
+    custoMana: manaConsumida,
     multiplicadorAnterior: atual.multiplicadorEfeito,
     multiplicadorNovo: infoFinal.multiplicadorEfeito,
     ouroRestante,
+    manaRestante: manaDisponivel !== undefined ? manaDisponivel - manaConsumida : undefined,
+    bonusLapidador: custo.bonusLapidador,
   };
 }

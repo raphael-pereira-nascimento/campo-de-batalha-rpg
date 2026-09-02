@@ -4,29 +4,58 @@ import {
   nivelInfo,
   gemaPolivel,
   polirPedra,
+  calcularCustoPolimento,
 } from '../game/gems.js';
 
 const ICONES_NIVEL = { destruida: '💥', bruta: '🪨', lapidada: '💎', polido: '💠', perfeita: '🌟' };
 const CADEIA = ['bruta', 'lapidada', 'polido', 'perfeita'];
 
-export default function GemPolisher({ gema, ouro = 0, onOuroChange, onEstadoChange, onClose }) {
+const BENEFICIOS_LAPIDADOR = [
+  { badge: '+15%', texto: 'de chance de sucesso' },
+  { badge: '-20%', texto: 'de custo de mana' },
+  { badge: '✦', texto: 'Falha segura: a pedra não degrada (exceto bruta)' },
+];
+
+export default function GemPolisher({
+  gema,
+  ouro = 0,
+  mana = 0,
+  jogador = {},
+  onOuroChange,
+  onManaChange,
+  onEstadoChange,
+  onPolirFalhaProtegida,
+  onClose,
+}) {
   const [progresso, setProgresso] = useState(0);
   const [polindo, setPolindo] = useState(false);
   const [toast, setToast] = useState(null);
   const [estadoLocal, setEstadoLocal] = useState(gema?.estado);
   const timer = useRef(null);
 
+  const eLapidador = jogador.profissao === 'Lapidador';
+
   const atual = gema ? nivelInfo(estadoLocal) : null;
   const proximo = gema && atual?.proximoNivel ? NIVEIS_POLIMENTO[atual.proximoNivel] : null;
   const polivel = !!gema && gemaPolivel(estadoLocal);
-  const passouNoOuro = atual && ouro >= atual.custoOuro;
+  const custo = atual ? calcularCustoPolimento(atual, jogador) : null;
+  const passouNoOuro = custo && ouro >= custo.custoOuro;
+  const passouNoMana = custo && mana >= custo.custoMana;
+  const podePolir = passouNoOuro && passouNoMana;
   const duracaoMs = 2000;
+
+  const brutaProtegida = eLapidador && estadoLocal === 'bruta';
+  const textoRisco = eLapidador && !brutaProtegida
+    ? 'Pedra mantém estado atual (protegido por Lapidador)'
+    : brutaProtegida
+    ? 'Pedra bruta ainda pode ser destruída na falha'
+    : 'Falha degrada a pedra para o nível anterior';
 
   useEffect(() => {
     return () => clearInterval(timer.current);
   }, []);
 
-  if (!gema || !atual) return null;
+  if (!gema || !atual || !custo) return null;
 
   const mostrarToast = (msg, tipo) => {
     setToast({ msg, tipo });
@@ -35,8 +64,11 @@ export default function GemPolisher({ gema, ouro = 0, onOuroChange, onEstadoChan
 
   const handlePolir = () => {
     if (!polivel || polindo) return;
-    if (!passouNoOuro) {
-      mostrarToast(`❌ Ouro insuficiente (precisa de ${atual.custoOuro})`, 'erro');
+    if (!podePolir) {
+      mostrarToast(
+        passouNoOuro ? `❌ Mana insuficiente (precisa de ${custo.custoMana})` : `❌ Ouro insuficiente (precisa de ${custo.custoOuro})`,
+        'erro'
+      );
       return;
     }
     setPolindo(true);
@@ -49,15 +81,21 @@ export default function GemPolisher({ gema, ouro = 0, onOuroChange, onEstadoChan
       setProgresso(p);
       if (p >= 100) {
         clearInterval(timer.current);
-        const resultado = polirPedra(gema, ouro);
+        const resultado = polirPedra(gema, ouro, jogador, mana);
         if (resultado.ok) {
           if (onOuroChange) onOuroChange(resultado.ouroRestante);
+          if (onManaChange && resultado.manaRestante !== undefined) onManaChange(resultado.manaRestante);
           setEstadoLocal(resultado.estadoNovo);
           if (onEstadoChange) onEstadoChange(gema.id, resultado.estadoNovo);
-          mostrarToast(
-            resultado.sucesso ? '✅ Pedra polida com sucesso!' : '❌ Falha no polimento!',
-            resultado.sucesso ? 'sucesso' : 'erro'
-          );
+          if (resultado.protegido && onPolirFalhaProtegida) {
+            onPolirFalhaProtegida(gema.id, resultado.custoMana);
+            mostrarToast('🛡️ Falha! A pedra foi protegida pelo Lapidador.', 'aviso');
+          } else {
+            mostrarToast(
+              resultado.sucesso ? '✅ Pedra polida com sucesso!' : '❌ Falha no polimento!',
+              resultado.sucesso ? 'sucesso' : 'erro'
+            );
+          }
         } else {
           mostrarToast(resultado.motivo || '❌ Não foi possível polir.', 'erro');
         }
@@ -75,13 +113,15 @@ export default function GemPolisher({ gema, ouro = 0, onOuroChange, onEstadoChan
   const corProximo = proximo ? proximo.corVisual : corAtual;
   const pctMultiplicador = (m) => Math.round((m || 0) * 100);
   const idxAtual = CADEIA.indexOf(estadoLocal);
+  const temDescontoMana = custo.custoManaOriginal > custo.custoMana;
+  const temBonusChance = custo.chanceSucesso > custo.chanceSucessoOriginal;
 
   return (
     <div className="modal-backdrop" onClick={handleFechar}>
       <div className="polisher-modal" onClick={(e) => e.stopPropagation()}>
         {/* ── Coluna esquerda: a "bancada de polimento" ── */}
         <aside className="polisher-bench">
-          <div className="polisher-gem-orbit" style={{ ['--c' ]: corAtual }}>
+          <div className="polisher-gem-orbit" style={{ ['--c']: corAtual }}>
             <div className="polisher-gem" style={{ color: corAtual, borderColor: corAtual }}>
               {ICONES_NIVEL[estadoLocal] || '💎'}
             </div>
@@ -121,6 +161,20 @@ export default function GemPolisher({ gema, ouro = 0, onOuroChange, onEstadoChan
           <h2>Polimento da Pedra</h2>
           <p className="polisher-subtitle">Leve a gema ao próximo nível para ampliar seus efeitos.</p>
 
+          {eLapidador && (
+            <div className="polisher-bonus-card">
+              <div className="polisher-bonus-title">⭐ Bônus da Profissão: Lapidador</div>
+              <ul className="polisher-bonus-list">
+                {BENEFICIOS_LAPIDADOR.map((b, i) => (
+                  <li key={i}>
+                    <span className="polisher-bonus-badge">{b.badge}</span>
+                    <span>{b.texto}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {polivel && proximo ? (
             <>
               <div className="polisher-vs">
@@ -137,16 +191,20 @@ export default function GemPolisher({ gema, ouro = 0, onOuroChange, onEstadoChan
 
               <div className="polisher-custos">
                 <div className="polisher-custo">
-                  <span className="polisher-custo-label">Custo</span>
-                  <span className={`polisher-custo-val ${ouro >= atual.custoOuro ? '' : 'carente'}`}>🪙 {atual.custoOuro}</span>
+                  <span className="polisher-custo-label">Custo em ouro</span>
+                  <span className={`polisher-custo-val ${ouro >= custo.custoOuro ? '' : 'carente'}`}>🪙 {custo.custoOuro}</span>
                 </div>
                 <div className="polisher-custo">
-                  <span className="polisher-custo-label">Tempo</span>
-                  <span className="polisher-custo-val">⏳ {atual.tempoHoras}h</span>
+                  <span className="polisher-custo-label">Custo de mana {temDescontoMana && <span className="polisher-badge-gold">-20%</span>}</span>
+                  <span className={`polisher-custo-val ${mana >= custo.custoMana ? '' : 'carente'}`}>
+                    ⚡{' '}
+                    {temDescontoMana && <s className="polisher-orig">{custo.custoManaOriginal}</s>}{' '}
+                    {custo.custoMana}
+                  </span>
                 </div>
                 <div className="polisher-custo">
-                  <span className="polisher-custo-label">Chance</span>
-                  <span className="polisher-custo-val">🎲 {atual.chanceSucesso}%</span>
+                  <span className="polisher-custo-label">Chance de sucesso {temBonusChance && <span className="polisher-badge-gold">+15%</span>}</span>
+                  <span className="polisher-custo-val">🎲 {custo.chanceSucesso}%</span>
                 </div>
               </div>
 
@@ -154,6 +212,12 @@ export default function GemPolisher({ gema, ouro = 0, onOuroChange, onEstadoChan
                 Efeito: <strong style={{ color: corAtual }}>{pctMultiplicador(atual.multiplicadorEfeito)}%</strong>
                 <span className="polisher-multiplier-arrow">→</span>
                 <strong style={{ color: corProximo }}>{pctMultiplicador(proximo.multiplicadorEfeito)}%</strong>
+              </div>
+
+              {/* Risco de falha */}
+              <div className={`polisher-risco ${eLapidador && !brutaProtegida ? 'protegido' : ''}`}>
+                <span className="polisher-risco-ico">{eLapidador && !brutaProtegida ? '🛡️' : '⚠️'}</span>
+                <span>{textoRisco}</span>
               </div>
 
               <div className="polisher-progress-wrap">
@@ -168,13 +232,16 @@ export default function GemPolisher({ gema, ouro = 0, onOuroChange, onEstadoChan
 
               <div className="polisher-actions">
                 <button className="ghost" onClick={handleFechar} disabled={polindo}>Cancelar</button>
-                <button className="polisher-polir" onClick={handlePolir} disabled={polindo || !passouNoOuro}>
-                  {polindo ? 'Polindo...' : `Polir por ${atual.custoOuro} 🪙`}
+                <button className="polisher-polir" onClick={handlePolir} disabled={polindo || !podePolir}>
+                  {polindo ? 'Polindo...' : `Polir por ${custo.custoOuro} 🪙 / ${custo.custoMana} ⚡`}
                 </button>
               </div>
 
               {passouNoOuro === false && (
                 <p className="polisher-erro">Você não tem ouro suficiente para este polimento.</p>
+              )}
+              {passouNoMana === false && passouNoOuro && (
+                <p className="polisher-erro">Você não tem mana suficiente para este polimento.</p>
               )}
             </>
           ) : (

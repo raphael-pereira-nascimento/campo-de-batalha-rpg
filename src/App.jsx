@@ -9,6 +9,7 @@ const Registry = lazy(() => import('./pages/Registry.jsx'));
 const Compendium = lazy(() => import('./pages/Compendium.jsx'));
 const TableBattle = lazy(() => import('./pages/TableBattle.jsx'));
 const GemForge = lazy(() => import('./pages/GemForge.jsx'));
+const ToolShop = lazy(() => import('./pages/ToolShop.jsx'));
 
 export default function App() {
   const [view, setView] = useState('home');
@@ -19,6 +20,7 @@ export default function App() {
   const [gameDataError, setGameDataError] = useState(false);
   const [battleId, setBattleId] = useState(null);
   const [offlineMode, setOfflineMode] = useState(isOffline());
+  const [walletCents, setWalletCents] = useState(0);
 
   useEffect(() => {
     api
@@ -80,6 +82,21 @@ export default function App() {
     setView('home');
   };
 
+  const abrirToolShop = async () => {
+    try {
+      const d = await api.getWallet();
+      const cents = d && d.wallet && typeof d.wallet === 'object' ? d.wallet.cents : Number(d?.wallet) || 0;
+      setWalletCents(cents);
+    } catch (_) {
+      // mantém o valor atual da carteira
+    }
+    setView('toolShop');
+  };
+
+  const handleToolBuy = (_ferramenta, preco) => {
+    setWalletCents((c) => Math.max(0, c - preco));
+  };
+
   if (!gameData) {
     if (gameDataError) {
       return (
@@ -130,6 +147,7 @@ export default function App() {
         onOpenRegistry={() => setView('registry')}
         onOpenCompendium={() => setView('compendium')}
         onOpenGemForge={() => setView('gemForge')}
+        onOpenToolShop={abrirToolShop}
         onOpenTableBattle={() => setView('tableBattle')}
         onLogout={handleLogout}
       />
@@ -151,6 +169,23 @@ export default function App() {
   if (view === 'gemForge') {
     return <Suspense fallback={<div className="loading">Acesando a forja...</div>}>
       <GemForge onBack={() => setView('characters')} />
+    </Suspense>;
+  }
+
+  if (view === 'toolShop') {
+    return <Suspense fallback={<div className="loading">Abrindo a loja...</div>}>
+      <ToolShop
+        jogador={{
+          nome: player?.name || 'Jogador',
+          carteira: walletCents,
+          inventario: [],
+          limitePeso: 40,
+          limiteEspacos: 20,
+        }}
+        localAtual="Porto Ferro"
+        onComprar={handleToolBuy}
+        onBack={() => setView('characters')}
+      />
     </Suspense>;
   }
 
