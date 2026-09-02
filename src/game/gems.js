@@ -1329,3 +1329,81 @@ export function verificarFusao(gemaA, gemaB) {
 
   return { ok: true, resultado: receita.resultado };
 }
+
+// ────────────────────────────────────────────────────────────────
+// SISTEMA DE POLIMENTO DE PEDRAS (GemPolisher)
+// Cadeia de níveis: destruída ← bruta → lapidada → polido → perfeita
+// Cada nível tem custo em ouro, tempo (h), chance de sucesso (%) e um
+// multiplicador de efeito aplicado aos status do equipamento.
+// ────────────────────────────────────────────────────────────────
+
+export const NIVEIS_POLIMENTO = {
+  destruida: { ordem: 0, nome: 'Destruída', corVisual: '#4b4f58', proximoNivel: null, custoOuro: 0, tempoHoras: 0, chanceSucesso: 0, multiplicadorEfeito: 0 },
+  bruta:     { ordem: 1, nome: 'Bruta',     corVisual: '#9aa0c0', proximoNivel: 'lapidada', custoOuro: 100, tempoHoras: 4,  chanceSucesso: 70, multiplicadorEfeito: 0.8 },
+  lapidada:  { ordem: 2, nome: 'Lapidada',  corVisual: '#4a90e2', proximoNivel: 'polido',   custoOuro: 250, tempoHoras: 8,  chanceSucesso: 60, multiplicadorEfeito: 0.9 },
+  polido:    { ordem: 3, nome: 'Polido',    corVisual: '#7c5cff', proximoNivel: 'perfeita', custoOuro: 500, tempoHoras: 16, chanceSucesso: 50, multiplicadorEfeito: 1.0 },
+  perfeita:  { ordem: 4, nome: 'Perfeita',  corVisual: '#ffd166', proximoNivel: null,       custoOuro: 0,   tempoHoras: 0,  chanceSucesso: 0,  multiplicadorEfeito: 1.2 },
+};
+
+// Retorna as informações do nível atual da gema (ou null se inválido).
+export function nivelInfo(estado) {
+  return NIVEIS_POLIMENTO[estado] || null;
+}
+
+// Verifica se o estado pode ser polido (não é terminal/destruída nem máximo).
+export function gemaPolivel(estado) {
+  const n = NIVEIS_POLIMENTO[estado];
+  return !!n && !!n.proximoNivel;
+}
+
+// Realiza a tentativa de polimento.
+// Entrada: gema (objeto com .estado) e ouroDisponivel (número).
+// Retorno: { ok, sucesso, estadoAnterior, estadoNovo, custoOuro,
+//           multiplicadorAnterior, multiplicadorNovo, ouroRestante, motivo? }
+export function polirPedra(gema, ouroDisponivel) {
+  if (!gema) return { ok: false, motivo: 'Gema não encontrada.' };
+  const atual = NIVEIS_POLIMENTO[gema.estado];
+  if (!atual) return { ok: false, motivo: 'Estado inválido.' };
+  if (!atual.proximoNivel) {
+    return { ok: false, motivo: 'A pedra já está no nível máximo de polimento.' };
+  }
+  if (ouroDisponivel < atual.custoOuro) {
+    return {
+      ok: false,
+      precisaOuro: true,
+      custoOuro: atual.custoOuro,
+      ouroDisponivel,
+      motivo: `Ouro insuficiente: precisa de ${atual.custoOuro}, você tem ${ouroDisponivel}.`,
+    };
+  }
+
+  const ouroRestante = ouroDisponivel - atual.custoOuro;
+
+  // Rola o dado virtual contra a chance de sucesso.
+  const sucesso = Math.random() < atual.chanceSucesso / 100;
+
+  let estadoNovo;
+  if (sucesso) {
+    // Sobe um nível (atual.proximoNivel já é o id do próximo nível).
+    estadoNovo = atual.proximoNivel;
+  } else {
+    // Degrada: perfeita → polido, polido → lapidada, lapidada → bruta, bruta → destruída.
+    const anteriorKv = Object.entries(NIVEIS_POLIMENTO).find(
+      ([, n]) => n.proximoNivel === gema.estado
+    );
+    estadoNovo = anteriorKv ? anteriorKv[0] : 'destruida';
+  }
+
+  const infoFinal = NIVEIS_POLIMENTO[estadoNovo] || NIVEIS_POLIMENTO.destruida;
+
+  return {
+    ok: true,
+    sucesso,
+    estadoAnterior: gema.estado,
+    estadoNovo,
+    custoOuro: atual.custoOuro,
+    multiplicadorAnterior: atual.multiplicadorEfeito,
+    multiplicadorNovo: infoFinal.multiplicadorEfeito,
+    ouroRestante,
+  };
+}

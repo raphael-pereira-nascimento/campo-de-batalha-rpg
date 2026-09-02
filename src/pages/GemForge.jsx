@@ -5,6 +5,7 @@ import {
   verificarFusao,
   efeitosParaLista,
 } from '../game/gems.js';
+import GemPolisher from '../components/GemPolisher.jsx';
 
 const RARITY_GLOW = {
   'Incomum': '#3ddc84',
@@ -79,6 +80,12 @@ export default function GemForge({ onBack }) {
   const [gemaAId, setGemaAId] = useState('');
   const [gemaBId, setGemaBId] = useState('');
 
+  // Cópias mutáveis das gemas disponíveis (para o polimento refletir o novo
+  // estado) + saldo de ouro do jogador.
+  const [disponiveis, setDisponiveis] = useState(() => gemas.map((g) => ({ ...g })));
+  const [ouro, setOuro] = useState(1000);
+  const [polindoGema, setPolindoGema] = useState(null);
+
   const gemaA = useMemo(() => getGemaById(gemaAId), [gemaAId]);
   const gemaB = useMemo(() => getGemaById(gemaBId), [gemaBId]);
 
@@ -87,6 +94,11 @@ export default function GemForge({ onBack }) {
   const handleDragStart = (id) => (e) => {
     e.dataTransfer.setData('text/gem-id', id);
     e.dataTransfer.effectAllowed = 'copy';
+  };
+
+  // Persiste a mudança de estado após o polimento no inventário local.
+  const handleEstadoChange = (id, estadoNovo) => {
+    setDisponiveis((prev) => prev.map((g) => (g.id === id ? { ...g, estado: estadoNovo } : g)));
   };
 
   const aviso = (() => {
@@ -127,23 +139,28 @@ export default function GemForge({ onBack }) {
 
         {/* Inventário simplificado (gemas disponíveis) — arrastáveis */}
         <div className="forge-inventory">
-          <h3>💎 Pedras disponíveis</h3>
+          <h3>💎 Pedras disponíveis <span className="muted">(clique para polir)</span></h3>
           <div className="forge-gem-pool">
-            {gemas.map((g) => (
+            {disponiveis.map((g) => (
               <div
                 key={g.id}
                 className={`forge-pool-gem ${g.estado === 'bruta' ? 'is-bruta' : ''}`}
                 draggable
                 onDragStart={handleDragStart(g.id)}
                 onClick={() => {
-                  if (!gemaA) setGemaAId(g.id);
+                  // Clique abre o polidor para pedras políveis; caso contrário,
+                  // usa a pedra na forja (preenchendo o próximo slot livre).
+                  if (['bruta', 'lapidada', 'polido'].includes(g.estado)) {
+                    setPolindoGema(g);
+                  } else if (!gemaA) setGemaAId(g.id);
                   else if (!gemaB) setGemaBId(g.id);
                 }}
+                title={['bruta', 'lapidada', 'polido'].includes(g.estado) ? 'Clique para polir' : 'Clique para usar na fusão'}
                 style={{ borderColor: RARITY_GLOW[g.raridade] || 'var(--border)' }}
               >
                 <span>{FUSION_ICONS[g.id] || DEFAULT_ICON}</span>
                 <strong>{g.nome}</strong>
-                <small>{g.raridade} · {g.estado === 'bruta' ? '⛓ Bruta' : '✨ Polida'}</small>
+                <small>{g.raridade} · {g.estado === 'bruta' ? '⛓ Bruta' : g.estado === 'lapidada' ? '🔷 Lapidada' : g.estado === 'polido' ? '✨ Polida' : g.estado === 'perfeita' ? '🌟 Perfeita' : '💥 Destruída'}</small>
               </div>
             ))}
           </div>
@@ -222,6 +239,17 @@ export default function GemForge({ onBack }) {
           </div>
         )}
       </div>
+
+      {/* Polidor de pedras — abre ao clicar numa gema polível */}
+      {polindoGema && (
+        <GemPolisher
+          gema={polindoGema}
+          ouro={ouro}
+          onOuroChange={setOuro}
+          onEstadoChange={handleEstadoChange}
+          onClose={() => setPolindoGema(null)}
+        />
+      )}
     </div>
   );
 }

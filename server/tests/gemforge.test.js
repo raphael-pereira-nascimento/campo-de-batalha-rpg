@@ -1,10 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   gemas,
   receitasFusao,
   getGemaById,
   verificarFusao,
   gemaIsBruta,
+  NIVEIS_POLIMENTO,
+  gemaPolivel,
+  polirPedra,
 } from '../../src/game/gems.js';
 
 const obsidiana = getGemaById('obsidiana');
@@ -77,5 +80,82 @@ describe('verificarFusao — Compatibilidade e Receitas', () => {
     expect(res.instavel).toBe(true);
     expect(res.motivo).toContain('Fusão Instável');
     expect(res.motivo).toContain('50% de chance de destruir');
+  });
+});
+
+describe('polirPedra — sistema de polimento', () => {
+  let mockRandom;
+
+  beforeEach(() => {
+    mockRandom = vi.spyOn(Math, 'random');
+  });
+
+  afterEach(() => {
+    mockRandom.mockRestore();
+  });
+
+  it('níveis formam a cadeia bruta → lapidada → polido → perfeita', () => {
+    expect(NIVEIS_POLIMENTO.bruta.proximoNivel).toBe('lapidada');
+    expect(NIVEIS_POLIMENTO.lapidada.proximoNivel).toBe('polido');
+    expect(NIVEIS_POLIMENTO.polido.proximoNivel).toBe('perfeita');
+    expect(NIVEIS_POLIMENTO.perfeita.proximoNivel).toBeNull();
+    // bônus: polido tem multiplicador 1.0 e perfeita 1.2 (80% → 100% etc.)
+    expect(NIVEIS_POLIMENTO.bruta.multiplicadorEfeito).toBe(0.8);
+    expect(NIVEIS_POLIMENTO.polido.multiplicadorEfeito).toBe(1.0);
+  });
+
+  it('gemaPolivel aceita bruta/lapidada/polido e recusa perfeita/destruida', () => {
+    expect(gemaPolivel('bruta')).toBe(true);
+    expect(gemaPolivel('lapidada')).toBe(true);
+    expect(gemaPolivel('polido')).toBe(true);
+    expect(gemaPolivel('perfeita')).toBe(false);
+    expect(gemaPolivel('destruida')).toBe(false);
+  });
+
+  it('sucesso sobe de nível e debita o custo em ouro', () => {
+    mockRandom.mockReturnValue(0); // garante sucesso
+    const gema = { id: 'rubi', estado: 'bruta' };
+    const res = polirPedra(gema, 500);
+    expect(res.ok).toBe(true);
+    expect(res.sucesso).toBe(true);
+    expect(res.estadoNovo).toBe('lapidada');
+    expect(res.custoOuro).toBe(100);
+    expect(res.ouroRestante).toBe(400);
+    expect(res.multiplicadorNovo).toBe(NIVEIS_POLIMENTO.lapidada.multiplicadorEfeito);
+  });
+
+  it('falha degrada: lapidada → bruta', () => {
+    mockRandom.mockReturnValue(0.99); // garante falha
+    const gema = { id: 'rubi', estado: 'lapidada' };
+    const res = polirPedra(gema, 500);
+    expect(res.ok).toBe(true);
+    expect(res.sucesso).toBe(false);
+    expect(res.estadoNovo).toBe('bruta');
+  });
+
+  it('falha a partir de bruta destrói a pedra', () => {
+    mockRandom.mockReturnValue(0.99);
+    const gema = { id: 'rubi', estado: 'bruta' };
+    const res = polirPedra(gema, 500);
+    expect(res.ok).toBe(true);
+    expect(res.sucesso).toBe(false);
+    expect(res.estadoNovo).toBe('destruida');
+  });
+
+  it('perfeita não pode ser polida', () => {
+    const gema = { id: 'rubi', estado: 'perfeita' };
+    const res = polirPedra(gema, 9999);
+    expect(res.ok).toBe(false);
+    expect(res.motivo).toContain('máximo');
+  });
+
+  it('ouro insuficiente bloqueia o polimento', () => {
+    const gema = { id: 'rubi', estado: 'bruta' };
+    const res = polirPedra(gema, 50);
+    expect(res.ok).toBe(false);
+    expect(res.precisaOuro).toBe(true);
+    expect(res.custoOuro).toBe(100);
+    // ouro insuficiente não deve sequer alterar o estado
+    expect(gema.estado).toBe('bruta');
   });
 });
