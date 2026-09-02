@@ -2223,23 +2223,26 @@ button.danger {
   color: var(--accent-2);
 }
 .forge-gem-pool {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
 }
 .forge-pool-gem {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 10px 14px;
+  justify-content: center;
+  gap: 4px;
+  padding: 16px 12px;
   background: linear-gradient(160deg, #14122a 0%, #1d1240 100%);
   border: 1px solid;
   border-radius: 12px;
   cursor: grab;
   font-size: 13px;
+  min-height: 74px;
   transition: transform 0.1s, box-shadow 0.15s;
 }
+.forge-pool-gem > span { font-size: 26px; }
 .forge-pool-gem:hover {
   transform: translateY(-2px);
   box-shadow: 0 0 14px rgba(212, 175, 55, 0.35);
@@ -2459,73 +2462,207 @@ button.danger {
 
 /* ─────────────────── Polidor de Gemas ─────────────────── */
 .polisher-modal {
-  width: min(460px, 100%);
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  width: min(760px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: polisher-modal-in 0.25s ease;
+}
+@keyframes polisher-modal-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* ── Bancada (coluna esquerda) ── */
+.polisher-bench {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 30px 20px;
+  background:
+    radial-gradient(circle at 50% 30%, var(--c, #7c5cff) 0%, transparent 55%),
+    radial-gradient(circle at 100% 100%, rgba(0, 0, 0, 0.6), transparent 70%),
+    linear-gradient(180deg, #171333 0%, #0e0a22 100%);
+  border-right: 1px solid var(--border);
+}
+.polisher-gem-orbit {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  display: grid;
+  place-items: center;
+}
+.polisher-gem {
+  width: 92px;
+  height: 92px;
+  display: grid;
+  place-items: center;
+  font-size: 48px;
+  border: 2px solid;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.25), rgba(0, 0, 0, 0.4));
+  box-shadow: 0 0 30px currentColor, inset 0 0 20px rgba(0, 0, 0, 0.4);
+  z-index: 2;
+  animation: polisher-gem-float 3s ease-in-out infinite;
+}
+@keyframes polisher-gem-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.polisher-gem-ring {
+  position: absolute;
+  inset: 6px;
+  border: 1px dashed;
+  border-radius: 50%;
+  opacity: 0.5;
+  animation: polisher-ring 8s linear infinite;
+}
+@keyframes polisher-ring {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.polisher-gem-nome {
+  font-size: 20px;
+  font-weight: 800;
   text-align: center;
 }
-.polisher-head {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  border-bottom: 2px solid;
-  padding-bottom: 14px;
-  text-align: left;
+.polisher-gem-tag {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border: 1px solid;
+  border-radius: 999px;
 }
-.polisher-head h2 { margin: 0; font-size: 20px; }
-.polisher-icon { font-size: 40px; line-height: 1; }
-.modal-close {
-  margin-left: auto;
+.polisher-track {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin-top: 8px;
+}
+.polisher-phase {
+  display: grid;
+  grid-template-columns: 30px auto;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+.polisher-phase-dot {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 13px;
+  color: #0c0a18;
+  background: #241f3c;
+  border: 1px solid var(--border);
+  z-index: 2;
+}
+.polisher-phase-dot.current { animation: polisher-pulse 1.2s ease infinite; }
+@keyframes polisher-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+.polisher-phase small {
+  font-size: 12px;
+  color: var(--muted);
+  justify-self: start;
+}
+.polisher-track-line {
+  position: absolute;
+  left: 13px;
+  top: 26px;
+  width: 0;
+  height: 6px;
+  border-left: 2px solid var(--border);
+  opacity: 0.5;
+}
+
+/* ── Painel de controles (coluna direita) ── */
+.polisher-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px 26px;
+  justify-content: center;
+}
+.polisher-panel .modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  margin: 0;
   background: transparent;
   color: var(--muted);
   width: 32px;
   height: 32px;
   padding: 0;
   border: 1px solid var(--border);
+  border-radius: 8px;
 }
-.polisher-levels {
+.polisher-panel h2 {
+  margin: 0;
+  font-size: 22px;
+}
+.polisher-subtitle {
+  margin: -6px 0 2px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.polisher-vs {
   display: flex;
   align-items: center;
+  gap: 12px;
   justify-content: center;
-  gap: 16px;
-  margin: 6px 0 10px;
 }
-.polisher-level {
+.polisher-vs-card {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding: 12px 18px;
+  padding: 14px 10px;
   border-radius: 14px;
   border: 2px solid;
   background: var(--panel-2);
-  min-width: 96px;
 }
-.polisher-level-icon { font-size: 30px; }
-.polisher-level strong { font-size: 14px; }
-.polisher-level small { color: var(--muted); font-size: 13px; }
-.polisher-arrow { font-size: 26px; color: var(--muted); }
-.polisher-multiplier {
-  font-size: 14px;
-  color: var(--muted);
-  margin-bottom: 12px;
-}
+.polisher-vs-card small { color: var(--muted); font-size: 18px; font-weight: 700; }
+.polisher-vs-card strong { font-size: 15px; }
+.polisher-vs-arrow { font-size: 24px; color: var(--muted); }
 .polisher-custos {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
-  margin-bottom: 16px;
 }
 .polisher-custo {
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 10px 8px;
+  padding: 10px 6px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  text-align: center;
 }
-.polisher-custo-label { font-size: 11px; color: var(--muted); }
-.polisher-custo-val { font-size: 15px; font-weight: 700; }
+.polisher-custo-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.polisher-custo-val { font-size: 16px; font-weight: 700; }
 .polisher-custo-val.carente { color: #ff6b6b; }
+.polisher-multiplier {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.polisher-multiplier-arrow { color: var(--muted); }
 .polisher-progress-wrap {
   position: relative;
   height: 20px;
@@ -2534,7 +2671,6 @@ button.danger {
   background: #14111f;
   border: 1px solid var(--border);
   overflow: hidden;
-  margin-bottom: 8px;
 }
 .polisher-progress {
   height: 100%;
@@ -2551,8 +2687,36 @@ button.danger {
   font-weight: 700;
   text-shadow: 0 1px 2px #000;
 }
-.polisher-status.muted { font-size: 13px; }
-.polisher-erro { color: #ff6b6b; font-size: 13px; margin: 0; }
+.polisher-status { font-size: 13px; color: var(--muted); text-align: center; margin: 0; }
+.polisher-erro { color: #ff6b6b; font-size: 13px; margin: 0; text-align: center; }
+.polisher-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+.polisher-actions button {
+  border: none;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 14px;
+}
+.polisher-actions .ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.polisher-actions .polisher-polir {
+  background: linear-gradient(135deg, #6d5cff, #9a4dff);
+  color: #fff;
+  box-shadow: 0 4px 18px rgba(124, 92, 255, 0.4);
+}
+.polisher-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .polisher-toast {
   position: fixed;
   bottom: 28px;
@@ -2568,30 +2732,16 @@ button.danger {
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
   animation: polisher-toast-in 0.25s ease;
 }
-.polisher-toast.sucesso {
-  border-color: var(--green);
-  color: #9ff0c0;
-}
-.polisher-toast.erro {
-  border-color: #ff6b6b;
-  color: #ffb3ba;
-}
+.polisher-toast.sucesso { border-color: var(--green); color: #9ff0c0; }
+.polisher-toast.erro { border-color: #ff6b6b; color: #ffb3ba; }
 @keyframes polisher-toast-in {
   from { opacity: 0; transform: translate(-50%, 12px); }
   to { opacity: 1; transform: translate(-50%, 0); }
 }
-.modal-actions button {
-  background: var(--accent);
-  border: none;
-  padding: 8px 18px;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.modal-actions button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-@media (max-width: 480px) {
-  .polisher-custos { grid-template-columns: 1fr; }
+@media (max-width: 640px) {
+  .polisher-modal { grid-template-columns: 1fr; }
+  .polisher-bench { border-right: none; border-bottom: 1px solid var(--border); }
+  .polisher-track { flex-direction: row; justify-content: space-between; }
+  .polisher-phase { grid-template-columns: auto; }
+  .polisher-track-line { display: none; }
 }
