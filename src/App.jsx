@@ -7,6 +7,7 @@ const Lobby = lazy(() => import('./pages/Lobby.jsx'));
 const Battle = lazy(() => import('./pages/Battle.jsx'));
 const Registry = lazy(() => import('./pages/Registry.jsx'));
 const Compendium = lazy(() => import('./pages/Compendium.jsx'));
+const Rules = lazy(() => import('./pages/Rules.jsx'));
 const TableBattle = lazy(() => import('./pages/TableBattle.jsx'));
 const GemForge = lazy(() => import('./pages/GemForge.jsx'));
 const ToolShop = lazy(() => import('./pages/ToolShop.jsx'));
@@ -146,6 +147,7 @@ export default function App() {
         onEnterLobby={() => setView('lobby')}
         onOpenRegistry={() => setView('registry')}
         onOpenCompendium={() => setView('compendium')}
+        onOpenRules={() => setView('rules')}
         onOpenGemForge={() => setView('gemForge')}
         onOpenToolShop={abrirToolShop}
         onOpenTableBattle={() => setView('tableBattle')}
@@ -163,6 +165,12 @@ export default function App() {
   if (view === 'compendium') {
     return <Suspense fallback={<div className="loading">Carregando...</div>}>
       <Compendium onBack={() => setView('characters')} />
+    </Suspense>;
+  }
+
+  if (view === 'rules') {
+    return <Suspense fallback={<div className="loading">Carregando...</div>}>
+      <Rules onBack={() => setView('characters')} />
     </Suspense>;
   }
 

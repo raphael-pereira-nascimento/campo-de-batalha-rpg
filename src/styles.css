@@ -1064,6 +1064,54 @@ button.danger {
   margin-top: 8px;
 }
 
+/* ── Regras / Contexto Base ────────────────────── */
+
+.rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 900px;
+}
+.rules-section {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.rules-section-head {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: transparent;
+  border: none;
+  padding: 14px 18px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+.rules-section-head:hover {
+  background: var(--panel-2);
+}
+.rules-section.open .rules-section-head {
+  border-bottom: 1px solid var(--border);
+  color: var(--accent);
+}
+.rules-section-body {
+  padding: 14px 18px 18px;
+  color: var(--text);
+  line-height: 1.6;
+}
+.rules-section-body ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+.rules-section-body p {
+  margin: 0 0 10px;
+}
+
 /* ── Arsenal / Compendium ─────────────────────── */
 
 .compendium-tabs {
