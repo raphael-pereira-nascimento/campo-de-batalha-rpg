@@ -1,6 +1,7 @@
 import { Server } from 'socket.io';
 import { BattleManager } from './game/battleManager.js';
 import { MONSTERS, defFromCustomMonster } from './game/monsters.js';
+import * as calendario from './game/calendar.js';
 import { getCharacter } from './services/characters.js';
 import { query } from './db/index.js';
 import { saveBattle, listFinishedBattles } from './services/battles.js';
@@ -74,7 +75,7 @@ export function setupSockets(httpServer) {
       }
     });
 
-    socket.on('createBattle', async ({ name, mode, role, characterId, aiEnabled }, ack) => {
+    socket.on('createBattle', async ({ name, mode, role, characterId, aiEnabled, dungeonId }, ack) => {
       try {
         assertAuthed();
         const resolvedRole = BattleManager.resolveRole(mode, role);
@@ -84,7 +85,18 @@ export function setupSockets(httpServer) {
           if (!character) throw new Error('Personagem não encontrado.');
           if (character.player_id !== me()) throw new Error('Este personagem não é seu.');
         }
-        const battle = manager.createBattle({ name, mode, role: resolvedRole, host: me(), hostName: socket.data.playerName || 'Anfitrião', character, aiEnabled });
+        const battle = manager.createBattle({
+          name,
+          mode,
+          role: resolvedRole,
+          host: me(),
+          hostName: socket.data.playerName || 'Anfitrião',
+          character,
+          aiEnabled,
+          // Estado do Eclipse no momento da criação da batalha.
+          calendario: { dia: calendario.getDia(), tipoEclipse: calendario.getTipo() },
+          dungeonId: dungeonId || null,
+        });
         socket.join(battle.id);
         publishBattle(io, manager, battle);
         ack({ ok: true, battleId: battle.id });
@@ -219,6 +231,48 @@ export function setupSockets(httpServer) {
     socket.on('setIdentity', ({ playerName }) => {
       socket.data.playerName = playerName;
     });
+
+    // ── Calendário do mundo / Eclipse ────────────────────────────────────
+    socket.on('getCalendario', (_payload, ack) => {
+      try {
+        ack({ ok: true, calendario: calendario.estado() });
+      } catch (err) {
+        ack && ack({ ok: false, error: err.message });
+      }
+    });
+
+    socket.on('avancarDia', ({ dias } = {}, ack) => {
+      try {
+        assertAuthed();
+        const estado = calendario.avancarDia(dias || 1);
+        io.emit('calendarioUpdate', estado);
+        ack({ ok: true, calendario: estado });
+      } catch (err) {
+        ack && ack({ ok: false, error: err.message });
+      }
+    });
+
+    socket.on('setDia', ({ dia } = {}, ack) => {
+      try {
+        assertAuthed();
+        const estado = calendario.setDia(dia);
+        io.emit('calendarioUpdate', estado);
+        ack({ ok: true, calendario: estado });
+      } catch (err) {
+        ack && ack({ ok: false, error: err.message });
+      }
+    });
+
+    socket.on('setTipoEclipse', ({ tipo } = {}, ack) => {
+      try {
+        assertAuthed();
+        const estado = calendario.setTipo(tipo);
+        io.emit('calendarioUpdate', estado);
+        ack({ ok: true, calendario: estado });
+      } catch (err) {
+        ack && ack({ ok: false, error: err.message });
+      }
+    });
   });
 
   return { io, manager };
@@ -246,5 +300,8 @@ function serializeBattle(battle) {
     log: battle.log.slice(-80),
     createdAt: battle.createdAt,
     finishedAt: battle.finishedAt,
+    eclipse: battle.eclipse || null,
+    dungeonId: battle.dungeonId || null,
+    xpPool: battle.xpPool || 0,
   };
 }

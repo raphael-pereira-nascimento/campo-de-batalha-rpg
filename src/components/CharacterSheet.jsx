@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { ATTRIBUTES, ATTRIBUTE_NAMES } from '../config.js';
 import { GEMS, GEM_RARITY, gemIsRaw } from '../game/gems.js';
+import { deriveStats } from '../game/data.js';
+import { cargaMaxima, VOO } from '../game/sistema.js';
 import StatBar from './StatBar.jsx';
 
 const CLASS_ICONS = {
@@ -57,6 +59,14 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
         .map((id) => gameData.spells[id])
         .filter(Boolean)
         .map(skillFromSpell);
+
+  // Recalcula os máximos com as fórmulas atuais para fichas criadas antes da
+  // mudança da regra de Mana (INT × 2 + BR + BC).
+  const derivados = deriveStats(classes, character.level, character.attributes, character.equipment, races);
+  const hpMax = derivados.hpMax || character.hp_max;
+  const mpMax = derivados.mpMax || character.mp_max;
+  const voa = races.some((r) => (r.vooNatural || gameData.races?.[r.id]?.vooNatural));
+  const cargaMax = cargaMaxima(derivados.effectiveAttributes, character.level);
 
   const equip = async (slot, itemId) => {
     setBusy(slot);
@@ -198,8 +208,14 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
         </div>
       )}
 
-      <StatBar label="HP" value={character.hp_current} max={character.hp_max} color="#e63946" />
-      <StatBar label="MP" value={character.mp_current} max={character.mp_max} color="#4a90e2" />
+      <StatBar label="HP" value={character.hp_current} max={hpMax} color="#e63946" />
+      <StatBar label="MP" value={character.mp_current} max={mpMax} color="#4a90e2" />
+      <p className="muted small">
+        Mana = INT × 2 + BR + BC = {character.attributes?.inteligencia} × 2 + bônus = <strong>{mpMax}</strong>
+        {mpMax !== character.mp_max && character.mp_max ? ` (ficha salva com ${character.mp_max})` : ''}
+        {' · '}Carga máxima: <strong>{cargaMax}</strong>
+        {voa && <span> · 🕊️ Voo natural (manter no ar custa foco; voo mágico custa {VOO.manaPorTurno} MP/turno)</span>}
+      </p>
 
       <div className="attr-grid">
         {ATTRIBUTES.map((k) => (

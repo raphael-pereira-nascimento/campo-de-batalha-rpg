@@ -4,7 +4,7 @@ import CharacterSheet from '../components/CharacterSheet.jsx';
 import { exportarFicha, importarFicha } from '../utils/fichaFile.js';
 import { api } from '../api.js';
 
-export default function Characters({ player, characters, gameData, customClasses = [], onRefresh, onEnterLobby, onOpenRegistry, onOpenCompendium, onOpenRules, onOpenGemForge, onOpenToolShop, onOpenTableBattle, onLogout }) {
+export default function Characters({ player, characters, gameData, customClasses = [], onRefresh, onEnterLobby, onOpenRegistry, onOpenCompendium, onOpenRules, onOpenGemForge, onOpenToolShop, onOpenTableBattle, onOpenDungeons, onLogout }) {
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState(null);
   const [importError, setImportError] = useState('');
@@ -47,6 +47,7 @@ export default function Characters({ player, characters, gameData, customClasses
             📜 Registro do Mundo
           </button>
           <button onClick={onEnterLobby}>⚔️ Campo de Batalha</button>
+          <button className="ghost" onClick={onOpenDungeons}>🗺️ Dungeons</button>
           <button className="ghost" onClick={onOpenTableBattle}>📋 Mesa de Batalha</button>
           <button className="ghost" onClick={onLogout}>
             Sair

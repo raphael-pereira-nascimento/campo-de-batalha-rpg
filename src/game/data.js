@@ -2,6 +2,30 @@
 
 import { RACES } from './races.js';
 import { GEMS } from './gems.js';
+import {
+  manaMaxFrom,
+  manaRecuperada,
+  iniciativaDe,
+  pesoAtributo,
+  cargaMaxima,
+  alcanceVerticalDeArma,
+  alcanceVerticalDeMagia,
+  foraDoAlcanceVertical,
+  ALCANCE_VERTICAL,
+  ALTITUDES,
+} from './sistema.js';
+
+export {
+  manaMaxFrom,
+  manaRecuperada,
+  pesoAtributo,
+  cargaMaxima,
+  alcanceVerticalDeArma,
+  alcanceVerticalDeMagia,
+  foraDoAlcanceVertical,
+  ALCANCE_VERTICAL,
+  ALTITUDES,
+};
 
 export const CLASSES = {
   guerreiro: {
@@ -69,29 +93,29 @@ export const CLASSES = {
 export const ELEMENTOS = ['fisico', 'fogo', 'agua', 'terra', 'ar', 'luz', 'trevas'];
 
 export const SPELLS = {
-  golpe_sangrento: { nome: 'Golpe Sangrento', tipo: 'ataque', custo: 5, poder: 2.0, desc: 'Ataque físico brutal com força aumentada.', status: { tipo: 'sangramento', turnos: 2, dano: 6 } },
+  golpe_sangrento: { nome: 'Golpe Sangrento', tipo: 'ataque', custo: 5, poder: 2.0, desc: 'Ataque físico brutal com força aumentada.', status: { tipo: 'sangramento', turnos: 2, dano: 6 }, alcanceVertical: 'terrestre' },
   grito_de_guerra: { nome: 'Grito de Guerra', tipo: 'buff', custo: 6, poder: 0.15, desc: 'Aumenta o dano físico de todos os aliados.' },
   muralha: { nome: 'Muralha', tipo: 'defesa', custo: 6, poder: 0.25, desc: 'Reduz o dano recebido nesta rodada.' },
 
   bola_de_fogo: { nome: 'Bola de Fogo', tipo: 'ataque', custo: 8, poder: 2.4, desc: 'Explosão de fogo devastadora.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3, dano: 5 } },
   raio: { nome: 'Raio', tipo: 'ataque', custo: 6, poder: 1.8, desc: 'Descarga elétrica precisa.', elemento: 'ar' },
-  gelo: { nome: 'Gelo', tipo: 'ataque', custo: 7, poder: 1.6, desc: 'Congela o alvo e reduz a velocidade dele.', elemento: 'agua', status: { tipo: 'congelamento', turnos: 2 } },
+  gelo: { nome: 'Gelo', tipo: 'ataque', custo: 7, poder: 1.6, desc: 'Congela o alvo e reduz a velocidade dele.', elemento: 'agua', status: { tipo: 'congelamento', turnos: 2 }, alcanceVertical: 'limitado' },
   escudo_arcano: { nome: 'Escudo Arcano', tipo: 'defesa', custo: 7, poder: 0.3, desc: 'Barreira mágica que absorve dano.' },
 
-  tiro_preciso: { nome: 'Tiro Preciso', tipo: 'ataque', custo: 4, poder: 1.5, desc: 'Dano crítico elevado.', elemento: 'fisico' },
+  tiro_preciso: { nome: 'Tiro Preciso', tipo: 'ataque', custo: 4, poder: 1.5, desc: 'Dano crítico elevado.', elemento: 'fisico', alcanceVertical: 'longo' },
   chuva_de_flechas: { nome: 'Chuva de Flechas', tipo: 'ataque', custo: 9, poder: 2.2, desc: 'Acerta todos os inimigos.', elemento: 'fisico' },
-  flecha_ardente: { nome: 'Flecha Ardente', tipo: 'ataque', custo: 6, poder: 1.9, desc: 'Flecha em chamas que causa queimadura.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3, dano: 6 } },
+  flecha_ardente: { nome: 'Flecha Ardente', tipo: 'ataque', custo: 6, poder: 1.9, desc: 'Flecha em chamas que causa queimadura.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3, dano: 6 }, alcanceVertical: 'longo' },
 
   cura: { nome: 'Cura', tipo: 'cura', custo: 6, poder: 2.0, desc: 'Restaura HP com base na inteligência.', elemento: 'luz' },
   cura_massa: { nome: 'Cura em Massa', tipo: 'cura', custo: 12, poder: 1.2, desc: 'Cura todos os aliados vivos.', elemento: 'luz' },
   luz_sagrada: { nome: 'Luz Sagrada', tipo: 'ataque', custo: 7, poder: 1.9, desc: 'Dano divino contra um inimigo.', elemento: 'luz' },
   benção: { nome: 'Benção', tipo: 'buff', custo: 5, poder: 0.1, desc: 'Aumenta o dano mágico dos aliados.', elemento: 'luz' },
 
-  golpe_preciso: { nome: 'Golpe Preciso', tipo: 'ataque', custo: 5, poder: 1.6, desc: 'Ataque certeiro que tem alta chance de crítico.', elemento: 'fisico' },
+  golpe_preciso: { nome: 'Golpe Preciso', tipo: 'ataque', custo: 5, poder: 1.6, desc: 'Ataque certeiro que tem alta chance de crítico.', elemento: 'fisico', alcanceVertical: 'terrestre' },
   veneno: { nome: 'Veneno', tipo: 'ataque', custo: 6, poder: 1.4, desc: 'Envenena o alvo, causando dano contínuo.', elemento: 'trevas', status: { tipo: 'veneno', turnos: 3, dano: 4 } },
   sombra: { nome: 'Sombra', tipo: 'defesa', custo: 5, poder: 0.3, desc: 'Desaparece nas sombras, reduzindo muito o dano recebido.' },
 
-  golpe_sagrado: { nome: 'Golpe Sagrado', tipo: 'ataque', custo: 7, poder: 2.0, desc: 'Espada envolta em luz sagrada.', elemento: 'luz' },
+  golpe_sagrado: { nome: 'Golpe Sagrado', tipo: 'ataque', custo: 7, poder: 2.0, desc: 'Espada envolta em luz sagrada.', elemento: 'luz', alcanceVertical: 'terrestre' },
   escudo_divino: { nome: 'Escudo Divino', tipo: 'defesa', custo: 7, poder: 0.3, desc: 'Barreira sagrada que absorve dano.', elemento: 'luz' },
 };
 
@@ -287,17 +311,19 @@ export function effectiveAttributes(attributes, equipment = {}, races = null, cl
   return eff;
 }
 
-// Formula de vida/mana com classe primária:
-// Vida = Resistência x 10 + hpPerLevel(primária) x (nível - 1)
-// Mana = Inteligência x 10 + mpPerLevel(primária) x (nível - 1)
+// Fórmulas de vida e mana (regra CONFIRMADA pelo criador):
+//   Vida = Resistência × 10 + hpPerLevel(primária) × (nível - 1)
+//   Mana = INT × 2 + BR + BC + outros modificadores
+// A fórmula de Mana não tem termo de nível: como os atributos evoluem
+// automaticamente a cada nível, o crescimento vem da própria INT.
 export function deriveStats(classes, level, attributes, equipment = {}, races = null) {
   const eff = effectiveAttributes(attributes, equipment, races, classes);
   const list = Array.isArray(classes) ? classes : classes ? [classes] : [];
   const primary = list.find((c) => c.primary) || list[0] || null;
   const hpPerLevel = primary?.hpPerLevel || 10;
-  const mpPerLevel = primary?.mpPerLevel || 5;
   const hpMax = eff.resistencia * 10 + Math.max(0, (level || 1) - 1) * hpPerLevel;
-  const mpMax = eff.inteligencia * 10 + Math.max(0, (level || 1) - 1) * mpPerLevel;
+  const intBase = Number(attributes?.inteligencia) || 0;
+  const mpMax = manaMaxFrom(intBase, eff.inteligencia);
 
   let defesa = 0;
   for (const item of Object.values(equipment)) {
@@ -307,9 +333,10 @@ export function deriveStats(classes, level, attributes, equipment = {}, races = 
   return { hpMax, mpMax, defesa, effectiveAttributes: eff };
 }
 
-// Velocidade define a ordem dos turnos
+// Ordem de iniciativa: Reflexos pesa mais (reação), Destreza e Resistência
+// também entram. Ver PESOS_ATRIBUTOS.iniciativa em sistema.js.
 export function speedOf(attributes, level) {
-  return attributes.reflexos * 2 + attributes.destreza + level;
+  return iniciativaDe(attributes, level);
 }
 
 // Rolagem de d20 para acerto

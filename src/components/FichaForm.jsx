@@ -18,6 +18,7 @@ import {
   PASSIVAS_EXTRAS,
 } from '../config.js';
 import { applyGenderToRace } from '../game/races.js';
+import { manaMaxFrom } from '../game/sistema.js';
 
 const STEP_NAMES = [
   'Identidade',
@@ -110,9 +111,9 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
 
   const stats = useMemo(() => {
     const eff = effFor(attrs, races, classes, equipment);
-    const primary = classes.find((c) => c.primary) || classes[0] || {};
     const hpMax = eff.resistencia * 10;
-    const mpMax = eff.inteligencia * 10;
+    // Regra confirmada: Mana = INT × 2 + BR + BC (não cresce por nível).
+    const mpMax = manaMaxFrom(attrs.inteligencia, eff.inteligencia);
     return { hpMax, mpMax, eff };
   }, [attrs, races, classes, equipment]);
 
@@ -623,9 +624,9 @@ function ClassesStep({ gameData, customClasses, classes, onAdd, onRemove, onPrim
               Vida por nível
               <input type="number" min={1} max={30} value={form.hpPerLevel} onChange={(e) => setForm((f) => ({ ...f, hpPerLevel: Number(e.target.value) }))} />
             </label>
-            <label>
-              Mana por nível
-              <input type="number" min={1} max={30} value={form.mpPerLevel} onChange={(e) => setForm((f) => ({ ...f, mpPerLevel: Number(e.target.value) }))} />
+            <label title="A Mana não cresce por nível: Mana = INT × 2 + BR + BC. Este campo está guardado por compatibilidade e não altera a Mana máxima.">
+              Mana por nível (obsoleto)
+              <input type="number" min={1} max={30} value={form.mpPerLevel} disabled onChange={(e) => setForm((f) => ({ ...f, mpPerLevel: Number(e.target.value) }))} />
             </label>
             <label>
               Atributo do up
@@ -636,6 +637,10 @@ function ClassesStep({ gameData, customClasses, classes, onAdd, onRemove, onPrim
               </select>
             </label>
           </div>
+          <p className="muted small">
+            A Mana máxima vem da Inteligência: <strong>INT × 2 + BR + BC</strong>. Nível só importa porque cada
+            up da classe primária soma +1 de Inteligência.
+          </p>
           <label>
             Arquétipo (golpes base da classe)
             <select value={form.archetype} onChange={(e) => setForm((f) => ({ ...f, archetype: e.target.value }))}>

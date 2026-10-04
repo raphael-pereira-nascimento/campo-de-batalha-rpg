@@ -360,7 +360,7 @@ function MonsterRegistry({ player, monsters, gameData, onChanged, setError }) {
             ))}
           </div>
           <p className="muted small">
-            Vida = Resistência × 10 · Mana = Inteligência × 10. Chefes ganham mais ações conforme o nº de jogadores.
+            Vida = Resistência × 10 · Mana = Inteligência × 2. Chefes ganham mais ações conforme o nº de jogadores.
           </p>
           <button type="submit">Criar Monstro</button>
         </form>
@@ -377,7 +377,7 @@ function MonsterRegistry({ player, monsters, gameData, onChanged, setError }) {
                 <span className="tag">Nv. {m.nivel}</span>
                 <span className="tag">por {m.creator_name}</span>
                 <p className="muted">
-                  HP {m.attributes.resistencia * 10} · MP {m.attributes.inteligencia * 10} · Arma: {m.arma ? `${m.arma.nome} (${m.arma.danoBase})` : 'sem arma'}
+                  HP {m.attributes.resistencia * 10} · MP {m.attributes.inteligencia * 2} · Arma: {m.arma ? `${m.arma.nome} (${m.arma.danoBase})` : 'sem arma'}
                 </p>
                 <p className="muted">✨ {m.passiva || 'Sem passiva'}</p>
               </div>

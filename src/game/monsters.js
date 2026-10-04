@@ -1,8 +1,12 @@
 // Bestiário do Campo de Batalha.
 // Cada monstro tem atributos na escala 1-10 (mesma dos jogadores).
-// Vida = Resistência x 10 e Mana = Inteligência x 10 (mesma fórmula).
+// Vida = Resistência × 10 e Mana = Inteligência × 2 (mesma fórmula dos jogadores).
 // Chefes (escalaChefe: true) têm vida = soma do HP dos jogadores x multiplicador,
 // e ganham múltiplas ações por turno conforme o número de jogadores.
+// Hordas (horda.quantidade) têm vida = HP individual × quantidade.
+// Monstros com voaNatural já entram em voo e têm alcance vertical definido.
+
+import { manaMaxFrom } from './sistema.js';
 
 export const MONSTERS = {
   manequim: {
@@ -93,6 +97,70 @@ export const MONSTERS = {
     passiva: 'Alcateia: ataca em bando e suas mordidas causam sangramento.',
     efeitos: { ataqueStatus: { tipo: 'sangramento', turnos: 2, dano: 4 } },
   },
+  esqueleto_arqueiro: {
+    id: 'esqueleto_arqueiro',
+    nome: 'Esqueleto Arqueiro',
+    tipo: 'inimigo',
+    nivel: 6,
+    attributes: { forca: 2, inteligencia: 1, resistencia: 3, destreza: 5, reflexos: 4 },
+    arma: { nome: 'Arco Ósseo', danoBase: 8, alcance: 'longo' },
+    spells: [],
+    passiva: 'Arqueiro: alcança inimigos em altitude média.',
+    efeitos: { alcanceVertical: 2 },
+    alcanceVertical: 2,
+  },
+  morcego_gigante: {
+    id: 'morcego_gigante',
+    nome: 'Morcego Gigante',
+    tipo: 'inimigo',
+    nivel: 9,
+    attributes: { forca: 4, inteligencia: 1, resistencia: 3, destreza: 6, reflexos: 6 },
+    arma: { nome: 'Garras', danoBase: 9 },
+    spells: [],
+    passiva: 'Voador: natura voa e ataca de altitude média.',
+    efeitos: { voaNatural: true, esquivaBonus: 0.1 },
+    voaNatural: true,
+    altitude: 2,
+    alcanceVertical: 1,
+  },
+  zumbi_bruto: {
+    id: 'zumbi_bruto',
+    nome: 'Zumbi Bruto',
+    tipo: 'inimigo',
+    nivel: 12,
+    attributes: { forca: 7, inteligencia: 1, resistencia: 7, destreza: 2, reflexos: 2 },
+    arma: { nome: 'Marreta', danoBase: 13 },
+    spells: [],
+    passiva: 'Brutamontes: causa +15% de dano físico e resiste à morte uma vez.',
+    efeitos: { danoFisicoMult: 1.15, resisteMorte: 1, imune: ['veneno'] },
+  },
+  // ── Hordas ──────────────────────────────────────────────────────────────
+  // Hordas aumentam o número de monstros em vez de aumentar o HP de um só.
+  // A quantidade cai conforme o dano recebido (regra confirmada pelo criador).
+  horda_goblins: {
+    id: 'horda_goblins',
+    nome: 'Horda de Goblins',
+    tipo: 'horda',
+    nivel: 2,
+    attributes: { forca: 2, inteligencia: 1, resistencia: 2, destreza: 4, reflexos: 4 },
+    arma: { nome: 'Adaga Tortas', danoBase: 6, elemento: 'fisico' },
+    spells: [],
+    passiva: 'Horda: o número de goblins diminui a cada golpe acertado.',
+    efeitos: { esquivaBonus: 0.05 },
+    horda: { quantidade: 5 },
+  },
+  horda_zumbis: {
+    id: 'horda_zumbis',
+    nome: 'Horda de Zumbis',
+    tipo: 'horda',
+    nivel: 6,
+    attributes: { forca: 4, inteligencia: 1, resistencia: 4, destreza: 1, reflexos: 1 },
+    arma: { nome: 'Garras', danoBase: 8 },
+    spells: [],
+    passiva: 'Horda lenta: muitos corpos, pouca resistência individual.',
+    efeitos: { resisteMorte: 1 },
+    horda: { quantidade: 6 },
+  },
   bandido: {
     id: 'bandido',
     nome: 'Bandido',
@@ -126,8 +194,15 @@ export function bossActionsPerTurn(playerCount) {
 }
 
 // XP concedido por abater um monstro.
-export function monsterXp(def) {
-  return Math.round((def.nivel || 1) * 12 + (def.escalaChefe ? 120 : 0));
+// Hordas valem XP por unidade: cada corpo abatido dá o seu XP.
+export function monsterXp(def, unidades = 1) {
+  const base = (def.nivel || 1) * 12 + (def.escalaChefe ? 120 : 0);
+  return Math.round(base * Math.max(1, unidades));
+}
+
+// XP total de uma horda inteira.
+export function monsterXpHorda(def) {
+  return monsterXp(def, def?.horda?.quantidade || 1);
 }
 
 // Converte um monstro customizado (do banco) em definição do bestiário.
@@ -150,12 +225,17 @@ export function defFromCustomMonster(row) {
 // Monta um monstro pronto para entrar em batalha.
 // `playerHpSum` só é usado para chefes: vida = soma do HP dos jogadores x multiplicador.
 export function buildMonster(def, playerHpSum = 0) {
-  const hpMax = Math.round(def.attributes.resistencia * 10);
-  const mpMax = Math.round(def.attributes.inteligencia * 10);
-  let hp = hpMax;
+  const hpPorUnidade = Math.round(def.attributes.resistencia * 10);
+  // Monstros não têm bônus separados de atributo: usa a mesma regra (INT × 2).
+  const mpMax = manaMaxFrom(def.attributes.inteligencia, def.attributes.inteligencia);
+  let hp = hpPorUnidade;
   if (def.escalaChefe) {
     hp = Math.max(50, Math.round(playerHpSum * (def.multiplicadorHP || 3)));
   }
+  // Horda: vida = HP individual × quantidade de corpos.
+  const unidadesHorda = def.horda?.quantidade || 0;
+  if (unidadesHorda > 0) hp = hpPorUnidade * unidadesHorda;
+  const voa = !!def.voaNatural;
   return {
     uid: def._uid || def.id,
     characterId: def._uid || null,
@@ -213,9 +293,24 @@ export function buildMonster(def, playerHpSum = 0) {
     resistDeathUsed: false,
     passiva: def.passiva || '',
     monsterDef: def,
-    xpValue: monsterXp(def),
+    xpValue: unidadesHorda > 0 ? monsterXpHorda(def) : monsterXp(def),
     fraquezas: def.fraquezas || [],
     resistencias: def.resistencias || [],
     elemento: def.elemento || null,
+    // ── Voo ──
+    voando: voa,
+    altitude: voa ? (def.altitude || 2) : 0,
+    vooTipo: voa ? 'natural' : null,
+    vooNatural: voa,
+    vooTurnos: 0,
+    vooFadiga: 0,
+    // Alcance vertical de quem ataca (alcança voadores até esta altitude).
+    alcanceVertical: def.alcanceVertical ?? null,
+    // ── Horda ──
+    horda: unidadesHorda > 0
+      ? { quantidade: unidadesHorda, hpPorUnidade, inicial: unidadesHorda }
+      : null,
+    xpPorUnidade: monsterXp(def),
+    contribuicao: { dano: 0, cura: 0, acertos: 0, acoes: 0, suporte: 0 },
   };
 }

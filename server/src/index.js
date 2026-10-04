@@ -25,6 +25,9 @@ import {
 import { CLASSES, SPELLS, EQUIPMENT, POTIONS, STATUS_DEFS } from './game/data.js';
 import { RACES } from './game/races.js';
 import { MONSTERS } from './game/monsters.js';
+import { DUNGEONS } from './game/dungeons.js';
+import { ECLIPSE_PERIODO } from './game/eclipse.js';
+import * as calendario from './game/calendar.js';
 import {
   createCustomClass,
   listCustomClasses,
@@ -209,6 +212,35 @@ app.get('/api/gamedata', (_req, res) => {
     races: RACES,
     monsters: MONSTERS,
     statuses: STATUS_DEFS,
+    dungeons: DUNGEONS,
+  });
+});
+
+// ---- Calendário do mundo / Eclipse ----
+app.get('/api/calendario', (_req, res) => {
+  res.json({ ok: true, ...calendario.estado() });
+});
+
+app.post('/api/calendario/avancar', requireAuth, (req, res) => {
+  const dias = Number(req.body?.dias) || 1;
+  res.json({ ok: true, ...calendario.avancarDia(dias) });
+});
+
+app.post('/api/calendario/dia', requireAuth, (req, res) => {
+  res.json({ ok: true, ...calendario.setDia(req.body?.dia) });
+});
+
+app.post('/api/calendario/tipo', requireAuth, (req, res) => {
+  res.json({ ok: true, ...calendario.setTipo(req.body?.tipo) });
+});
+
+// ---- Dungeons ----
+app.get('/api/dungeons', (_req, res) => {
+  res.json({
+    ok: true,
+    periodoEclipse: ECLIPSE_PERIODO,
+    calendario: calendario.estado(),
+    dungeons: DUNGEONS,
   });
 });
 
@@ -379,6 +411,27 @@ const clientDist = path.join(__dirname, '../../dist');
 if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
   app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+} else {
+  // Sem build do frontend, a API continua funcionando e a raiz explica o problema
+  // (evita a tela em branco ao abrir http://localhost:3000).
+  app.get('/', (_req, res) => {
+    res
+      .status(503)
+      .type('html')
+      .send(`<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Campo de Batalha RPG</title>
+<style>body{background:#0b0e1a;color:#e8e9f5;font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0}
+.box{max-width:620px;padding:32px;border:1px solid #343b63;border-radius:16px;background:#1a1f35}
+h1{margin:0 0 12px;font-size:22px}code{background:#232a4a;padding:2px 8px;border-radius:6px}</style></head>
+<body><div class="box">
+<h1>⚔️ Campo de Batalha RPG</h1>
+<p>O frontend ainda não foi compilado, por isso a página fica em branco.</p>
+<p>Rode <code>npm run build</code> na pasta do projeto e recarregue esta página.<br>
+Para desenvolver com recarga automática use <code>npm run dev</code> e abra <code>http://localhost:5173</code>.</p>
+<p>A API do servidor continua no ar (porta ${PORT}).</p>
+</div></body></html>`);
+  });
+  console.warn('[web] AVISO: pasta dist/ não encontrada — rode `npm run build` para o frontend aparecer em http://localhost:' + PORT);
 }
 
 const httpServer = http.createServer(app);

@@ -360,7 +360,8 @@ describe('BattleManager — fluxo completo de ultimate/especial', () => {
 });
 
 describe('BattleManager — melhorias do Mestre', () => {
-  it('regenera mana no fim do turno: Math.floor(inteligencia/2)', () => {
+  // Regra confirmada pelo criador: a recuperação de mana é o GASTO ÷ 2.
+  it('recupera mana no fim do turno: gasto ÷ 2', () => {
     const { manager } = makeManager();
     const p = {
       isMonster: false,
@@ -369,22 +370,52 @@ describe('BattleManager — melhorias do Mestre', () => {
       attributes: { inteligencia: 7 },
       mp: 10,
       mpMax: 50,
+      manaGastoTurno: 6,
     };
     const gain = manager._regenMana(p);
     expect(gain).toBe(3);
     expect(p.mp).toBe(13);
   });
 
+  it('não recupera mana se nada foi gasto no turno', () => {
+    const { manager } = makeManager();
+    const p = {
+      isMonster: false,
+      alive: true,
+      charName: 'Hero',
+      attributes: { inteligencia: 20 },
+      mp: 10,
+      mpMax: 50,
+      manaGastoTurno: 0,
+    };
+    expect(manager._regenMana(p)).toBe(0);
+    expect(p.mp).toBe(10);
+  });
+
   it('não regenera mana em monstros', () => {
     const { manager } = makeManager();
-    const p = { isMonster: true, alive: true, attributes: { inteligencia: 20 }, mp: 1, mpMax: 100 };
+    const p = {
+      isMonster: true,
+      alive: true,
+      attributes: { inteligencia: 20 },
+      mp: 1,
+      mpMax: 100,
+      manaGastoTurno: 8,
+    };
     expect(manager._regenMana(p)).toBe(0);
     expect(p.mp).toBe(1);
   });
 
-  it('regen de mana respeita o máximo', () => {
+  it('recuperação de mana respeita o máximo', () => {
     const { manager } = makeManager();
-    const p = { isMonster: false, alive: true, attributes: { inteligencia: 20 }, mp: 48, mpMax: 50 };
+    const p = {
+      isMonster: false,
+      alive: true,
+      attributes: { inteligencia: 20 },
+      mp: 48,
+      mpMax: 50,
+      manaGastoTurno: 8,
+    };
     expect(manager._regenMana(p)).toBe(2);
     expect(p.mp).toBe(50);
   });

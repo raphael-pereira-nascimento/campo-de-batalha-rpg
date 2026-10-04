@@ -2,6 +2,7 @@ import { BattleManager } from '../game/battleManager.js';
 import { MONSTERS } from '../game/monsters.js';
 import { pickMonsterAction } from './ai.js';
 import { addOfflineCoins } from './storage.js';
+import { estadoMundo } from '../game/calendar.js';
 
 class OfflineBattle {
   constructor() {
@@ -22,7 +23,7 @@ class OfflineBattle {
     this.listeners.filter((l) => l.event === event).forEach((l) => l.fn(data));
   }
 
-  create(playerId, characterData, mode = 'solo', aiEnabled = true) {
+  create(playerId, characterData, mode = 'solo', aiEnabled = true, opts = {}) {
     this.manager = new BattleManager({
       emit: (battle) => {
         if (battle) this._emit('battleUpdate', { ...battle });
@@ -53,11 +54,14 @@ class OfflineBattle {
     const primaryClass = normalizedClasses.find((c) => c.primary) || normalizedClasses[0];
 
     const battle = this.manager.createBattle({
-      name: 'Batalha Solo',
+      name: opts.name || 'Batalha Solo',
       mode: 'mestre',
       host: playerId,
       hostName: playerId,
       aiEnabled,
+      // Estado do Eclipse do calendário do RPG (offline: localStorage).
+      calendario: opts.calendario || estadoMundo(),
+      dungeonId: opts.dungeonId || null,
       character: {
         id: characterData.id,
         name: characterData.name,

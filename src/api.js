@@ -5,6 +5,13 @@ import { offlineBattle } from './offline/battle.js';
 import { MONSTERS } from './game/monsters.js';
 import { gemIsRaw } from './game/gems.js';
 import { EQUIPMENT, POTIONS, deriveStats, applyMaxMults, efeitosDeHabilidades } from './game/data.js';
+import { DUNGEONS } from './game/dungeons.js';
+import {
+  estadoMundo,
+  avancarDia as avancarDiaLocal,
+  setDia as setDiaLocal,
+  setTipoEclipse as setTipoEclipseLocal,
+} from './game/calendar.js';
 
 // Soma os efeitos mecânicos das raças + passivas extras da ficha.
 function efeitosDaFicha(charOrPayload) {
@@ -82,6 +89,9 @@ class MockSocket {
     this._handlers[event] = this._handlers[event].filter((f) => f !== fn);
     return this;
   }
+  _emit(event, data) {
+    for (const fn of this._handlers[event] || []) fn(data);
+  }
   emit(event, payload, ack) {
     if (typeof payload === 'function') { ack = payload; payload = undefined; }
 
@@ -96,7 +106,13 @@ class MockSocket {
 
     if (event === 'createBattle') {
       try {
-        const battleId = offlineBattle.create(payload.playerId, payload.character, payload.mode || 'mestre', payload.aiEnabled);
+        const battleId = offlineBattle.create(
+          payload.playerId,
+          payload.character,
+          payload.mode || 'mestre',
+          payload.aiEnabled,
+          { dungeonId: payload.dungeonId || null, calendario: payload.calendario || estadoMundo(), name: payload.name },
+        );
         if (ack) ack({ ok: true, battleId });
       } catch (e) {
         if (ack) ack({ ok: false, error: e.message });
@@ -167,6 +183,32 @@ class MockSocket {
 
     if (event === 'leaveBattle') {
       if (ack) ack({ ok: true });
+      return;
+    }
+
+    // ── Calendário do mundo / Eclipse (mock) ──
+    if (event === 'getCalendario') {
+      if (ack) ack({ ok: true, calendario: estadoMundo() });
+      return;
+    }
+    if (event === 'avancarDia') {
+      const estado = avancarDiaLocal(payload?.dias || 1);
+      this._emit('calendarioUpdate', estado);
+      if (ack) ack({ ok: true, calendario: estado });
+      return;
+    }
+    if (event === 'setDia') {
+      setDiaLocal(payload?.dia);
+      const estado = estadoMundo();
+      this._emit('calendarioUpdate', estado);
+      if (ack) ack({ ok: true, calendario: estado });
+      return;
+    }
+    if (event === 'setTipoEclipse') {
+      setTipoEclipseLocal(payload?.tipo);
+      const estado = estadoMundo();
+      this._emit('calendarioUpdate', estado);
+      if (ack) ack({ ok: true, calendario: estado });
       return;
     }
   }
@@ -342,6 +384,41 @@ export const api = {
       return Promise.resolve(gameData);
     }
     return request('/api/gamedata');
+  },
+
+  // ── Calendário do mundo / Eclipse ──
+  calendario: () => {
+    if (isOffline()) return Promise.resolve(estadoMundo());
+    return request('/api/calendario');
+  },
+  avancarDia: (dias = 1) => {
+    if (isOffline()) {
+      const estado = avancarDiaLocal(dias);
+      return Promise.resolve({ ok: true, ...estado });
+    }
+    return auth('/api/calendario/avancar', { method: 'POST', body: JSON.stringify({ dias }) });
+  },
+  setDia: (dia) => {
+    if (isOffline()) {
+      setDiaLocal(dia);
+      return Promise.resolve({ ok: true, ...estadoMundo() });
+    }
+    return auth('/api/calendario/dia', { method: 'POST', body: JSON.stringify({ dia }) });
+  },
+  setTipoEclipse: (tipo) => {
+    if (isOffline()) {
+      setTipoEclipseLocal(tipo);
+      return Promise.resolve({ ok: true, ...estadoMundo() });
+    }
+    return auth('/api/calendario/tipo', { method: 'POST', body: JSON.stringify({ tipo }) });
+  },
+
+  // ── Dungeons ──
+  getDungeons: () => {
+    if (isOffline()) {
+      return Promise.resolve({ ok: true, dungeons: DUNGEONS, calendario: estadoMundo() });
+    }
+    return request('/api/dungeons');
   },
   getRanking: () => {
     if (isOffline()) {

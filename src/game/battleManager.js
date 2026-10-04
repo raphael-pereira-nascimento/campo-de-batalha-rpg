@@ -24,6 +24,19 @@ import {
   efeitosDeHabilidades,
   MAX_PLAYERS_PER_BATTLE,
 } from './data.js';
+import {
+  manaRecuperada,
+  pesoAtributo,
+  alcanceVerticalDeArma,
+  alcanceVerticalDeMagia,
+  foraDoAlcanceVertical,
+  distribuirXp,
+  poolDeXp,
+  VOO,
+  ALCANCE_VERTICAL,
+  ALTITUDES,
+} from './sistema.js';
+import { estadoEclipse, sortearVarianteEclipse, aplicarEclipseEmChefe } from './eclipse.js';
 import { RACES } from './races.js';
 import { buildMonster, bossActionsPerTurn } from './monsters.js';
 
@@ -59,6 +72,8 @@ function skillFromSpell(s) {
     cooldown: 0,
     todos: s.nome === 'Cura em Massa',
     status: s.status ? { ...s.status } : null,
+    elemento: s.elemento || null,
+    alcanceVertical: s.alcanceVertical || null,
     desc: s.desc || '',
   };
 }
@@ -164,7 +179,9 @@ export class BattleManager {
     return ['mestre', 'mestre_jogador'].includes(role) ? role : 'mestre_jogador';
   }
 
-  createBattle({ name, mode, host, hostName, character, role, aiEnabled }) {
+  // `calendario` = { dia, tipoEclipse } do mundo do RPG (ver game/calendar.js).
+  // `dungeonId` = opcional, indica que o encontro veio de uma dungeon.
+  createBattle({ name, mode, host, hostName, character, role, aiEnabled, calendario, dungeonId }) {
     const normalized = ['todos', 'equipes', 'mestre'].includes(mode) ? mode : 'todos';
     const normalizedRole = BattleManager.resolveRole(normalized, role);
     const battle = {
@@ -183,6 +200,11 @@ export class BattleManager {
       log: [],
       winner: null,
       createdAt: Date.now(),
+      // Estado do Eclipse no momento da batalha (regra confirmada do criador).
+      eclipse: estadoEclipse(calendario?.dia || 1, calendario?.tipoEclipse || 'comum'),
+      dungeonId: dungeonId || null,
+      xpPool: 0,
+      monstrosAbatidosXp: [],
     };
     this.battles.set(battle.id, battle);
     if (normalizedRole === 'mestre') {
@@ -190,7 +212,20 @@ export class BattleManager {
     } else {
       this._joinCharacter(battle, host, hostName, character, null, 'hero');
     }
+    this._logEclipse(battle);
     return battle;
+  }
+
+  _logEclipse(battle) {
+    const e = battle.eclipse;
+    if (!e) return;
+    if (e.eclipseAtivo) {
+      battle.log.push(
+        makeLog(`🩸 ${e.icon} ${e.tipoNome.toUpperCase()} — DIA ${e.diaNoCiclo}/${e.periodo || 30}. Monstros +${Math.round((e.monstroMult - 1) * 100)}% e XP +${Math.round((e.xpMult - 1) * 100)}%.`, 'enemy'),
+      );
+    } else if (e.sinais) {
+      battle.log.push(makeLog(`${e.icon} ${e.nome}: o Eclipse está se aproximando (${e.diasParaEclipse} dia(s)).`, 'info'));
+    }
   }
 
   joinBattle({ battleId, playerId, playerName, character, team }) {
@@ -279,6 +314,17 @@ export class BattleManager {
       ultimateSkillUsed: false,
       cooldowns: {},
       drunk: false,
+      // ── Mana: gasto do turno (recuperação = gasto ÷ 2) ──
+      manaGastoTurno: 0,
+      // ── Voo ──
+      voando: false,
+      altitude: 0,
+      vooTipo: null,          // 'natural' | 'magico'
+      vooTurnos: 0,
+      vooFadiga: 0,
+      vooNatural: (efeitosDe({ races }) || {}).vooNatural > 0,
+      // ── XP por participação ──
+      contribuicao: { dano: 0, cura: 0, acertos: 0, acoes: 0, suporte: 0 },
     });
     battle.log.push(
       makeLog(`${playerName} entra na batalha com ${character.name} (${classNameOf(battle.participants[battle.participants.length - 1])})`),
@@ -295,12 +341,43 @@ export class BattleManager {
       throw new Error(`Limite de ${MAX_PLAYERS_PER_BATTLE} participantes atingido.`);
 
     const uid = randomUUID();
+    const eclipse = battle.eclipse || estadoEclipse(1);
+    // Variante de monstro sorteada durante o Eclipse (regra do criador).
+    const variante = sortearVarianteEclipse(eclipse);
     const def = { ...monsterDef, _uid: uid };
+    if (variante) {
+      // Sufixo para o nome não virar "Sedento Horda de Goblins".
+      def.nome = `${def.nome} (${variante.prefixo})`;
+      def.efeitos = { ...(def.efeitos || {}), ...variante.efeitos };
+      def.passiva = `${def.passiva || ''} ${variante.desc}`.trim();
+      def.varianteEclipse = variante.id;
+    }
     const m = buildMonster(def);
     m.uid = uid;
     const heroes = battle.participants.filter((q) => !q.isMonster);
     const playerCount = heroes.length;
     const sumHeroHp = heroes.reduce((s, h) => s + h.hpMax, 0);
+
+    // Durante o Eclipse os monstros ficam mais fortes (multiplicador por atributo).
+    if (eclipse.monstroMult !== 1) {
+      const escala = eclipse.monstroMult;
+      const resAntes = def.attributes?.resistencia || 0;
+      for (const key of Object.keys(m.attributes)) {
+        m.attributes[key] = Math.max(1, Math.min(12, Math.round(m.attributes[key] * escala * 10) / 10));
+      }
+      const fatorRes = resAntes > 0 ? m.attributes.resistencia / resAntes : 1;
+      if (m.horda) {
+        m.horda.hpPorUnidade = Math.round(m.horda.hpPorUnidade * fatorRes);
+        m.hp = m.hpMax = m.horda.hpPorUnidade * m.horda.quantidade;
+      } else if (m.isBoss) {
+        // Chefes são escalados pelo HP dos jogadores no startBattle.
+        m.hp = m.hpMax = Math.round(m.hpMax * escala);
+      } else {
+        m.hp = m.hpMax = Math.round(m.hpMax * fatorRes);
+      }
+      m.eclipse = true;
+      m.passiva = `${m.passiva} Eclipse: +${Math.round((escala - 1) * 100)}% de atributos.`;
+    }
 
     if (modoChefeDinamico) {
       // Modo Chefe Dinâmico: vira chefe com HP = soma do HP dos jogadores x 2.0
@@ -355,16 +432,26 @@ export class BattleManager {
 
     const heroes = battle.participants.filter((p) => !p.isMonster && p.alive);
     const enemies = battle.participants.filter((p) => p.isMonster && p.alive);
+    const eclipse = battle.eclipse || estadoEclipse(1);
     if (battle.mode === 'mestre') {
       if (heroes.length < 1) throw new Error('Adicione ao menos 1 jogador.');
       if (enemies.length < 1) throw new Error('Adicione ao menos 1 inimigo.');
       const sum = heroes.reduce((s, h) => s + h.hpMax, 0);
       enemies.forEach((e) => {
         if (e.isBoss) {
-          e.hp = e.hpMax = Math.max(50, Math.round(sum * (e.monsterDef.multiplicadorHP || 3)));
+          const hpBase = Math.max(50, Math.round(sum * (e.monsterDef.multiplicadorHP || 3)));
+          const ajustado = aplicarEclipseEmChefe(
+            { ...e, hp: hpBase, hpMax: hpBase, acoesPorTurno: e.acoesPorTurno },
+            { estado: eclipse, hpBase },
+          );
+          e.hp = e.hpMax = ajustado.hpMax;
+          e.acoesPorTurno = ajustado.acoesPorTurno;
+          if (ajustado.passiva) e.passiva = ajustado.passiva;
         }
       });
     }
+    // O turno extra do chefe durante o Eclipse entra na ordem de turnos.
+    battle.eclipse = eclipse;
 
     battle.status = 'in_progress';
     const indices = [];
@@ -442,8 +529,20 @@ export class BattleManager {
 
   _resolveTurnGains(battle, p) {
     const efeito = efeitosDe(p);
-    const mpGain = 5 + (efeito.regenMana || 0);
-    p.mp = clamp(p.mp + mpGain, 0, p.mpMax);
+    // Recuperação de mana CONFIRMADA: o que foi gasto ÷ 2 (+ passivas de raça).
+    const gastoTurno = Number(p.manaGastoTurno) || 0;
+    const rec = this._regenMana(p);
+    p.manaGastoTurno = 0;
+    if (rec > 0) {
+      battle.log.push(makeLog(`💧 ${p.charName} recupera ${rec} de MP (gasto ${gastoTurno} ÷ 2).`, 'heal'));
+    }
+    if (efeito.regenMana) {
+      const extra = efeito.regenMana;
+      const before = p.mp;
+      p.mp = clamp(p.mp + extra, 0, p.mpMax);
+      if (p.mp > before) battle.log.push(makeLog(`✨ ${p.charName} recupera mais ${p.mp - before} de MP (passiva).`, 'heal'));
+    }
+    this._processFlight(battle, p);
     if (efeito.regenHpPct && p.alive) {
       const heal = Math.max(1, Math.round(p.hpMax * efeito.regenHpPct));
       const before = p.hp;
@@ -498,15 +597,108 @@ export class BattleManager {
     return { ...p, attributes: this._rollAttrs(p) };
   }
 
-  // Regeneração de mana no fim do turno: Math.floor(inteligencia / 2),
-  // respeitando o máximo. Retorna o quanto foi recuperado (0 se cheio/morto).
+  // Recuperação de mana no fim do turno: GASTO ÷ 2 (regra confirmada).
+  // O gasto medido é o do turno que acabou de passar (manaGastoTurno).
+  // Respeita o máximo e monstros não recuperam mana.
   _regenMana(p) {
     if (p.isMonster || !p.alive) return 0;
-    const gain = Math.floor(((p.attributes && p.attributes.inteligencia) || 0) / 2);
+    const gasto = Number(p.manaGastoTurno) || 0;
+    if (gasto <= 0) return 0;
+    const gain = manaRecuperada(gasto);
     if (gain <= 0) return 0;
     const before = p.mp;
     p.mp = clamp(p.mp + gain, 0, p.mpMax);
     return Math.max(0, p.mp - before);
+  }
+
+  // ── VOO ────────────────────────────────────────────────────────────────
+  // Voo é condição de combate: dá altitude e alcance, nunca invulnerabilidade.
+  // Cada ação `voo` sobe/desce/aterrissa. Voo mágico gasta Mana; voo natural
+  // cansa (fadiga) e exige teste de controle com Destreza/Reflexos/Resistência.
+  _vooDisponivel(p) {
+    return { natural: !!p.vooNatural, magico: !p.isMonster };
+  }
+
+  _alcanceVerticalDoGolpe(p, skill, weapon) {
+    if (skill) {
+      if (skill.alcanceVertical) return alcanceVerticalDeMagia(skill);
+      const catalogo = Object.values(SPELLS).find((s) => s.nome === skill.nome || s.nome === skill.id);
+      if (catalogo) return alcanceVerticalDeMagia(catalogo);
+      if (skill.tipo === 'fisico') return alcanceVerticalDeArma(weapon);
+      return ALCANCE_VERTICAL.magico;
+    }
+    if (p.alcanceVertical != null) return Number(p.alcanceVertical);
+    return alcanceVerticalDeArma(weapon);
+  }
+
+  _processFlight(battle, p) {
+    if (!p.voando || p.isMonster) return;
+    p.vooTurnos += 1;
+    // Voo mágico: manutenção em Mana por turno; sem Mana, cai.
+    if (p.vooTipo === 'magico') {
+      if (p.mp < VOO.manaPorTurno) {
+        this._aterrissar(battle, p, 'A mana para manter o voo acabou.');
+        return;
+      }
+      p.mp -= VOO.manaPorTurno;
+      p.manaGastoTurno = (p.manaGastoTurno || 0) + VOO.manaPorTurno;
+    }
+    // Voo natural: fadiga acumulada e teste de controle.
+    if (p.vooTipo === 'natural' && p.vooTurnos >= VOO.fadigaTurnos) {
+      const controle = pesoAtributo('controleVoo', this._rollAttrs(p))
+        + pesoAtributo('resistenciaVoo', this._rollAttrs(p));
+      const d20 = Math.floor(Math.random() * 20) + 1;
+      const dif = 15;
+      if (d20 + controle < dif) {
+        this._aterrissar(battle, p, `fadiga: controle (d20 ${d20} + ${Math.round(controle)}) < ${dif}`);
+        return;
+      }
+      battle.log.push(makeLog(`🕊️ ${p.charName} resiste à fadiga do voo (d20 ${d20} + ${Math.round(controle)} ≥ ${dif}).`));
+    }
+  }
+
+  _aterrissar(battle, p, motivo = '') {
+    if (!p.voando) return;
+    p.voando = false;
+    p.altitude = 0;
+    p.vooTipo = null;
+    p.vooTurnos = 0;
+    p.vooFadiga = 0;
+    battle.log.push(makeLog(`🛬 ${p.charName} aterrissa${motivo ? ` (${motivo})` : ''}.`, 'info'));
+  }
+
+  _alternarVoo(battle, p, dir = 'subir') {
+    if (p.voando && (dir === 'aterrissar' || dir === 'descer')) {
+      this._aterrissar(battle, p, dir === 'aterrissar' ? 'pouso voluntário' : '');
+      return;
+    }
+    if (!p.voando) {
+      // Decolagem: voo natural (raça) ou voo mágico (gasta Mana).
+      if (p.vooNatural) {
+        p.vooTipo = 'natural';
+      } else {
+        if (p.isMonster) throw new Error('Este participante não consegue voar.');
+        if (p.mp < VOO.manaSubida) throw new Error(`Mana insuficiente para voar (precisa de ${VOO.manaSubida} MP).`);
+        p.mp -= VOO.manaSubida;
+        p.manaGastoTurno = (p.manaGastoTurno || 0) + VOO.manaSubida;
+        p.vooTipo = 'magico';
+      }
+      p.voando = true;
+      p.altitude = VOO.bonusAltitude;
+      p.vooTurnos = 0;
+      battle.log.push(
+        makeLog(`🕊️ ${p.charName} decola (${p.vooTipo === 'natural' ? 'voo natural' : `voo mágico, −${VOO.manaSubida} MP`}) e fica na altitude ${p.altitude}.`, 'buff'),
+      );
+      return;
+    }
+    const novo = Math.max(0, Math.min(ALTITUDES.alto, (p.altitude || 0) + (dir === 'descer' ? -1 : 1) * VOO.bonusAltitude));
+    p.altitude = novo;
+    if (novo === 0) {
+      this._aterrissar(battle, p, ' altitude zero');
+      return;
+    }
+    const controle = pesoAtributo('controleVoo', this._rollAttrs(p));
+    battle.log.push(makeLog(`🕊️ ${p.charName} ${dir === 'descer' ? 'desce' : 'sobe'} para a altitude ${novo} (controle ${Math.round(controle)}).`, 'buff'));
   }
 
   _rollToHit(attacker, defender, kind) {
@@ -518,14 +710,18 @@ export class BattleManager {
     const defA = this._rollAttrs(defender);
     let acc, dodge, chance;
     if (kind === 'magic') {
-      acc = atkA.inteligencia;
-      dodge = defender.dodge ? defA.reflexos * 1.5 : defA.reflexos;
+      // INT é o atributo da magia; REF ajuda na mira.
+      acc = pesoAtributo('ataqueMagico', atkA);
+      dodge = defender.dodge
+        ? pesoAtributo('esquiva', defA) + pesoAtributo('esquiva', defA) * 0.5
+        : pesoAtributo('esquiva', defA);
       chance = clamp(0.35 + (acc - dodge) * 0.035 - dodgeBonus - stAtk.accPenalty + stDef.dodgePenalty, 0.15, 0.95);
     } else {
-      acc = atkA.destreza + atkA.reflexos * 0.5;
+      // DEX manda na precisão, REF ajuda, FOR dá peso ao golpe.
+      acc = pesoAtributo('ataqueFisico', atkA);
       dodge = defender.dodge
         ? defA.destreza + defA.reflexos
-        : defA.destreza + defA.reflexos * 0.5;
+        : pesoAtributo('esquiva', defA);
       chance = clamp(0.35 + (acc - dodge) * 0.03 - dodgeBonus - stAtk.accPenalty + stDef.dodgePenalty, 0.15, 0.95);
     }
     const threshold = Math.round(20 * chance);
@@ -612,6 +808,40 @@ export class BattleManager {
     const reduced = Math.max(0, baseDamage - target.defesa);
     const finalDamage = reduced === 0 ? Math.max(1, Math.round(baseDamage * 0.1)) : reduced;
 
+    // ── Horda: o dano reduz o número de corpos em vez de só encurtar o HP ──
+    // O último corpo nunca sai pela contagem: ele morre com dano normal.
+    if (target.horda && target.horda.quantidade > 1) {
+      const porUnidade = Math.max(1, target.horda.hpPorUnidade);
+      const abatidos = Math.min(
+        target.horda.quantidade - 1,
+        Math.floor(finalDamage / porUnidade),
+      );
+      if (abatidos > 0) {
+        target.horda.quantidade -= abatidos;
+        target.hpMax = Math.max(1, porUnidade * target.horda.quantidade);
+        target.hp = clamp(target.hp - finalDamage, 0, target.hpMax);
+        target.danoRecebido = (target.danoRecebido || 0) + finalDamage;
+        if (source && !source.isMonster) {
+          source.contribuicao = source.contribuicao || { dano: 0, cura: 0, acertos: 0, acoes: 0, suporte: 0 };
+          source.contribuicao.dano += finalDamage;
+        }
+        this._chargeUltimate(battle, target, finalDamage * 0.8);
+        if (source && !source.isMonster) this._chargeUltimate(battle, source, finalDamage * 1.0);
+        battle.log.push(
+          makeLog(
+            `💥 ${source ? source.charName : 'Algo'} causa ${finalDamage} de dano em ${target.charName}: ${abatidos} abatido(s), restam ${target.horda.quantidade}.`,
+            'damage',
+          ),
+        );
+        if (source) source.kills = (source.kills || 0) + abatidos;
+        if (target.hp <= 0) {
+          if (source) source.kills = (source.kills || 0) + 1;
+          this._killIfDead(battle, target);
+        }
+        return finalDamage;
+      }
+    }
+
     if (finalDamage >= target.hp && efeito.resisteMorte && !target.resistDeathUsed) {
       target.resistDeathUsed = true;
       target.hp = 1;
@@ -621,6 +851,11 @@ export class BattleManager {
 
     target.hp = clamp(target.hp - finalDamage, 0, target.hpMax);
     target.danoRecebido = (target.danoRecebido || 0) + finalDamage;
+    if (source && !source.isMonster) {
+      // XP por participação: o dano causado conta para a divisão do XP.
+      source.contribuicao = source.contribuicao || { dano: 0, cura: 0, acertos: 0, acoes: 0, suporte: 0 };
+      source.contribuicao.dano += finalDamage;
+    }
     this._chargeUltimate(battle, target, finalDamage * 0.8);
     if (source && !source.isMonster) this._chargeUltimate(battle, source, finalDamage * 1.0);
     battle.log.push(
@@ -718,8 +953,28 @@ export class BattleManager {
     }
   }
 
+  _marcarAcerto(p) {
+    if (!p || p.isMonster) return;
+    p.contribuicao = p.contribuicao || { dano: 0, cura: 0, acertos: 0, acoes: 0, suporte: 0 };
+    p.contribuicao.acertos += 1;
+  }
+
+  _marcarSuporte(p, qtd = 1) {
+    if (!p || p.isMonster) return;
+    p.contribuicao = p.contribuicao || { dano: 0, cura: 0, acertos: 0, acoes: 0, suporte: 0 };
+    p.contribuicao.suporte += qtd;
+  }
+
   _resolveAttack(battle, p, target, weapon) {
     const weaponName = weapon ? weapon.nome : 'as mãos';
+    // Alcance vertical: golpe corpo a corpo não alcança quem está no ar.
+    const alcance = this._alcanceVerticalDoGolpe(p, null, weapon);
+    if (foraDoAlcanceVertical(alcance, target)) {
+      battle.log.push(
+        makeLog(`🕊️ ${weaponName} não alcança ${target.charName} na altitude ${target.altitude} (${p.charName} chega até a altitude ${alcance}).`, 'miss'),
+      );
+      return;
+    }
     const res = this._rollToHit(p, target, 'physical');
     if (res.roll === 1) {
       battle.log.push(makeLog(`❌ ${p.charName} falha ao atacar ${target.charName} com ${weaponName}! (d20 = 1)`, 'miss'));
@@ -729,6 +984,7 @@ export class BattleManager {
       battle.log.push(makeLog(`💨 ${p.charName} erra o ataque em ${target.charName}. (d20 = ${res.roll}, precisava de ${res.chance})`, 'miss'));
       return;
     }
+    this._marcarAcerto(p);
     const dmg = physicalDamage(this._withDrunk(p), weapon, this._physMult(p) * this._especializacaoMult(p, weapon));
     let total = res.crit ? dmg.total * 2 : dmg.total;
     const atkElem = weapon?.elemento || 'fisico';
@@ -744,7 +1000,7 @@ export class BattleManager {
     this._chargeEspecial(battle, p, res.crit ? 15 : 8);
     const dealt = this._applyDamage(target, total, battle, p, 'physical');
     if (dealt > 0) this._lifesteal(battle, p, dealt);
-    if (!target.alive) p.kills += 1;
+    if (!target.alive && !target.horda) p.kills += 1;
     const ataqueStatus = efeitosDe(p).ataqueStatus;
     if (ataqueStatus && target.alive) this._applyStatus(battle, target, ataqueStatus, p);
   }
@@ -766,6 +1022,7 @@ export class BattleManager {
       return;
     }
     p.mp -= cost;
+    p.manaGastoTurno = (p.manaGastoTurno || 0) + cost;
 
     if (skill.tipo === 'cura') {
       const healing = Math.round(p.attributes.inteligencia * (skill.poder / 100) * 1.4);
@@ -781,8 +1038,13 @@ export class BattleManager {
       targets.forEach((t) => {
         const before = t.hp;
         t.hp = clamp(t.hp + healing, 0, t.hpMax);
+        if (!p.isMonster) {
+          p.contribuicao = p.contribuicao || { dano: 0, cura: 0, acertos: 0, acoes: 0, suporte: 0 };
+          p.contribuicao.cura += t.hp - before;
+        }
         battle.log.push(makeLog(`💚 ${p.charName} usa ${skill.nome} em ${t.charName}: cura ${t.hp - before} de HP.`, 'heal'));
       });
+      this._marcarSuporte(p, targets.length);
       this._setCooldown(p, skill);
       return;
     }
@@ -794,6 +1056,7 @@ export class BattleManager {
       p.buffMagic += skill.poder / 100;
       p.buffTurns = 3;
       battle.log.push(makeLog(`🔮 ${p.charName} usa ${skill.nome}: dano de aliados aumentado em ${skill.poder}%.`, 'buff'));
+      this._marcarSuporte(p);
       this._setCooldown(p, skill);
       return;
     }
@@ -802,11 +1065,20 @@ export class BattleManager {
       p.defense = true;
       p.buffTurns = Math.max(p.buffTurns, 1);
       battle.log.push(makeLog(`🛡️ ${p.charName} usa ${skill.nome}: reduzirá muito o dano recebido.`, 'buff'));
+      this._marcarSuporte(p);
       this._setCooldown(p, skill);
       return;
     }
 
     const kind = skill.tipo === 'fisico' ? 'physical' : 'magic';
+    // Alcance vertical da magia: algumas magias não alcançam voadores.
+    const alcance = this._alcanceVerticalDoGolpe(p, skill, p.equipment?.arma || null);
+    if (foraDoAlcanceVertical(alcance, target)) {
+      battle.log.push(
+        makeLog(`🕊️ ${skill.nome} não alcança ${target.charName} na altitude ${target.altitude} (alcance vertical ${alcance}).`, 'miss'),
+      );
+      return;
+    }
     const res = this._rollToHit(p, target, kind);
     if (res.roll === 1) {
       battle.log.push(makeLog(`❌ ${p.charName} falha ao usar ${skill.nome}! (d20 = 1)`, 'miss'));
@@ -816,6 +1088,7 @@ export class BattleManager {
       battle.log.push(makeLog(`💨 ${p.charName} erra ${skill.nome} em ${target.charName}. (d20 = ${res.roll}, precisava de ${res.chance})`, 'miss'));
       return;
     }
+    this._marcarAcerto(p);
     let dmg;
     if (skill.tipo === 'fisico') {
       const base = Math.round(this._rollAttrs(p).forca * 1.5 * (skill.poder / 100));
@@ -840,7 +1113,7 @@ export class BattleManager {
     this._chargeEspecial(battle, p, res.crit ? 15 : 8);
     const dealt = this._applyDamage(target, total, battle, p, kind);
     if (dealt > 0) this._lifesteal(battle, p, dealt);
-    if (!target.alive) p.kills += 1;
+    if (!target.alive && !target.horda) p.kills += 1;
     this._setCooldown(p, skill);
     if (skill.status) this._applyStatus(battle, target, skill.status, p);
   }
@@ -861,8 +1134,13 @@ export class BattleManager {
       targets.forEach((t) => {
         const before = t.hp;
         t.hp = clamp(t.hp + healing, 0, t.hpMax);
+        if (!p.isMonster) {
+          p.contribuicao = p.contribuicao || { dano: 0, cura: 0, acertos: 0, acoes: 0, suporte: 0 };
+          p.contribuicao.cura += t.hp - before;
+        }
         battle.log.push(makeLog(`💚 ${p.charName} desfere ${skill.nome} em ${t.charName}: cura ${t.hp - before} de HP.`, 'heal'));
       });
+      this._marcarSuporte(p, targets.length);
       return;
     }
     if (skill.tipo === 'buff') {
@@ -870,15 +1148,24 @@ export class BattleManager {
       p.buffMagic = (p.buffMagic || 1) + skill.poder / 100;
       p.buffTurns = Math.max(p.buffTurns, 3);
       battle.log.push(makeLog(`🔮 ${p.charName} usa ${skill.nome}: poder aliado +${skill.poder}%.`, 'buff'));
+      this._marcarSuporte(p);
       return;
     }
     if (skill.tipo === 'defesa') {
       p.defense = true;
       battle.log.push(makeLog(`🛡️ ${p.charName} usa ${skill.nome}: defesa total!`, 'buff'));
+      this._marcarSuporte(p);
       return;
     }
 
     const kind = skill.tipo === 'fisico' ? 'physical' : 'magic';
+    const alcance = this._alcanceVerticalDoGolpe(p, skill, p.equipment?.arma || null);
+    if (foraDoAlcanceVertical(alcance, target)) {
+      battle.log.push(
+        makeLog(`🕊️ ${skill.nome} não alcança ${target.charName} na altitude ${target.altitude} (alcance vertical ${alcance}).`, 'miss'),
+      );
+      return;
+    }
     const res = this._rollToHit(p, target, kind);
     if (res.roll === 1) {
       battle.log.push(makeLog(`❌ ${p.charName} falha ao desferir ${skill.nome}! (d20 = 1)`, 'miss'));
@@ -888,6 +1175,7 @@ export class BattleManager {
       battle.log.push(makeLog(`💨 ${p.charName} erra ${skill.nome} em ${target.charName}. (d20 = ${res.roll}, precisava de ${res.chance})`, 'miss'));
       return;
     }
+    this._marcarAcerto(p);
     let dmg;
     if (skill.tipo === 'fisico') {
       const base = Math.round(this._rollAttrs(p).forca * 2.2 * (skill.poder / 100));
@@ -911,7 +1199,7 @@ export class BattleManager {
     );
     const dealt = this._applyDamage(target, total, battle, p, kind);
     if (dealt > 0) this._lifesteal(battle, p, dealt);
-    if (!target.alive) p.kills += 1;
+    if (!target.alive && !target.horda) p.kills += 1;
   }
 
   _resolveItem(battle, p, item) {
@@ -977,6 +1265,10 @@ export class BattleManager {
       (q) => q.characterId === action.targetId || q.uid === action.targetId,
     ) || null;
 
+    // Toda ação do turno vale como participação na divisão do XP.
+    p.contribuicao = p.contribuicao || { dano: 0, cura: 0, acertos: 0, acoes: 0, suporte: 0 };
+    p.contribuicao.acoes += 1;
+
     if (battle.mode === 'mestre' && target) {
       if (p.isMonster && target.isMonster) throw new Error('Inimigos atacam apenas os jogadores.');
       if (!p.isMonster && !target.isMonster) throw new Error('Escolha um alvo inimigo.');
@@ -1007,6 +1299,14 @@ export class BattleManager {
       case 'dodge': {
         p.dodge = true;
         battle.log.push(makeLog(`💨 ${p.charName} foca em esquivar dos próximos ataques.`));
+        break;
+      }
+      case 'voo': {
+        // Voo: subir, descer ou aterrissar (regra confirmada pelo criador).
+        const dir = ['subir', 'descer', 'aterrissar'].includes(action.dir) ? action.dir : 'subir';
+        const podeVoo = !p.isMonster || p.vooNatural || p.voando || p.monsterDef?.voaNatural;
+        if (!podeVoo) throw new Error('Este participante não consegue voar.');
+        this._alternarVoo(battle, p, dir);
         break;
       }
       case 'useItem': {
@@ -1068,10 +1368,6 @@ export class BattleManager {
 
     const ended = this._checkEnd(battle);
     if (!ended) {
-      const regen = this._regenMana(p);
-      if (regen > 0) {
-        battle.log.push(makeLog(`💧 ${p.charName} regenera ${regen} de MP no fim do turno.`, 'heal'));
-      }
       this._advanceTurn(battle);
     }
     if (!this._checkEnd(battle)) {
@@ -1151,6 +1447,44 @@ export class BattleManager {
     this._resolveAttack(battle, p, target, weapon);
   }
 
+  // XP: o grupo recebe um total e cada jogador recebe uma parte
+  // proporcional à participação (dano, cura, acertos, ações, abates).
+  _distribuirXpFinal(battle, vencedores) {
+    const monstrosMortos = battle.participants.filter((q) => q.isMonster && !q.alive);
+    const xpMonstros = [];
+    for (const m of monstrosMortos) {
+      if (m.horda) {
+        // Horda: XP por corpo abatido, não pela horda inteira.
+        const abatidos = Math.max(1, (m.horda.inicial || 1) - (m.horda.quantidade || 0));
+        xpMonstros.push(Math.round((m.xpPorUnidade || m.xpValue || 0) * abatidos));
+      } else {
+        xpMonstros.push(m.xpValue || 0);
+      }
+    }
+    const chefeDerrotado = monstrosMortos.some((m) => m.isBoss);
+    const eclipse = battle.eclipse || estadoEclipse(1);
+    const pool = poolDeXp({ chefeDerrotado, monstrosDerrotados: xpMonstros, eclipseMult: eclipse.xpMult });
+    battle.xpPool = pool;
+
+    const lista = (vencedores || []).filter((p) => !p.isMonster);
+    const dist = distribuirXp(lista, pool);
+    for (const d of dist) {
+      const p = lista.find((q) => q.uid === d.uid);
+      if (!p) continue;
+      const mult = efeitosDe(p).xpMult || 1;
+      p.xpGained = Math.round(d.xpGained * mult);
+      p.xpShare = Math.round(d.share * 100);
+      p.xpContribuicao = Math.round(d.contribuicao);
+    }
+    battle.log.push(
+      makeLog(
+        `📊 XP total ${pool} dividido por participação: ${dist.map((d) => `${d.uid.slice(0, 4)} ${Math.round(d.share * 100)}%`).join(' · ')}`,
+        'info',
+      ),
+    );
+    return pool;
+  }
+
   _checkEnd(battle) {
     const alive = battle.participants.filter((q) => q.alive);
     if (alive.length === 0) {
@@ -1163,11 +1497,7 @@ export class BattleManager {
       const enemies = alive.filter((q) => q.isMonster);
       if (enemies.length === 0) {
         battle.winner = 'Os Aventureiros';
-        const bossDied = battle.participants.some((q) => q.isMonster && q.isBoss && !q.alive);
-        heroes.forEach((h) => {
-          const mult = efeitosDe(h).xpMult || 1;
-          h.xpGained = Math.round((150 + h.kills * 25 + (bossDied ? 100 : 0)) * mult);
-        });
+        this._distribuirXpFinal(battle, heroes);
         return this._finish(battle);
       }
       if (heroes.length === 0) {
@@ -1180,7 +1510,7 @@ export class BattleManager {
     if (battle.mode === 'todos') {
       if (alive.length === 1) {
         battle.winner = alive[0].playerName;
-        alive[0].xpGained = 150 + alive[0].kills * 25;
+        this._distribuirXpFinal(battle, alive);
         return this._finish(battle);
       }
       return false;
@@ -1194,11 +1524,8 @@ export class BattleManager {
     if (Object.keys(teams).length === 1) {
       const winningTeam = Object.keys(teams)[0];
       battle.winner = teamNames[winningTeam];
-      battle.participants
-        .filter((q) => q.alive && q.team === winningTeam)
-        .forEach((q) => {
-          q.xpGained = 150 + q.kills * 25;
-        });
+      const equipeVencedora = battle.participants.filter((q) => q.alive && q.team === winningTeam);
+      this._distribuirXpFinal(battle, equipeVencedora);
       return this._finish(battle);
     }
     return false;
@@ -1208,6 +1535,15 @@ export class BattleManager {
     battle.status = 'finished';
     battle.finishedAt = Date.now();
     battle.log.push(makeLog(`🏆 ${battle.winner} venceu a batalha!`, 'win'));
+    const comXp = battle.participants.filter((p) => !p.isMonster && p.xpGained > 0);
+    if (comXp.length) {
+      battle.log.push(
+        makeLog(
+          `📊 XP por participação: ${comXp.map((p) => `${p.charName} ${p.xpGained} XP (${p.xpShare ?? 0}%)`).join(' · ')}`,
+          'info',
+        ),
+      );
+    }
     this.saveBattle(battle);
     if (this.onBattleEnd) this.onBattleEnd(battle);
     return true;

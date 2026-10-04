@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, getSocket, emitAck, isOffline, applyOfflineRewards } from '../api.js';
 import StatBar from '../components/StatBar.jsx';
 import { playLogKind, play, isMuted, toggleMute } from '../utils/sfx.js';
+import { VOO, ALTITUDES } from '../game/sistema.js';
 
 const CLASS_ICONS = { guerreiro: '🛡️', mago: '🔮', arqueiro: '🏹', clerigo: '✝️', assassino: '🗡️', paladino: '⚔️' };
 const MONSTER_ICON = '👾';
@@ -207,6 +208,7 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
   const doAttack = () => act({ type: 'attack', targetId: targetId || aliveTargets[0]?.characterId });
   const doDefend = () => act({ type: 'defend' });
   const doDodge = () => act({ type: 'dodge' });
+  const doVoo = (dir) => act({ type: 'voo', dir });
   const doMagic = () => {
     if (!spellId) return;
     act({ type: 'magic', spellId, targetId: targetId || null });
@@ -332,6 +334,8 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
           {muted ? '🔇' : '🔊'}
         </button>
       </header>
+
+      {battle.eclipse && <EclipseBanner eclipse={battle.eclipse} dungeonId={battle.dungeonId} />}
 
       <div className="battle-layout">
         <div className="arena">
@@ -569,6 +573,32 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                   <button onClick={doDodge} disabled={busy}>
                     💨 Esquivar (esquiva +)
                   </button>
+                  {active && (
+                    <div className="voo-actions">
+                      <p className="muted small">
+                        {active.voando
+                          ? `🕊️ No ar — altitude ${active.altitude} (${active.vooTipo === 'natural' ? 'voo natural' : 'voo mágico'}). Voo não dá esquiva automática: attacks sem alcance vertical não te acertam.`
+                          : 'Voo não concede invulnerabilidade: apenas define a altitude e o alcance dos ataques.'}
+                      </p>
+                      {active.voando ? (
+                        <>
+                          <button onClick={() => doVoo('subir')} disabled={busy || (active.altitude || 0) >= ALTITUDES.alto}>
+                            ⬆️ Subir
+                          </button>
+                          <button onClick={() => doVoo('descer')} disabled={busy}>
+                            ⬇️ Descer
+                          </button>
+                          <button onClick={() => doVoo('aterrissar')} disabled={busy}>
+                            🛬 Aterrissar
+                          </button>
+                        </>
+                      ) : (
+                        <button onClick={() => doVoo('subir')} disabled={busy || active.mp < VOO.manaSubida}>
+                          🕊️ Decolar {active.vooNatural ? '(voo natural)' : `(${VOO.manaSubida} MP)`}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -781,6 +811,33 @@ function QuickChat({ battle, player }) {
   );
 }
 
+function EclipseBanner({ eclipse, dungeonId }) {
+  if (!eclipse) return null;
+  const forte = eclipse.eclipseAtivo;
+  const classe = forte ? 'eclipse-banner forte' : eclipse.sinais ? 'eclipse-banner sinais' : 'eclipse-banner';
+  return (
+    <div className={classe}>
+      <span className="eclipse-icon">{eclipse.icon}</span>
+      <span className="eclipse-txt">
+        <strong>
+          {eclipse.tipoNome} · {eclipse.nome}
+        </strong>
+        {forte ? (
+          <span className="eclipse-mults">
+            {' '}Monstros +{Math.round((eclipse.monstroMult - 1) * 100)}% · Chefes +{Math.round((eclipse.chefeMult - 1) * 100)}% · XP
+            +{Math.round((eclipse.xpMult - 1) * 100)}%
+          </span>
+        ) : (
+          <span className="eclipse-mults">
+            {' '}faltam {eclipse.diasParaEclipse} dia(s) para o Eclipse
+          </span>
+        )}
+        {dungeonId && <span className="tag">🗺️ Dungeon</span>}
+      </span>
+    </div>
+  );
+}
+
 function VictoryPanel({ battle, player, onExit }) {
   const rewardsRef = useRef(false);
   const winners = (battle.participants || []).filter((p) => p.alive && !p.isMonster);
@@ -800,6 +857,7 @@ function VictoryPanel({ battle, player, onExit }) {
   return (
     <div className="panel victory-panel">
       <h2>🏆 {battle.winner} venceu!</h2>
+      {battle.xpPool > 0 && <p className="muted small">Pool de XP: {battle.xpPool} (dividido por participação)</p>}
       <div className="reward-list">
         {winners.map((p) => {
           const coins = 100 + (p.kills || 0) * 25;
@@ -807,6 +865,7 @@ function VictoryPanel({ battle, player, onExit }) {
             <div key={p.characterId} className="reward-row">
               <span className="reward-name">{p.charName}</span>
               <span className="reward-tag reward-xp">+{p.xpGained || 0} XP</span>
+              {p.xpShare != null && <span className="reward-tag">📊 {p.xpShare}%</span>}
               <span className="reward-tag reward-coins">+{coins} ℛ</span>
               {p.kills > 0 && <span className="reward-tag">⚔️ {p.kills} abate{p.kills > 1 ? 's' : ''}</span>}
             </div>
@@ -860,6 +919,18 @@ function FfFighter({ p, index, mirrored, current, gameData, floats = [], selecte
       {p.isBoss && <span className="tag boss-tag">☠️ CHEFE</span>}
       {p.team && <span className="tag">Eq. {p.team}</span>}
       {isCurrent && <span className="tag current-tag">▶ Turno</span>}
+      {p.voando && (
+        <span className="tag voo-tag" title="Voo não dá invulnerabilidade: define a altitude e o alcance vertical dos ataques.">
+          🕊️ Alt. {p.altitude}
+          {p.vooTipo === 'natural' ? ' (natural)' : ' (mágico)'}
+        </span>
+      )}
+      {p.horda && (
+        <span className="tag horda-tag" title="Horda: cada corpo tem a própria vida e vale XP individual.">
+          👥 {p.horda.quantidade}/{p.horda.inicial}
+        </span>
+      )}
+      {p.eclipse && <span className="tag eclipse-tag" title="Monstro fortalecido pelo Eclipse.">🩸 Eclipse</span>}
       {p.alive ? (
         <>
           <StatBar label="HP" value={p.hp} max={p.hpMax} color="#e63946" />

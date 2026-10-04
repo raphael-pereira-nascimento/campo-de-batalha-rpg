@@ -2,6 +2,30 @@
 
 import { RACES } from './races.js';
 import { GEMS } from './gems.js';
+import {
+  manaMaxFrom,
+  manaRecuperada,
+  iniciativaDe,
+  pesoAtributo,
+  cargaMaxima,
+  alcanceVerticalDeArma,
+  alcanceVerticalDeMagia,
+  foraDoAlcanceVertical,
+  ALCANCE_VERTICAL,
+  ALTITUDES,
+} from './sistema.js';
+
+export {
+  manaMaxFrom,
+  manaRecuperada,
+  pesoAtributo,
+  cargaMaxima,
+  alcanceVerticalDeArma,
+  alcanceVerticalDeMagia,
+  foraDoAlcanceVertical,
+  ALCANCE_VERTICAL,
+  ALTITUDES,
+};
 
 export const CLASSES = {
   guerreiro: {
@@ -69,54 +93,82 @@ export const CLASSES = {
 export const ELEMENTOS = ['fisico', 'fogo', 'agua', 'terra', 'ar', 'luz', 'trevas'];
 
 export const SPELLS = {
-  golpe_sangrento: { nome: 'Golpe Sangrento', tipo: 'ataque', custo: 5, poder: 2.0, desc: 'Ataque físico brutal com força aumentada.', status: { tipo: 'sangramento', turnos: 2, dano: 6 } },
+  golpe_sangrento: { nome: 'Golpe Sangrento', tipo: 'ataque', custo: 5, poder: 2.0, desc: 'Ataque físico brutal com força aumentada.', status: { tipo: 'sangramento', turnos: 2, dano: 6 }, alcanceVertical: 'terrestre' },
   grito_de_guerra: { nome: 'Grito de Guerra', tipo: 'buff', custo: 6, poder: 0.15, desc: 'Aumenta o dano físico de todos os aliados.' },
   muralha: { nome: 'Muralha', tipo: 'defesa', custo: 6, poder: 0.25, desc: 'Reduz o dano recebido nesta rodada.' },
 
   bola_de_fogo: { nome: 'Bola de Fogo', tipo: 'ataque', custo: 8, poder: 2.4, desc: 'Explosão de fogo devastadora.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3, dano: 5 } },
   raio: { nome: 'Raio', tipo: 'ataque', custo: 6, poder: 1.8, desc: 'Descarga elétrica precisa.', elemento: 'ar' },
-  gelo: { nome: 'Gelo', tipo: 'ataque', custo: 7, poder: 1.6, desc: 'Congela o alvo e reduz a velocidade dele.', elemento: 'agua', status: { tipo: 'congelamento', turnos: 2 } },
+  gelo: { nome: 'Gelo', tipo: 'ataque', custo: 7, poder: 1.6, desc: 'Congela o alvo e reduz a velocidade dele.', elemento: 'agua', status: { tipo: 'congelamento', turnos: 2 }, alcanceVertical: 'limitado' },
   escudo_arcano: { nome: 'Escudo Arcano', tipo: 'defesa', custo: 7, poder: 0.3, desc: 'Barreira mágica que absorve dano.' },
 
-  tiro_preciso: { nome: 'Tiro Preciso', tipo: 'ataque', custo: 4, poder: 1.5, desc: 'Dano crítico elevado.', elemento: 'fisico' },
+  tiro_preciso: { nome: 'Tiro Preciso', tipo: 'ataque', custo: 4, poder: 1.5, desc: 'Dano crítico elevado.', elemento: 'fisico', alcanceVertical: 'longo' },
   chuva_de_flechas: { nome: 'Chuva de Flechas', tipo: 'ataque', custo: 9, poder: 2.2, desc: 'Acerta todos os inimigos.', elemento: 'fisico' },
-  flecha_ardente: { nome: 'Flecha Ardente', tipo: 'ataque', custo: 6, poder: 1.9, desc: 'Flecha em chamas que causa queimadura.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3, dano: 6 } },
+  flecha_ardente: { nome: 'Flecha Ardente', tipo: 'ataque', custo: 6, poder: 1.9, desc: 'Flecha em chamas que causa queimadura.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3, dano: 6 }, alcanceVertical: 'longo' },
 
   cura: { nome: 'Cura', tipo: 'cura', custo: 6, poder: 2.0, desc: 'Restaura HP com base na inteligência.', elemento: 'luz' },
   cura_massa: { nome: 'Cura em Massa', tipo: 'cura', custo: 12, poder: 1.2, desc: 'Cura todos os aliados vivos.', elemento: 'luz' },
   luz_sagrada: { nome: 'Luz Sagrada', tipo: 'ataque', custo: 7, poder: 1.9, desc: 'Dano divino contra um inimigo.', elemento: 'luz' },
   benção: { nome: 'Benção', tipo: 'buff', custo: 5, poder: 0.1, desc: 'Aumenta o dano mágico dos aliados.', elemento: 'luz' },
 
-  golpe_preciso: { nome: 'Golpe Preciso', tipo: 'ataque', custo: 5, poder: 1.6, desc: 'Ataque certeiro que tem alta chance de crítico.', elemento: 'fisico' },
+  golpe_preciso: { nome: 'Golpe Preciso', tipo: 'ataque', custo: 5, poder: 1.6, desc: 'Ataque certeiro que tem alta chance de crítico.', elemento: 'fisico', alcanceVertical: 'terrestre' },
   veneno: { nome: 'Veneno', tipo: 'ataque', custo: 6, poder: 1.4, desc: 'Envenena o alvo, causando dano contínuo.', elemento: 'trevas', status: { tipo: 'veneno', turnos: 3, dano: 4 } },
   sombra: { nome: 'Sombra', tipo: 'defesa', custo: 5, poder: 0.3, desc: 'Desaparece nas sombras, reduzindo muito o dano recebido.' },
 
-  golpe_sagrado: { nome: 'Golpe Sagrado', tipo: 'ataque', custo: 7, poder: 2.0, desc: 'Espada envolta em luz sagrada.', elemento: 'luz' },
+  golpe_sagrado: { nome: 'Golpe Sagrado', tipo: 'ataque', custo: 7, poder: 2.0, desc: 'Espada envolta em luz sagrada.', elemento: 'luz', alcanceVertical: 'terrestre' },
   escudo_divino: { nome: 'Escudo Divino', tipo: 'defesa', custo: 7, poder: 0.3, desc: 'Barreira sagrada que absorve dano.', elemento: 'luz' },
+};
+
+export const WEAPON_STATES = {
+  otima:       { nome: 'Ótima',       cor: '#3ddc84', multDano: 1.0, multDefesa: 1.0 },
+  manutencao:  { nome: 'Manutenção',  cor: '#f5c542', multDano: 0.85, multDefesa: 0.9 },
+  danificada:  { nome: 'Danificada',  cor: '#ff6b35', multDano: 0.65, multDefesa: 0.7 },
+  quebrada:    { nome: 'Quebrada',    cor: '#dc3545', multDano: 0.0,  multDefesa: 0.0 },
+};
+
+export const ALCANCE_TYPES = {
+  corpo:  { nome: 'Corpo a Corpo', ordem: 1 },
+  medio:  { nome: 'Médio Alcance', ordem: 2 },
+  longo:  { nome: 'Longo Alcance', ordem: 3 },
 };
 
 export const EQUIPMENT = {
   armas: {
-    espada_curta: { nome: 'Espada Curta', tipo: 'arma', danoBase: 4, bonus: { forca: 1 } },
-    espada_longa: { nome: 'Espada Longa', tipo: 'arma', danoBase: 7, bonus: { forca: 2 } },
-    machado_de_guerra: { nome: 'Machado de Guerra', tipo: 'arma', danoBase: 9, bonus: { forca: 3 } },
-    cajado_arcano: { nome: 'Cajado Arcano', tipo: 'arma', danoBase: 3, bonus: { inteligencia: 2 } },
-    orbe_magico: { nome: 'Orbe Mágico', tipo: 'arma', danoBase: 2, bonus: { inteligencia: 3 } },
-    arco_simples: { nome: 'Arco Simples', tipo: 'arma', danoBase: 5, bonus: { destreza: 2 } },
-    arco_longo: { nome: 'Arco Longo', tipo: 'arma', danoBase: 8, bonus: { destreza: 3 } },
-    adaga_dupla: { nome: 'Adaga Dupla', tipo: 'arma', danoBase: 4, bonus: { destreza: 3 } },
-    martelo_sagrado: { nome: 'Martelo Sagrado', tipo: 'arma', danoBase: 6, bonus: { inteligencia: 1, resistencia: 1 } },
-    adaga_ritual: { nome: 'Adaga Ritual', tipo: 'arma', danoBase: 5, bonus: { reflexos: 2 } },
-    lanca_sagrada: { nome: 'Lança Sagrada', tipo: 'arma', danoBase: 8, bonus: { forca: 2, resistencia: 1 } },
+    // ── Armas brancas ─────────────────────
+    espada_curta: { nome: 'Espada Curta', tipo: 'arma', danoBase: 4, bonus: { forca: 1 }, socketSlots: 1, alcance: 'corpo', recarga: 0, descricao: 'Lâmina curta e ágil, ideal para combate apertado.' },
+    espada_longa: { nome: 'Espada Longa', tipo: 'arma', danoBase: 7, bonus: { forca: 2 }, socketSlots: 2, alcance: 'corpo', recarga: 0, descricao: 'Versátil e equilibrada, a clássica espada medieval.' },
+    machado_de_guerra: { nome: 'Machado de Guerra', tipo: 'arma', danoBase: 9, bonus: { forca: 3 }, socketSlots: 3, alcance: 'corpo', recarga: 0, descricao: 'Pesado e devastador, machados cortam armaduras com facilidade.' },
+    adaga_dupla: { nome: 'Adaga Dupla', tipo: 'arma', danoBase: 4, bonus: { destreza: 3 }, socketSlots: 1, alcance: 'corpo', recarga: 0, descricao: 'Lâminas gêmeas para o assassino implacável.' },
+    martelo_sagrado: { nome: 'Martelo Sagrado', tipo: 'arma', danoBase: 6, bonus: { inteligencia: 1, resistencia: 1 }, socketSlots: 3, alcance: 'corpo', recarga: 0, descricao: 'Arma de clérigos, esmaga com fé inabalável.' },
+    adaga_ritual: { nome: 'Adaga Ritual', tipo: 'arma', danoBase: 5, bonus: { reflexos: 2 }, socketSlots: 1, alcance: 'corpo', recarga: 0, descricao: 'Usada em rituais, corta com precisão sobrenatural.' },
+
+    // ── Armas de longo alcance ─────────────
+    arco_simples: { nome: 'Arco Simples', tipo: 'arma', danoBase: 5, bonus: { destreza: 2 }, socketSlots: 2, alcance: 'longo', recarga: 0, descricao: 'Confiável e silencioso, perfeito para emboscadas.' },
+    arco_longo: { nome: 'Arco Longo', tipo: 'arma', danoBase: 8, bonus: { destreza: 3 }, socketSlots: 2, alcance: 'longo', recarga: 0, descricao: 'Alcance superior, letal à distância.' },
+    lanca_sagrada: { nome: 'Lança Sagrada', tipo: 'arma', danoBase: 8, bonus: { forca: 2, resistencia: 1 }, socketSlots: 2, alcance: 'medio', recarga: 0, descricao: 'Reach advantage — perfura inimigos antes que cheguem perto.' },
+
+    // ── Magias canalizadas ─────────────────
+    cajado_arcano: { nome: 'Cajado Arcano', tipo: 'arma', danoBase: 3, bonus: { inteligencia: 2 }, socketSlots: 2, alcance: 'longo', recarga: 0, descricao: 'Canaliza energia arcanosa através de um cristal precioso.' },
+    orbe_magico: { nome: 'Orbe Mágico', tipo: 'arma', danoBase: 2, bonus: { inteligencia: 3 }, socketSlots: 1, alcance: 'longo', recarga: 0, descricao: 'Esfera flutuante que amplifica magia pura.' },
+
+    // ── Armas de fogo ──────────────────────
+    pistola: { nome: 'Pistola', tipo: 'arma_fogo', elemento: 'fogo', danoBase: 6, bonus: { destreza: 1 }, socketSlots: 1, alcance: 'longo', recarga: 1, descricao: 'Rápida e letal, mas imprecisa à distância.' },
+    mosquete: { nome: 'Mosquete', tipo: 'arma_fogo', elemento: 'fogo', danoBase: 8, bonus: { forca: 1 }, socketSlots: 2, alcance: 'longo', recarga: 2, descricao: 'O ye olde clássico — lenta mas devastadora.' },
+    bacamarte: { nome: 'Bacamarte', tipo: 'arma_fogo', elemento: 'fogo', danoBase: 7, bonus: { forca: 1 }, socketSlots: 1, alcance: 'medio', recarga: 2, descricao: 'Dispara chumbos em cone, eficaz contra grupos.' },
+    rifle_de_caca: { nome: 'Rifle de Caça', tipo: 'arma_fogo', elemento: 'fogo', danoBase: 9, bonus: { destreza: 2 }, socketSlots: 2, alcance: 'longo', recarga: 2, descricao: 'Precisão cirúrgica, cara e rara.' },
+    besta_pesada: { nome: 'Besta Pesada', tipo: 'arma_fogo', elemento: 'fogo', danoBase: 7, bonus: { forca: 1 }, socketSlots: 2, alcance: 'longo', recarga: 1, descricao: 'Mais lenta que arco mas ignora parcialmente defesa.' },
+    espada_baioneta: { nome: 'Espada Baioneta', tipo: 'arma_fogo', elemento: 'fogo', danoBase: 5, bonus: { forca: 1, destreza: 1 }, socketSlots: 1, alcance: 'corpo', recarga: 0, descricao: 'Mosquete com baioneta — funciona como lança em combate corpo a corpo.' },
+    cajado_de_fogo: { nome: 'Cajado de Fogo', tipo: 'arma_fogo', elemento: 'fogo', danoBase: 4, bonus: { inteligencia: 2 }, socketSlots: 2, alcance: 'longo', recarga: 1, descricao: 'Cajado arcano que dispara projéteis de fogo incandescentes.' },
+    arco_composto: { nome: 'Arco Composto', tipo: 'arma_fogo', elemento: 'fogo', danoBase: 7, bonus: { destreza: 2 }, socketSlots: 2, alcance: 'longo', recarga: 0, descricao: 'Arco reforçado com lâmina — multiclasse de precisão.' },
   },
   armaduras: {
-    roupa_de_aventureiro: { nome: 'Roupa de Aventureiro', tipo: 'armadura', defesa: 2 },
-    couro: { nome: 'Armadura de Couro', tipo: 'armadura', defesa: 4 },
-    cota_de_malha: { nome: 'Cota de Malha', tipo: 'armadura', defesa: 6, penalidade: { reflexos: -1 } },
-    armadura_de_placas: { nome: 'Armadura de Placas', tipo: 'armadura', defesa: 9, penalidade: { reflexos: -1, destreza: -1 } },
-    manto_arcano: { nome: 'Manto Arcano', tipo: 'armadura', defesa: 3, bonus: { inteligencia: 1 } },
-    vestes_sagradas: { nome: 'Vestes Sagradas', tipo: 'armadura', defesa: 3, bonus: { inteligencia: 1 } },
-    armadura_leve: { nome: 'Armadura Leve', tipo: 'armadura', defesa: 5, bonus: { reflexos: 1 } },
+    roupa_de_aventureiro: { nome: 'Roupa de Aventureiro', tipo: 'armadura', defesa: 2, socketSlots: 1, descricao: 'Proteção básica, leve e flexível.' },
+    couro: { nome: 'Armadura de Couro', tipo: 'armadura', defesa: 4, socketSlots: 2, descricao: 'Boa proteção sem sacrificar mobilidade.' },
+    cota_de_malha: { nome: 'Cota de Malha', tipo: 'armadura', defesa: 6, socketSlots: 3, penalidade: { reflexos: -1 }, descricao: 'Malha de anéis entrelaços — robusta e confiável.' },
+    armadura_de_placas: { nome: 'Armadura de Placas', tipo: 'armadura', defesa: 9, socketSlots: 4, penalidade: { reflexos: -1, destreza: -1 }, descricao: 'Fortaleza ambulante — pesada mas praticamente impenetrável.' },
+    manto_arcano: { nome: 'Manto Arcano', tipo: 'armadura', defesa: 3, socketSlots: 2, bonus: { inteligencia: 1 }, descricao: 'Tecido encantado que canaliza mana e protege o conjurador.' },
+    vestes_sagradas: { nome: 'Vestes Sagradas', tipo: 'armadura', defesa: 3, socketSlots: 2, bonus: { inteligencia: 1 }, descricao: 'Roupas rituais imbuídas de fé divina.' },
+    armadura_leve: { nome: 'Armadura Leve', tipo: 'armadura', defesa: 5, socketSlots: 2, bonus: { reflexos: 1 }, descricao: 'Proteção reforçada com mobilidade.' },
   },
 };
 
@@ -210,6 +262,7 @@ export function applyRaceBonus(raceId, attributes) {
 }
 
 // Soma dos bônus de atributos das gemas socketadas (ignora gemas brutas).
+// Cada gema aplica efeitos conforme o slot do equipamento (arma/armadura/acessorio).
 export function gemsAttrs(equipment = {}, gems = GEMS) {
   const acc = {};
   for (const [slot, item] of Object.entries(equipment)) {
@@ -258,17 +311,19 @@ export function effectiveAttributes(attributes, equipment = {}, races = null, cl
   return eff;
 }
 
-// Formula de vida/mana com classe primária:
-// Vida = Resistência x 10 + hpPerLevel(primária) x (nível - 1)
-// Mana = Inteligência x 10 + mpPerLevel(primária) x (nível - 1)
+// Fórmulas de vida e mana (regra CONFIRMADA pelo criador):
+//   Vida = Resistência × 10 + hpPerLevel(primária) × (nível - 1)
+//   Mana = INT × 2 + BR + BC + outros modificadores
+// A fórmula de Mana não tem termo de nível: como os atributos evoluem
+// automaticamente a cada nível, o crescimento vem da própria INT.
 export function deriveStats(classes, level, attributes, equipment = {}, races = null) {
   const eff = effectiveAttributes(attributes, equipment, races, classes);
   const list = Array.isArray(classes) ? classes : classes ? [classes] : [];
   const primary = list.find((c) => c.primary) || list[0] || null;
   const hpPerLevel = primary?.hpPerLevel || 10;
-  const mpPerLevel = primary?.mpPerLevel || 5;
   const hpMax = eff.resistencia * 10 + Math.max(0, (level || 1) - 1) * hpPerLevel;
-  const mpMax = eff.inteligencia * 10 + Math.max(0, (level || 1) - 1) * mpPerLevel;
+  const intBase = Number(attributes?.inteligencia) || 0;
+  const mpMax = manaMaxFrom(intBase, eff.inteligencia);
 
   let defesa = 0;
   for (const item of Object.values(equipment)) {
@@ -278,9 +333,10 @@ export function deriveStats(classes, level, attributes, equipment = {}, races = 
   return { hpMax, mpMax, defesa, effectiveAttributes: eff };
 }
 
-// Velocidade define a ordem dos turnos
+// Ordem de iniciativa: Reflexos pesa mais (reação), Destreza e Resistência
+// também entram. Ver PESOS_ATRIBUTOS.iniciativa em sistema.js.
 export function speedOf(attributes, level) {
-  return attributes.reflexos * 2 + attributes.destreza + level;
+  return iniciativaDe(attributes, level);
 }
 
 // Rolagem de d20 para acerto
@@ -344,4 +400,28 @@ export function efeitosDeHabilidades(habilidades) {
     }
   }
   return out;
+}
+
+// ── Helpers para o Arsenal / Compendium ─────────────────
+
+export const WEAPON_CATEGORIES = {
+  branca: { nome: 'Armas Brancas', icon: '⚔️', filter: (w) => w.tipo === 'arma' && ['corpo', 'medio'].includes(w.alcance || 'corpo') },
+  fogo:   { nome: 'Armas de Fogo', icon: '🔫', filter: (w) => w.tipo === 'arma_fogo' },
+  magica: { nome: 'Armas Mágicas', icon: '✨', filter: (w) => w.tipo === 'arma' && w.alcance === 'longo' && (w.bonus?.inteligencia || 0) >= 2 },
+};
+
+export function getWeaponsByCategory(categoryKey) {
+  const cat = WEAPON_CATEGORIES[categoryKey];
+  if (!cat) return [];
+  return Object.entries(EQUIPMENT.armas)
+    .filter(([, w]) => cat.filter(w))
+    .map(([id, w]) => ({ id, ...w }));
+}
+
+export function getAllWeapons() {
+  return Object.entries(EQUIPMENT.armas).map(([id, w]) => ({ id, ...w }));
+}
+
+export function getAllArmors() {
+  return Object.entries(EQUIPMENT.armaduras).map(([id, a]) => ({ id, ...a }));
 }

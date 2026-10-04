@@ -11,6 +11,7 @@ const Rules = lazy(() => import('./pages/Rules.jsx'));
 const TableBattle = lazy(() => import('./pages/TableBattle.jsx'));
 const GemForge = lazy(() => import('./pages/GemForge.jsx'));
 const ToolShop = lazy(() => import('./pages/ToolShop.jsx'));
+const Dungeons = lazy(() => import('./pages/Dungeons.jsx'));
 
 export default function App() {
   const [view, setView] = useState('home');
@@ -20,6 +21,8 @@ export default function App() {
   const [gameData, setGameData] = useState(null);
   const [gameDataError, setGameDataError] = useState(false);
   const [battleId, setBattleId] = useState(null);
+  // De onde a batalha veio: 'lobby' ou 'dungeons' (define para onde o "Sair" volta).
+  const [battleOrigin, setBattleOrigin] = useState('lobby');
   const [offlineMode, setOfflineMode] = useState(isOffline());
   const [walletCents, setWalletCents] = useState(0);
 
@@ -151,6 +154,7 @@ export default function App() {
         onOpenGemForge={() => setView('gemForge')}
         onOpenToolShop={abrirToolShop}
         onOpenTableBattle={() => setView('tableBattle')}
+        onOpenDungeons={() => setView('dungeons')}
         onLogout={handleLogout}
       />
     );
@@ -203,6 +207,21 @@ export default function App() {
     </Suspense>;
   }
 
+  if (view === 'dungeons') {
+    return <Suspense fallback={<div className="loading">Abrindo as dungeons...</div>}>
+      <Dungeons
+        player={player}
+        characters={characters}
+        onBack={() => setView('characters')}
+        onOpenBattle={(id) => {
+          setBattleId(id);
+          setBattleOrigin('dungeons');
+          setView('battle');
+        }}
+      />
+    </Suspense>;
+  }
+
   if (view === 'lobby') {
     return <Suspense fallback={<div className="loading">Carregando...</div>}>
       <Lobby
@@ -211,7 +230,10 @@ export default function App() {
         gameData={gameData}
         onBack={() => setView('characters')}
         onOpenBattle={(id) => setBattleId(id)}
-        onEnterBattle={() => setView('battle')}
+        onEnterBattle={() => {
+          setBattleOrigin('lobby');
+          setView('battle');
+        }}
       />
     </Suspense>;
   }
@@ -222,7 +244,7 @@ export default function App() {
       player={player}
       gameData={gameData}
       onExit={() => {
-        setView('lobby');
+        setView(battleOrigin);
         setBattleId(null);
       }}
       onBackToSheets={() => setView('characters')}
