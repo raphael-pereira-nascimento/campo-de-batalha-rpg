@@ -121,7 +121,7 @@ describe('buildCharacterData — ficha livre', () => {
     });
     expect(data.races.length).toBe(2);
     // res: 7 + round(2*0.7)=1 + mago(+1) = 9
-    expect(data.hp_max).toBe(90);
+    expect(data.hp_max).toBe(590);
   });
 
   it('aceita 3 raças com penalidade de 55%', () => {
@@ -133,7 +133,7 @@ describe('buildCharacterData — ficha livre', () => {
     });
     expect(data.races.length).toBe(3);
     // res: 7 + round(3*0.55)=2 + mago(+1) = 10
-    expect(data.hp_max).toBe(100);
+    expect(data.hp_max).toBe(600);
   });
 
   it('rejeita 4 raças', () => {
@@ -157,7 +157,7 @@ describe('buildCharacterData — ficha livre', () => {
     expect(data.classes[0].primary).toBe(true);
     expect(data.class).toBe('guerreiro');
     // res: 8 + guerreiro(2) + mago(1) = 11
-    expect(data.hp_max).toBe(110);
+    expect(data.hp_max).toBe(610);
     // Mana = INT x 2 + BR + BC => (4 x 2) + 3 (BC do mago) = 11
     expect(data.mp_max).toBe(11);
   });

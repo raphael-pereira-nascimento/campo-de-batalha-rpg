@@ -111,7 +111,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
 
   const stats = useMemo(() => {
     const eff = effFor(attrs, races, classes, equipment);
-    const hpMax = eff.resistencia * 10;
+    const hpMax = 500 + eff.resistencia * 10;
     // Regra confirmada: Mana = INT × 2 + BR + BC (não cresce por nível).
     const mpMax = manaMaxFrom(attrs.inteligencia, eff.inteligencia);
     return { hpMax, mpMax, eff };

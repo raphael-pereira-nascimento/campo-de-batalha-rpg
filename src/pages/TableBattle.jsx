@@ -23,7 +23,7 @@ const uid = () => `tb_${_nextId++}`;
 
 function makeFighter(name, team, attrs = {}) {
   const a = { forca: 5, inteligencia: 5, resistencia: 5, destreza: 5, reflexos: 5, ...attrs };
-  const hpMax = 20 + (a.resistencia || 5) * 3;
+  const hpMax = 500 + (a.resistencia || 5) * 10;
   const mpMax = 10 + (a.inteligencia || 5) * 2;
   return {
     id: uid(), name, team,

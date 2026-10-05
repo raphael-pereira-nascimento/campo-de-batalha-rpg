@@ -300,7 +300,7 @@ describe('BattleManager — fluxo completo de ultimate/especial', () => {
 
     manager.addMonster({ battleId: battle.id, hostId: 'p1', monsterDef: makeMonsterDef() });
     const boss = battle.participants.find((q) => q.isMonster);
-    expect(boss.hpMax).toBe(600); // 100 (HP do herói) x 6
+    expect(boss.hpMax).toBe(hero.hpMax * 6); // Chefe escala com HP total do grupo (herói × 6)
 
     manager.startBattle({ battleId: battle.id, playerId: 'p1' });
     expect(battle.status).toBe('in_progress');

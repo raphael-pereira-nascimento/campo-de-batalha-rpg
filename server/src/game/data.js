@@ -312,7 +312,7 @@ export function effectiveAttributes(attributes, equipment = {}, races = null, cl
 }
 
 // Fórmulas de vida e mana (regra CONFIRMADA pelo criador):
-//   Vida = Resistência × 10 + hpPerLevel(primária) × (nível - 1)
+//   Vida = 500 + (Resistência Final × 10)
 //   Mana = INT × 2 + BR + BC + outros modificadores
 // A fórmula de Mana não tem termo de nível: como os atributos evoluem
 // automaticamente a cada nível, o crescimento vem da própria INT.
@@ -321,7 +321,8 @@ export function deriveStats(classes, level, attributes, equipment = {}, races = 
   const list = Array.isArray(classes) ? classes : classes ? [classes] : [];
   const primary = list.find((c) => c.primary) || list[0] || null;
   const hpPerLevel = primary?.hpPerLevel || 10;
-  const hpMax = eff.resistencia * 10 + Math.max(0, (level || 1) - 1) * hpPerLevel;
+  // Nova regra: Vida = 500 + (Resistência Final × 10)
+  const hpMax = 500 + eff.resistencia * 10;
   const intBase = Number(attributes?.inteligencia) || 0;
   const mpMax = manaMaxFrom(intBase, eff.inteligencia);
 

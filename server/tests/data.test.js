@@ -82,11 +82,11 @@ describe('deriveStats — vida/mana pela classe primária', () => {
   ];
   const attrs = { forca: 5, inteligencia: 3, resistencia: 4, destreza: 3, reflexos: 3 };
 
-  it('Vida = Resistência x10 + hpPerLevel(primária) x (nível-1)', () => {
+  it('Vida = 500 + Resistência x10', () => {
     const lvl1 = deriveStats(classes, 1, attrs);
-    expect(lvl1.hpMax).toBe(60); // (4 + 2) x 10
+    expect(lvl1.hpMax).toBe(500 + 60); // (4 + 2) x 10 = 60
     const lvl5 = deriveStats(classes, 5, attrs);
-    expect(lvl5.hpMax).toBe(60 + 12 * 4);
+    expect(lvl5.hpMax).toBe(500 + 60);
   });
 
   // Regra confirmada pelo criador: Mana = INT x 2 + BR + BC + outros.

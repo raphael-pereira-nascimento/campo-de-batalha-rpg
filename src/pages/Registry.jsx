@@ -360,7 +360,7 @@ function MonsterRegistry({ player, monsters, gameData, onChanged, setError }) {
             ))}
           </div>
           <p className="muted small">
-            Vida = Resistência × 10 · Mana = Inteligência × 2. Chefes ganham mais ações conforme o nº de jogadores.
+            Vida = 500 + Resistência × 10 · Mana = Inteligência × 2. Chefes ganham mais ações conforme o nº de jogadores.
           </p>
           <button type="submit">Criar Monstro</button>
         </form>
