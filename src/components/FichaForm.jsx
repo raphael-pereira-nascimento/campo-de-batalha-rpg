@@ -638,8 +638,7 @@ function ClassesStep({ gameData, customClasses, classes, onAdd, onRemove, onPrim
             </label>
           </div>
           <p className="muted small">
-            A Mana máxima vem da Inteligência: <strong>INT × 10 (Inteligência Final)</strong>. A Inteligência Final
-            inclui bônus de raça, classe e equipamentos.
+            A Mana máxima = (Inteligência Final) × 10. O Atributo Final inclui bônus de raça, classe e equipamentos.
           </p>
           <label>
             Arquétipo (golpes base da classe)

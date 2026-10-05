@@ -64,8 +64,8 @@ const SECTIONS = [
     conteudo: (
       <>
         <p>Mana é o recurso fundamental para magia e habilidades mágicas. INT influencia diretamente a Mana máxima.</p>
-        <p><strong>Versão atual do sistema:</strong> INT × 2 + BR + BC = Mana máxima.</p>
-        <p>Exemplo: 60 INT × 2 = 120, +10 BR, +20 BC = <strong>150 Mana</strong>.</p>
+        <p><strong>Versão atual do sistema:</strong> Vida = 500 + (Resistência Final × 10) · Mana = (Inteligência Final × 10).</p>
+        <p>O Atributo Final já inclui BR + BC + outros modificadores (raça, classe, equipamentos, gemas e efeitos).</p>
       </>
     ),
   },
