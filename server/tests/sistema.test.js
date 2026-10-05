@@ -20,25 +20,25 @@ import {
   XP_MINIMO_PARTICIPACAO,
 } from '../src/game/sistema.js';
 
-describe('Mana — fórmula confirmada (INT x 2 + BR + BC)', () => {
+describe('Mana — fórmula confirmada ((INT Final) × 10)', () => {
   it('mantém o multiplicador e o divisor em um único lugar', () => {
-    expect(MANA_MULT_INT).toBe(2);
+    expect(MANA_MULT_INT).toBe(10);
     expect(MANA_RECOVERY_DIVISOR).toBe(2);
   });
 
   it('sem bônus: INT x 2', () => {
-    expect(manaMaxFrom(10, 10)).toBe(20);
+    expect(manaMaxFrom(10, 10)).toBe(100);
     expect(manaMaxFrom(0, 0)).toBe(0);
-    expect(manaMaxFrom(1, 1)).toBe(2);
+    expect(manaMaxFrom(1, 1)).toBe(10);
   });
 
   it('soma os bônus (BR + BC) uma vez só', () => {
-    // 60 INT x 2 + 10 BR + 20 BC = 150 (exemplo do criador)
-    expect(manaMaxFrom(60, 90)).toBe(150);
+    // 90 INT final × 10 = 900 (exemplo)
+    expect(manaMaxFrom(60, 90)).toBe(900);
   });
 
   it('aceita outros modificadores (gemas, habilidades, itens)', () => {
-    expect(manaMaxFrom(10, 13, 5)).toBe(28);
+    expect(manaMaxFrom(10, 13, 5)).toBe((13+5)*10);
   });
 });
 

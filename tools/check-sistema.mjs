@@ -9,8 +9,8 @@ import { montarEncontro, DUNGEONS } from '../server/src/game/dungeons.js';
 const log = (...a) => console.log(...a);
 
 log('── Mana ──');
-log('INT 10, +0 bônus  =>', manaMaxFrom(10, 10), '(esperado 20)');
-log('INT 10, +6 bônus  =>', manaMaxFrom(10, 16), '(esperado 26 = 2x10 + 6)');
+log('INT 10, +0 bônus  =>', manaMaxFrom(10, 10), '(esperado 100)');
+log('INT 10, +6 bônus  =>', manaMaxFrom(10, 16), '(esperado 160)');
 log('recuperação 5/10/15/20/30 =>', [5, 10, 15, 20, 30].map(manaRecuperada).join(', '), '(esperado 3,5,8,10,15)');
 
 log('\n── Eclipse ──');

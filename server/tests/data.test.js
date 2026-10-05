@@ -89,24 +89,13 @@ describe('deriveStats — vida/mana pela classe primária', () => {
     expect(lvl5.hpMax).toBe(500 + 60);
   });
 
-  // Regra confirmada pelo criador: Mana = INT x 2 + BR + BC + outros.
-  // Não existe termo de nível: o crescimento vem da própria INT (a cada
-  // nível o atributo `levelUp` da classe primária sobe +1).
-  it('Mana = INT x 2 + bônus de Resistência e Destreza (sem termo de nível)', () => {
+  // Regra confirmada pelo criador: Mana = (Inteligência Final) × 10
+  // Não existe termo de nível.
+  it('Mana = (Inteligência Final) × 10', () => {
     const magoPrimary = classes.map((c) => ({ ...c, primary: c.id === 'mago' }));
     const lvl1 = deriveStats(magoPrimary, 1, attrs);
-    expect(lvl1.mpMax).toBe(9); // (3 x 2) + 2 (BR) + 1 (BC) = 9
-    const lvl5 = deriveStats(magoPrimary, 5, attrs);
-    expect(lvl5.mpMax).toBe(9); // nível não entra na conta
-  });
-
-  it('Mana dobra a INT base e soma os bônus uma vez só', () => {
-    // ATTRS aqui: forca 5, inteligencia 10, resistencia 4, destreza 3, reflexos 3.
-    //classes = [guerreiro (sem INT), mago (+3 de INT)]
-    const comInteligencia = deriveStats(classes, 1, { ...attrs, inteligencia: 10 });
-    expect(comInteligencia.mpMax).toBe(23); // (10 x 2) + 3 de bônus de classe
-    const semBônus = deriveStats([], 1, { ...attrs, inteligencia: 10 });
-    expect(semBônus.mpMax).toBe(20); // 10 x 2
+    const intFinal = 3 + 3; // base 3 + mago 3
+    expect(lvl1.mpMax).toBe(intFinal * 10);
   });
 
   it('defesa soma o defesa dos equipamentos', () => {

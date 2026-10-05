@@ -211,7 +211,7 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
       <StatBar label="HP" value={character.hp_current} max={hpMax} color="#e63946" />
       <StatBar label="MP" value={character.mp_current} max={mpMax} color="#4a90e2" />
       <p className="muted small">
-        Mana = INT × 2 + BR + BC = {character.attributes?.inteligencia} × 2 + bônus = <strong>{mpMax}</strong>
+        Mana = (INT final) × 10 = {character.attributes?.inteligencia} → <strong>{mpMax}</strong>
         {mpMax !== character.mp_max && character.mp_max ? ` (ficha salva com ${character.mp_max})` : ''}
         {' · '}HP = 500 + (RES final × 10) · <strong>{hpMax}</strong>
         {' · '}Carga máxima: <strong>{cargaMax}</strong>

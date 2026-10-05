@@ -128,11 +128,11 @@ describe('Dungeons — montagem do encontro', () => {
 });
 
 describe('Bestiário — Mana pela mesma fórmula dos jogadores', () => {
-  it('Mana do monstro = INT x 2', () => {
+  it('Mana do monstro = INT x 10', () => {
     const goblin = buildMonster(MONSTERS.goblin);
-    expect(goblin.mpMax).toBe(MONSTERS.goblin.attributes.inteligencia * 2);
+    expect(goblin.mpMax).toBe(MONSTERS.goblin.attributes.inteligencia * 10);
     const golem = buildMonster(MONSTERS.golem_pedra);
-    expect(golem.mpMax).toBe(MONSTERS.golem_pedra.attributes.inteligencia * 2);
+    expect(golem.mpMax).toBe(MONSTERS.golem_pedra.attributes.inteligencia * 10);
   });
 
   it('monstros voladores já entram no ar com o alcance vertical definido', () => {

@@ -624,7 +624,7 @@ function ClassesStep({ gameData, customClasses, classes, onAdd, onRemove, onPrim
               Vida por nível
               <input type="number" min={1} max={30} value={form.hpPerLevel} onChange={(e) => setForm((f) => ({ ...f, hpPerLevel: Number(e.target.value) }))} />
             </label>
-            <label title="A Mana não cresce por nível: Mana = INT × 2 + BR + BC. Este campo está guardado por compatibilidade e não altera a Mana máxima.">
+            <label title="A Mana não cresce por nível: Mana = (Inteligência Final) × 10. Este campo está guardado por compatibilidade e não altera a Mana máxima.">
               Mana por nível (obsoleto)
               <input type="number" min={1} max={30} value={form.mpPerLevel} disabled onChange={(e) => setForm((f) => ({ ...f, mpPerLevel: Number(e.target.value) }))} />
             </label>
@@ -638,8 +638,8 @@ function ClassesStep({ gameData, customClasses, classes, onAdd, onRemove, onPrim
             </label>
           </div>
           <p className="muted small">
-            A Mana máxima vem da Inteligência: <strong>INT × 2 + BR + BC</strong>. Nível só importa porque cada
-            up da classe primária soma +1 de Inteligência.
+            A Mana máxima vem da Inteligência: <strong>INT × 10 (Inteligência Final)</strong>. A Inteligência Final
+            inclui bônus de raça, classe e equipamentos.
           </p>
           <label>
             Arquétipo (golpes base da classe)

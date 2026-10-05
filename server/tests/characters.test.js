@@ -159,7 +159,7 @@ describe('buildCharacterData — ficha livre', () => {
     // res: 8 + guerreiro(2) + mago(1) = 11
     expect(data.hp_max).toBe(610);
     // Mana = INT x 2 + BR + BC => (4 x 2) + 3 (BC do mago) = 11
-    expect(data.mp_max).toBe(11);
+    expect(data.mp_max).toBe(70);
   });
 
   it('junta os golpes das duas classes', () => {

@@ -226,7 +226,7 @@ export function defFromCustomMonster(row) {
 // `playerHpSum` só é usado para chefes: vida = soma do HP dos jogadores x multiplicador.
 export function buildMonster(def, playerHpSum = 0) {
   const hpPorUnidade = Math.round(def.attributes.resistencia * 10);
-  // Monstros não têm bônus separados de atributo: usa a mesma regra (INT × 2).
+  // Monstros não têm bônus separados de atributo: usa INT × 10
   const mpMax = manaMaxFrom(def.attributes.inteligencia, def.attributes.inteligencia);
   let hp = hpPorUnidade;
   if (def.escalaChefe) {

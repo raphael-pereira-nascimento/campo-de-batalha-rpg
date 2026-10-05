@@ -9,24 +9,18 @@
 
 /* ═══════════════════════════════════════════════════════════════════════════
    1. MANA — CONFIRMADA
-   Regra: "INT × 2 + BR + BC = Mana máxima".
-   Como `effectiveAttributes` já devolve INT_final = INT_base + BR + BC + outros,
-   a fórmula do criador equivale a:  2 × INT_base + (INT_final - INT_base)
-   que é exatamente  INT_base + INT_final.
+   Regra: Mana = (Inteligência Final) × 10
+   A Inteligência Final inclui base + BR + BC + outros modificadores.
    ═══════════════════════════════════════════════════════════════════════════ */
-export const MANA_MULT_INT = 2;
+export const MANA_MULT_INT = 10;
 
 /**
- * Mana máxima = INT × 2 + BR + BC + outros modificadores.
- * Como `effectiveAttributes` já devolve INT_final = INT_base + BR + BC + outros,
- * a fórmula do criador equivale a  2 × INT_base + (INT_final - INT_base).
- * `outros` cobre modificadores que ainda não entraram em INT_final (habilidades,
- * efeitos temporários de batalha, itens), evitando contá-los duas vezes.
+ * Mana máxima = (Inteligência Final) × 10.
  */
 export function manaMaxFrom(intBase, intFinal, outros = 0) {
-  const base = Number(intBase) || 0;
   const final = Number(intFinal) || 0;
-  return Math.max(0, Math.round(base * MANA_MULT_INT + (final - base) + (Number(outros) || 0)));
+  const extra = Number(outros) || 0;
+  return Math.max(0, Math.round((final + extra) * MANA_MULT_INT));
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
