@@ -13,6 +13,10 @@ import {
   foraDoAlcanceVertical,
   ALCANCE_VERTICAL,
   ALTITUDES,
+  DANO_MULT,
+  danoBaseDaArma,
+  danoFisicoAtaque,
+  danoMagico,
 } from './sistema.js';
 
 export {
@@ -93,18 +97,18 @@ export const CLASSES = {
 export const ELEMENTOS = ['fisico', 'fogo', 'agua', 'terra', 'ar', 'luz', 'trevas'];
 
 export const SPELLS = {
-  golpe_sangrento: { nome: 'Golpe Sangrento', tipo: 'ataque', custo: 5, poder: 2.0, desc: 'Ataque físico brutal com força aumentada.', status: { tipo: 'sangramento', turnos: 2, dano: 6 }, alcanceVertical: 'terrestre' },
+  golpe_sangrento: { nome: 'Golpe Sangrento', tipo: 'ataque', custo: 5, poder: 2.0, desc: 'Ataque físico brutal com força aumentada.', status: { tipo: 'sangramento', turnos: 2, dano: 60 }, alcanceVertical: 'terrestre' },
   grito_de_guerra: { nome: 'Grito de Guerra', tipo: 'buff', custo: 6, poder: 0.15, desc: 'Aumenta o dano físico de todos os aliados.' },
   muralha: { nome: 'Muralha', tipo: 'defesa', custo: 6, poder: 0.25, desc: 'Reduz o dano recebido nesta rodada.' },
 
-  bola_de_fogo: { nome: 'Bola de Fogo', tipo: 'ataque', custo: 8, poder: 2.4, desc: 'Explosão de fogo devastadora.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3, dano: 5 } },
+  bola_de_fogo: { nome: 'Bola de Fogo', tipo: 'ataque', custo: 8, poder: 2.4, desc: 'Explosão de fogo devastadora.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3, dano: 50 } },
   raio: { nome: 'Raio', tipo: 'ataque', custo: 6, poder: 1.8, desc: 'Descarga elétrica precisa.', elemento: 'ar' },
   gelo: { nome: 'Gelo', tipo: 'ataque', custo: 7, poder: 1.6, desc: 'Congela o alvo e reduz a velocidade dele.', elemento: 'agua', status: { tipo: 'congelamento', turnos: 2 }, alcanceVertical: 'limitado' },
   escudo_arcano: { nome: 'Escudo Arcano', tipo: 'defesa', custo: 7, poder: 0.3, desc: 'Barreira mágica que absorve dano.' },
 
   tiro_preciso: { nome: 'Tiro Preciso', tipo: 'ataque', custo: 4, poder: 1.5, desc: 'Dano crítico elevado.', elemento: 'fisico', alcanceVertical: 'longo' },
   chuva_de_flechas: { nome: 'Chuva de Flechas', tipo: 'ataque', custo: 9, poder: 2.2, desc: 'Acerta todos os inimigos.', elemento: 'fisico' },
-  flecha_ardente: { nome: 'Flecha Ardente', tipo: 'ataque', custo: 6, poder: 1.9, desc: 'Flecha em chamas que causa queimadura.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3, dano: 6 }, alcanceVertical: 'longo' },
+  flecha_ardente: { nome: 'Flecha Ardente', tipo: 'ataque', custo: 6, poder: 1.9, desc: 'Flecha em chamas que causa queimadura.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3, dano: 60 }, alcanceVertical: 'longo' },
 
   cura: { nome: 'Cura', tipo: 'cura', custo: 6, poder: 2.0, desc: 'Restaura HP com base na inteligência.', elemento: 'luz' },
   cura_massa: { nome: 'Cura em Massa', tipo: 'cura', custo: 12, poder: 1.2, desc: 'Cura todos os aliados vivos.', elemento: 'luz' },
@@ -112,7 +116,7 @@ export const SPELLS = {
   benção: { nome: 'Benção', tipo: 'buff', custo: 5, poder: 0.1, desc: 'Aumenta o dano mágico dos aliados.', elemento: 'luz' },
 
   golpe_preciso: { nome: 'Golpe Preciso', tipo: 'ataque', custo: 5, poder: 1.6, desc: 'Ataque certeiro que tem alta chance de crítico.', elemento: 'fisico', alcanceVertical: 'terrestre' },
-  veneno: { nome: 'Veneno', tipo: 'ataque', custo: 6, poder: 1.4, desc: 'Envenena o alvo, causando dano contínuo.', elemento: 'trevas', status: { tipo: 'veneno', turnos: 3, dano: 4 } },
+  veneno: { nome: 'Veneno', tipo: 'ataque', custo: 6, poder: 1.4, desc: 'Envenena o alvo, causando dano contínuo.', elemento: 'trevas', status: { tipo: 'veneno', turnos: 3, dano: 40 } },
   sombra: { nome: 'Sombra', tipo: 'defesa', custo: 5, poder: 0.3, desc: 'Desaparece nas sombras, reduzindo muito o dano recebido.' },
 
   golpe_sagrado: { nome: 'Golpe Sagrado', tipo: 'ataque', custo: 7, poder: 2.0, desc: 'Espada envolta em luz sagrada.', elemento: 'luz', alcanceVertical: 'terrestre' },
@@ -311,9 +315,10 @@ export function effectiveAttributes(attributes, equipment = {}, races = null, cl
   return eff;
 }
 
-// Fórmulas de vida e mana (regra CONFIRMADA pelo criador):
+// Fórmulas de vida, mana e dano (regras do criador — ver sistema.js):
 //   Vida = 500 + (Resistência Final × 10)
-//   Mana = (INT Base × 10) + bônus de raça/classe/ouros
+//   Mana = (Inteligência Final × 10)
+//   Dano = (Força Final + danoBase da arma) × 10   [PROVISÓRIO]
 export function deriveStats(classes, level, attributes, equipment = {}, races = null) {
   const eff = effectiveAttributes(attributes, equipment, races, classes);
   const list = Array.isArray(classes) ? classes : classes ? [classes] : [];
@@ -326,10 +331,14 @@ export function deriveStats(classes, level, attributes, equipment = {}, races = 
 
   let defesa = 0;
   for (const item of Object.values(equipment)) {
-    if (item && item.defesa) defesa += item.defesa;
+    // Defesa na MESMA escala do dano (× DANO_MULT) — ver sistema.js.
+    if (item && item.defesa) defesa += item.defesa * DANO_MULT;
   }
 
-  return { hpMax, mpMax, defesa, effectiveAttributes: eff };
+  // Dano do ataque básico (exibição na ficha) — mesma fórmula do combate.
+  const dano = danoFisicoAtaque(eff.forca, danoBaseDaArma(equipment?.arma));
+
+  return { hpMax, mpMax, defesa, dano, effectiveAttributes: eff };
 }
 
 // Ordem de iniciativa: Reflexos pesa mais (reação), Destreza e Resistência
@@ -357,23 +366,30 @@ export function rollAttack() {
   return { rolls, total, isCrit, isFail };
 }
 
-// Dano físico: dados baseados na arma + Força (recalibrado para HP x10)
+// Dano físico: (FOR Final + danoBase da arma) × 10 — determinístico, igual
+// vida/mana. Atributo Final inclui raça/classe/equipamento/gemas.
+// Fórmula e escala em sistema.js (PROVISÓRIAS); crítico/elementos/buffs
+// continuam sendo aplicados por cima, pelo chamador (racialMult).
 export function physicalDamage(attacker, weapon, racialMult = 1) {
-  const danoBase = weapon ? weapon.danoBase || 4 : 2;
-  const dados = Math.max(1, Math.round(danoBase / 3) + 1);
-  const bonusForca = weapon && weapon.bonus ? weapon.bonus.forca || 0 : 0;
-  const bonus = Math.round(attacker.attributes.forca * 1.5 + bonusForca * 2);
-  const multi = (attacker._buffPhysical || 1) * racialMult;
-  return rollDamage(6, dados, Math.round(bonus * multi));
+  const eff = effectiveAttributes(
+    attacker.attributes,
+    attacker.equipment || {},
+    attacker.races || null,
+    attacker.classes || null,
+  );
+  return { rolls: [], total: danoFisicoAtaque(eff.forca, danoBaseDaArma(weapon), racialMult) };
 }
 
-// Dano mágico: baseado na inteligência e no poder da magia
-export function magicDamage(attacker, spell) {
-  const bonus = Math.round(attacker.attributes.inteligencia * (spell.poder || 1) * 1.4);
-  const multi = attacker._buffMagic || 1;
-  const extra = Math.round(bonus * multi);
-  const qty = Math.max(1, Math.round(spell.poder));
-  return rollDamage(6, qty, extra);
+// Dano mágico: (INT Final × 10) × poder% da magia — sem dados.
+// `spell.poder` é percentual (240 = 240%); mult = buffs do chamador.
+export function magicDamage(attacker, spell, mult = 1) {
+  const eff = effectiveAttributes(
+    attacker.attributes,
+    attacker.equipment || {},
+    attacker.races || null,
+    attacker.classes || null,
+  );
+  return { rolls: [], total: danoMagico(eff.inteligencia, spell?.poder ?? 100, mult) };
 }
 
 export function rollDamage(diceSides, diceQty, bonus) {

@@ -214,6 +214,7 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
         Mana = (INT final) × 10 = <strong>{mpMax}</strong>
         {mpMax !== character.mp_max && character.mp_max ? ` (ficha salva com ${character.mp_max})` : ''}
         {' · '}HP = 500 + (RES final × 10) · <strong>{hpMax}</strong>
+        {' · '}Dano = (FOR final + arma) × 10 · <strong>{derivados.dano}</strong>
         {' · '}Carga máxima: <strong>{cargaMax}</strong>
         {voa && <span> · 🕊️ Voo natural (manter no ar custa foco; voo mágico custa {VOO.manaPorTurno} MP/turno)</span>}
       </p>

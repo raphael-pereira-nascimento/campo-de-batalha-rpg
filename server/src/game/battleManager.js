@@ -6,11 +6,11 @@ import {
   EQUIPMENT,
   STATUS_DEFS,
   deriveStats,
+  effectiveAttributes,
   speedOf,
   rollAttack,
   physicalDamage,
   magicDamage,
-  rollDamage,
   efeitosDeHabilidades,
   MAX_PLAYERS_PER_BATTLE,
 } from './data.js';
@@ -22,6 +22,8 @@ import {
   foraDoAlcanceVertical,
   distribuirXp,
   poolDeXp,
+  danoFisicoGolpe,
+  DANO_COEF_MEGA,
   VOO,
   ALCANCE_VERTICAL,
   ALTITUDES,
@@ -579,6 +581,18 @@ export class BattleManager {
     };
   }
 
+  // Atributo Final do participante (base + raça/classe/equipamento/gemas),
+  // já com o efeito de bêbado. Mesmo conceito da vida/mana — ver
+  // effectiveAttributes em data.js.
+  _finalAttrs(p) {
+    return effectiveAttributes(
+      this._rollAttrs(p),
+      p.equipment || {},
+      p.races || null,
+      p.classes || null,
+    );
+  }
+
   _withDrunk(p) {
     return { ...p, attributes: this._rollAttrs(p) };
   }
@@ -794,18 +808,18 @@ export class BattleManager {
     const reduced = Math.max(0, baseDamage - target.defesa);
     const finalDamage = reduced === 0 ? Math.max(1, Math.round(baseDamage * 0.1)) : reduced;
 
-    // ── Horda: o dano reduz o número de corpos em vez de só encurtar o HP ──
+    // ── Horda: o HP é um pool e os corpos caem conforme o pool cruza os
+    // limites de hpPorUnidade (funciona em qualquer escala de dano/vida) ──
     // O último corpo nunca sai pela contagem: ele morre com dano normal.
     if (target.horda && target.horda.quantidade > 1) {
       const porUnidade = Math.max(1, target.horda.hpPorUnidade);
-      const abatidos = Math.min(
-        target.horda.quantidade - 1,
-        Math.floor(finalDamage / porUnidade),
-      );
+      const hpDepois = clamp(target.hp - finalDamage, 0, target.hpMax);
+      const restantes = Math.max(1, Math.ceil(hpDepois / porUnidade));
+      const abatidos = target.horda.quantidade - restantes;
       if (abatidos > 0) {
-        target.horda.quantidade -= abatidos;
-        target.hpMax = Math.max(1, porUnidade * target.horda.quantidade);
-        target.hp = clamp(target.hp - finalDamage, 0, target.hpMax);
+        target.horda.quantidade = restantes;
+        target.hpMax = Math.max(1, porUnidade * restantes);
+        target.hp = hpDepois;
         target.danoRecebido = (target.danoRecebido || 0) + finalDamage;
         if (source && !source.isMonster) {
           source.contribuicao = source.contribuicao || { dano: 0, cura: 0, acertos: 0, acoes: 0, suporte: 0 };
@@ -971,7 +985,11 @@ export class BattleManager {
       return;
     }
     this._marcarAcerto(p);
-    const dmg = physicalDamage(this._withDrunk(p), weapon, this._physMult(p) * this._especializacaoMult(p, weapon));
+    const dmg = physicalDamage(
+      this._withDrunk(p),
+      weapon,
+      this._physMult(p) * this._especializacaoMult(p, weapon) * (p.buffPhysical || 1),
+    );
     let total = res.crit ? dmg.total * 2 : dmg.total;
     const atkElem = weapon?.elemento || 'fisico';
     const elemM = this._elemMult(atkElem, target);
@@ -979,7 +997,7 @@ export class BattleManager {
     const elemTag = elemM > 1 ? ` ⚡${atkElem} fragiliza!` : elemM < 1 ? ` 🛡${atkElem} resistido!` : '';
     battle.log.push(
       makeLog(
-        `${res.crit ? '✨ CRÍTICO! ' : ''}⚔️ ${p.charName} ataca ${target.charName} com ${weaponName}: dados [${dmg.rolls.join(', ')}] + bônus = ${total} de dano.${elemTag}`,
+        `${res.crit ? '✨ CRÍTICO! ' : ''}⚔️ ${p.charName} ataca ${target.charName} com ${weaponName}: ${total} de dano.${elemTag}`,
         'attack',
       ),
     );
@@ -1077,13 +1095,10 @@ export class BattleManager {
     this._marcarAcerto(p);
     let dmg;
     if (skill.tipo === 'fisico') {
-      const base = Math.round(this._rollAttrs(p).forca * 1.5 * (skill.poder / 100));
-      const qty = Math.max(1, Math.round(skill.poder / 100));
       const mult = this._physMult(p) * (p.buffPhysical || 1);
-      dmg = rollDamage(6, qty, Math.round(base * mult));
+      dmg = { rolls: [], total: danoFisicoGolpe(this._finalAttrs(p).forca, skill.poder, mult) };
     } else {
-      dmg = magicDamage(p, { poder: skill.poder / 100 });
-      dmg.total = Math.round(dmg.total * this._magMult(p));
+      dmg = magicDamage(p, { poder: skill.poder }, this._magMult(p) * (p.buffMagic || 1));
     }
     const total0 = res.crit ? dmg.total * 2 : dmg.total;
     const skElem = skill.elemento || 'fisico';
@@ -1164,13 +1179,10 @@ export class BattleManager {
     this._marcarAcerto(p);
     let dmg;
     if (skill.tipo === 'fisico') {
-      const base = Math.round(this._rollAttrs(p).forca * 2.2 * (skill.poder / 100));
-      const qty = Math.max(1, Math.round(skill.poder / 100));
       const mult = this._physMult(p) * (p.buffPhysical || 1);
-      dmg = rollDamage(6, qty, Math.round(base * mult));
+      dmg = { rolls: [], total: danoFisicoGolpe(this._finalAttrs(p).forca, skill.poder, mult, DANO_COEF_MEGA) };
     } else {
-      dmg = magicDamage(p, { poder: skill.poder / 100 });
-      dmg.total = Math.round(dmg.total * this._magMult(p));
+      dmg = magicDamage(p, { poder: skill.poder }, this._magMult(p) * (p.buffMagic || 1));
     }
     const total0m = res.crit ? dmg.total * 2 : dmg.total;
     const meElem = skill.elemento || 'fisico';

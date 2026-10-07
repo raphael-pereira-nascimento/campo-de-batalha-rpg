@@ -18,7 +18,7 @@ import {
   PASSIVAS_EXTRAS,
 } from '../config.js';
 import { applyGenderToRace } from '../game/races.js';
-import { manaMaxFrom } from '../game/sistema.js';
+import { manaMaxFrom, danoFisicoAtaque, danoBaseDaArma } from '../game/sistema.js';
 
 const STEP_NAMES = [
   'Identidade',
@@ -114,7 +114,9 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
     const hpMax = 500 + eff.resistencia * 10;
     // Regra confirmada: Mana = INT × 2 + BR + BC (não cresce por nível).
     const mpMax = manaMaxFrom(attrs.inteligencia, eff.inteligencia);
-    return { hpMax, mpMax, eff };
+    // Dano do ataque básico = (FOR Final + danoBase da arma) × 10 (provisório).
+    const dano = danoFisicoAtaque(eff.forca, danoBaseDaArma(equipment?.arma));
+    return { hpMax, mpMax, dano, eff };
   }, [attrs, races, classes, equipment]);
 
   const penaltyPct = Math.round((1 - (RACE_PENALTY[races.length] ?? 1)) * 100);
@@ -331,7 +333,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
                   Pontos restantes: {remaining}
                 </span>
                 <span>
-                  Vida máx: <strong>{stats.hpMax}</strong> · Mana máx: <strong>{stats.mpMax}</strong>
+                  Vida máx: <strong>{stats.hpMax}</strong> · Mana máx: <strong>{stats.mpMax}</strong> · Dano: <strong>{stats.dano}</strong>
                 </span>
               </div>
               <p className="muted small">Os números à direita são os atributos efetivos (base + raças + classes + equipamento).</p>
@@ -1220,6 +1222,7 @@ function Summary({ name, gender, races, classes, passiva, skills, ultimate, espe
       <div className="form-meta">
         <span>Vida: <strong>{stats.hpMax}</strong></span>
         <span>Mana: <strong>{stats.mpMax}</strong></span>
+        <span>Dano: <strong>{stats.dano}</strong></span>
       </div>
     </div>
   );

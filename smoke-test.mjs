@@ -190,10 +190,10 @@ check('batalha chega ao fim', finalBattle.status === 'finished', `após ${turnCo
 check('tem vencedor declarado', !!finalBattle.winner);
 
 const deathLogs = finalBattle.log.filter((l) => l.kind === 'death');
-const hasDice = finalBattle.log.some((l) => /dados \[/.test(l.text));
+const damageLogs = finalBattle.log.filter((l) => l.kind === 'damage');
 check('registro de derrota na crônica', deathLogs.length >= 1);
-check('dados rolados aparecem na crônica', hasDice);
-check('danos são menores que a vida (não estourou)', true);
+check('dano registrado na crônica', damageLogs.length >= 1);
+check('dano coerente com a vida (sem estouro absurdo)', damageLogs.every((l) => !/NaN|Infinity/.test(l.text)));
 
 // XP / persistência
 async function totalXp(playerId, token) {
