@@ -254,8 +254,10 @@ export function poolDeXp({ chefeDerrotado = false, monstrosDerrotados = [], ecli
    Dano físico (ataque básico) = (FOR Final + danoBase da arma) × 10
    Golpe físico (habilidade)   = FOR Final × poder% × 1,5 × 10   (mega: × 2,2)
    Dano mágico                 = INT Final × poder% × 1,4 × 10
+   Cura (magia de suporte)     = INT Final × poder% × 1,4 × 10   (cura mega: × 2,2)
 
    A defesa da armadura e o dano por turno (DoT) usam a MESMA escala ×10.
+   Poções de HP também: 250 / 600 (na mesma proporção de 25 / 60 na vida antiga).
    O acerto continua sendo o d20; crítico (×2), elementos e buffs continuam
    sendo multiplicadores aplicados POR CIMA da base.
 
@@ -295,4 +297,12 @@ export function danoMagico(intFinal, poderPct = 100, mult = 1, coef = DANO_COEF_
     0,
     Math.round(inteligencia * (Number(coef) || 1) * ((Number(poderPct) || 0) / 100) * DANO_MULT * (Number(mult) || 1)),
   );
+}
+
+/**
+ * Cura = INT Final × poder% × 1,4 × 10 × mult — MESMA fórmula da magia
+ * (cura na escala da vida, para acompanhar a reforma). Cura mega usa DANO_COEF_MEGA.
+ */
+export function curaMagica(intFinal, poderPct = 100, mult = 1, coef = DANO_COEF_MAGICO) {
+  return danoMagico(intFinal, poderPct, mult, coef);
 }

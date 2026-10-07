@@ -192,8 +192,9 @@ export const STATUS_DEFS = {
 export const STATUS_KEYS = Object.keys(STATUS_DEFS);
 
 export const POTIONS = {
-  pocao_cura: { nome: 'Poção de Cura', tipo: 'pocao', cura: 25, desc: 'Restaura 25 de HP.' },
-  pocao_cura_grande: { nome: 'Poção de Cura Grande', tipo: 'pocao', cura: 60, desc: 'Restaura 60 de HP.' },
+  // Escala da vida (× 10): 250/600 na mesma proporção de 25/60 na vida antiga.
+  pocao_cura: { nome: 'Poção de Cura', tipo: 'pocao', cura: 250, desc: 'Restaura 250 de HP.' },
+  pocao_cura_grande: { nome: 'Poção de Cura Grande', tipo: 'pocao', cura: 600, desc: 'Restaura 600 de HP.' },
   elixir_mana: { nome: 'Elixir de Mana', tipo: 'pocao', mana: 25, desc: 'Restaura 25 de MP.' },
   elixir_mana_grande: { nome: 'Elixir de Mana Grande', tipo: 'pocao', mana: 60, desc: 'Restaura 60 de MP.' },
 };

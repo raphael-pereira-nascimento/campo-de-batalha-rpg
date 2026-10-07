@@ -25,7 +25,7 @@ const uid = () => `tb_${_nextId++}`;
 function makeFighter(name, team, attrs = {}) {
   const a = { forca: 5, inteligencia: 5, resistencia: 5, destreza: 5, reflexos: 5, ...attrs };
   const hpMax = 500 + (a.resistencia || 5) * 10;
-  const mpMax = 10 + (a.inteligencia || 5) * 2;
+  const mpMax = (a.inteligencia || 5) * 10; // mana = INT × 10 (mesma regra do combate principal)
   return {
     id: uid(), name, team,
     hp: hpMax, hpMax, mp: mpMax, mpMax,

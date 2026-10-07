@@ -3,7 +3,7 @@
 import { BattleManager } from '../server/src/game/battleManager.js';
 import { MONSTERS } from '../server/src/game/monsters.js';
 import { estadoEclipse } from '../server/src/game/eclipse.js';
-import { manaMaxFrom, manaRecuperada, distribuirXp, danoFisicoAtaque, danoFisicoGolpe, danoMagico, DANO_MULT } from '../server/src/game/sistema.js';
+import { manaMaxFrom, manaRecuperada, distribuirXp, danoFisicoAtaque, danoFisicoGolpe, danoMagico, curaMagica, DANO_MULT } from '../server/src/game/sistema.js';
 import { montarEncontro, DUNGEONS } from '../server/src/game/dungeons.js';
 
 const log = (...a) => console.log(...a);
@@ -18,6 +18,7 @@ log('FOR 12 + arma 7           =>', danoFisicoAtaque(12, 7), '(esperado 190)');
 log('FOR 10, golpe 200% (×1.5) =>', danoFisicoGolpe(10, 200), '(esperado 300)');
 log('FOR 10, mega 250% (×2.2)  =>', danoFisicoGolpe(10, 250, 1, 2.2), '(esperado 550)');
 log('INT 10, magia 240% (×1.4) =>', danoMagico(10, 240), '(esperado 336)');
+log('INT 10, cura 200% (×1.4)   =>', curaMagica(10, 200), '(esperado 280)');
 log('defesa de armadura 6      =>', 6 * DANO_MULT, '(esperado 60)');
 
 log('\n── Eclipse ──');

@@ -26,6 +26,7 @@ import {
   danoFisicoAtaque,
   danoFisicoGolpe,
   danoMagico,
+  curaMagica,
 } from '../src/game/sistema.js';
 
 describe('Mana — fórmula confirmada ((INT Final) × 10)', () => {
@@ -92,6 +93,13 @@ describe('Dano — fórmula provisória (Atributo Final × 10, sem dados)', () =
     expect(danoBaseDaArma(undefined)).toBe(2);
     expect(danoBaseDaArma({ nome: 'Faca Torta' })).toBe(4);
     expect(danoBaseDaArma({ danoBase: 9 })).toBe(9);
+  });
+
+  it('cura = INT Final × poder% × 1,4 × 10 (mesma escala da vida)', () => {
+    expect(curaMagica(10, 200)).toBe(280); // feitiço "Cura" (200%)
+    expect(curaMagica(10, 120)).toBe(168); // "Cura em Massa" (120%)
+    expect(curaMagica(10, 200, 1, DANO_COEF_MEGA)).toBe(440); // cura mega × 2,2
+    expect(curaMagica(4, 100)).toBe(56);
   });
 });
 

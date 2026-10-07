@@ -33,6 +33,7 @@ import {
   distribuirXp,
   poolDeXp,
   danoFisicoGolpe,
+  curaMagica,
   DANO_COEF_MEGA,
   VOO,
   ALCANCE_VERTICAL,
@@ -1043,7 +1044,8 @@ export class BattleManager {
     p.manaGastoTurno = (p.manaGastoTurno || 0) + cost;
 
     if (skill.tipo === 'cura') {
-      const healing = Math.round(p.attributes.inteligencia * (skill.poder / 100) * 1.4);
+      // Cura reformada: INT Final × poder% × 1,4 × 10 (mesma escala do dano).
+      const healing = curaMagica(this._finalAttrs(p).inteligencia, skill.poder);
       const allies = battle.participants.filter(
         (q) =>
           q.alive &&
@@ -1136,7 +1138,8 @@ export class BattleManager {
   // Golpe ultimate (durante o Modo Ultimate) e Golpe Especial (gasta 100% da barra).
   _resolveMegaSkill(battle, p, target, skill) {
     if (skill.tipo === 'cura') {
-      const healing = Math.round(p.attributes.inteligencia * (skill.poder / 100) * 2.2);
+      // Cura mega: mesma fórmula com coeficiente 2,2 (DANO_COEF_MEGA).
+      const healing = curaMagica(this._finalAttrs(p).inteligencia, skill.poder, 1, DANO_COEF_MEGA);
       const allies = battle.participants.filter(
         (q) =>
           q.alive &&

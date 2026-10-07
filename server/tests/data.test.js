@@ -5,6 +5,7 @@ import {
   effectiveAttributes,
   deriveStats,
   gemsAttrs,
+  POTIONS,
 } from '../src/game/data.js';
 import { gemIsRaw } from '../src/game/gems.js';
 import { DANO_MULT } from '../src/game/sistema.js';
@@ -114,6 +115,15 @@ describe('deriveStats — vida/mana pela classe primária', () => {
 
   it('Dano sem arma usa o valor das mãos nuas (2)', () => {
     expect(deriveStats(classes, 1, attrs, {}).dano).toBe((5 + 3 + 2) * 10);
+  });
+
+  // Poções de HP acompanharam a escala da vida (25/60 → 250/600).
+  it('poções de HP na mesma escala da vida (× 10)', () => {
+    expect(POTIONS.pocao_cura.cura).toBe(250);
+    expect(POTIONS.pocao_cura_grande.cura).toBe(600);
+    // Elixires de mana ficam como estão: custos de magia continuam 4–12 MP.
+    expect(POTIONS.elixir_mana.mana).toBe(25);
+    expect(POTIONS.elixir_mana_grande.mana).toBe(60);
   });
 });
 

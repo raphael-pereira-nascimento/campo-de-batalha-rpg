@@ -529,7 +529,7 @@ export const SHOP_ITEMS = {
   balsamo_de_fogo: { nome: 'Bálsamo de Fogo', tipo: 'item', preco: 60, removeStatus: 'queimadura', desc: 'Apaga queimaduras.' },
   kit_de_curativo: { nome: 'Kit de Curativo', tipo: 'item', preco: 50, removeStatus: 'sangramento', desc: 'Para o sangramento.' },
   elixir_antigelo: { nome: 'Elixir Antigelo', tipo: 'item', preco: 80, removeStatus: 'congelamento', desc: 'Rompe o gelo.' },
-  pocao_cura_grande: { nome: 'Poção de Cura Grande', tipo: 'item', preco: 120, cura: 60, desc: 'Restaura 60 de HP.' },
+  pocao_cura_grande: { nome: 'Poção de Cura Grande', tipo: 'item', preco: 120, cura: 600, desc: 'Restaura 600 de HP.' },
   elixir_mana_grande: { nome: 'Elixir de Mana Grande', tipo: 'item', preco: 100, mana: 50, desc: 'Restaura 50 de MP.' },
 };
 
