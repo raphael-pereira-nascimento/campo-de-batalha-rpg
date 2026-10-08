@@ -27,6 +27,7 @@ import { RACES } from './game/races.js';
 import { MONSTERS } from './game/monsters.js';
 import { DUNGEONS } from './game/dungeons.js';
 import { ECLIPSE_PERIODO } from './game/eclipse.js';
+import { createSharedCharacter, getSharedCharacter } from './game/sharedStore.js';
 import * as calendario from './game/calendar.js';
 import {
   createCustomClass,
@@ -242,6 +243,26 @@ app.get('/api/dungeons', (_req, res) => {
     calendario: calendario.estado(),
     dungeons: DUNGEONS,
   });
+});
+
+// ---- Compartilhamento de fichas ----
+app.post('/api/share/characters', requireAuth, (req, res) => {
+  try {
+    const rec = createSharedCharacter(req.body || {});
+    const host = req.get('host');
+    const proto = req.protocol || 'http';
+    const base = `${proto}://${host}`;
+    res.json({ ok: true, id: rec.id, url: `${base}/share/characters/${rec.id}` });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+app.get('/api/share/characters/:id', (req, res) => {
+  const rec = getSharedCharacter(req.params.id);
+  if (!rec) return res.status(404).json({ ok: false, error: 'Ficha não encontrada ou expirada.' });
+  const ch = rec.data?.data || rec.data;
+  res.json({ ok: true, character: ch });
 });
 
 app.get('/api/ranking', async (_req, res) => {

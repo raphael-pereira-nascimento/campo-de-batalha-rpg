@@ -70,9 +70,14 @@ export default function TableBattle({ onBack, characters = [], gameData }) {
 
   const [atkAttacker, setAtkAttacker] = useState('');
   const [atkDefender, setAtkDefender] = useState('');
-  const [lastRoll, setLastRoll] = useState(null);
+const [lastRoll, setLastRoll] = useState(null);
   const [rolling, setRolling] = useState(false);
   const [rollResult, setRollResult] = useState(null);
+  const [diceFaces, setDiceFaces] = useState(20);
+  const [diceQty, setDiceQty] = useState(1);
+  const [diceBonus, setDiceBonus] = useState(0);
+  const [diceRolls, setDiceRolls] = useState([]);
+  const [diceTotal, setDiceTotal] = useState(null);
 
   const [buffTarget, setBuffTarget] = useState('');
   const [buffPreset, setBuffPreset] = useState(BUFF_DEBUFF_PRESETS[0].id);
@@ -233,6 +238,31 @@ export default function TableBattle({ onBack, characters = [], gameData }) {
     setRollResult(null);
     addLog(`═══ Rodada ${round + 1} ═══`);
   }, [round, tickEffects, addLog]);
+
+  const doRoll = useCallback(() => {
+    const faces = Math.max(2, Math.min(100, Number(diceFaces) || 20));
+    const qty = Math.max(1, Math.min(5, Number(diceQty) || 1));
+    const bonus = Number(diceBonus) || 0;
+    setRolling(true);
+    setDiceRolls([]);
+    setDiceTotal(null);
+    let steps = 0;
+    const interval = setInterval(() => {
+      steps += 1;
+      const rolls = Array.from({ length: qty }, () => Math.floor(Math.random() * faces) + 1);
+      setDiceRolls(rolls);
+      setDiceTotal(rolls.reduce((s, n) => s + n, 0) + bonus);
+      if (steps >= 12) {
+        clearInterval(interval);
+        setRolling(false);
+        const finalRolls = Array.from({ length: qty }, () => Math.floor(Math.random() * faces) + 1);
+        const total = finalRolls.reduce((s, n) => s + n, 0) + bonus;
+        setDiceRolls(finalRolls);
+        setDiceTotal(total);
+        addLog(`🎲 Rola ${qty}d${faces}${bonus >= 0 ? '+' + bonus : bonus} → [${finalRolls.join(', ')}] = ${total}`);
+      }
+    }, 60);
+  }, [diceFaces, diceQty, diceBonus, addLog]);
 
   const renderFighterCard = (f) => {
     const hpPct = f.hpMax > 0 ? (f.hp / f.hpMax) * 100 : 0;
@@ -435,6 +465,53 @@ export default function TableBattle({ onBack, characters = [], gameData }) {
                       {rollResult?.isCrit && '🎯 CRÍTICO! '}
                       {rollResult?.hit ? `ACERTA! (${rollResult?.damage} dano)` : 'ERRA!'}
                     </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="panel">
+            <h2>🎲 Dado de Decisão (fora do combate)</h2>
+            <p className="muted small">Use para decidir situações: se um buff/debuff vale, se o ambiente reage, testes de perícia, sorte do Mestre etc.</p>
+            <div className="attack-panel">
+              <div className="attack-selects">
+                <label>
+                  Dados
+                  <input
+                    type="number"
+                    min={1}
+                    max={5}
+                    value={diceQty}
+                    onChange={(e) => setDiceQty(Math.max(1, Math.min(5, +e.target.value || 1)))}
+                  />
+                </label>
+                <span className="vs-text">d</span>
+                <label>
+                  Lados
+                  <select value={diceFaces} onChange={(e) => setDiceFaces(Number(e.target.value))}>
+                    {[2, 4, 6, 8, 10, 12, 20, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Bônus
+                  <input
+                    type="number"
+                    min={-10}
+                    max={10}
+                    value={diceBonus}
+                    onChange={(e) => setDiceBonus(Math.max(-10, Math.min(10, +e.target.value || 0)))}
+                  />
+                </label>
+              </div>
+              <div className="dice-area">
+                <button className="dice-btn" onClick={doRoll} disabled={rolling}>
+                  {rolling ? '🎲...' : `🎲 Rolar ${diceQty}d${diceFaces}${diceBonus >= 0 ? '+' + diceBonus : diceBonus}`}
+                </button>
+                {diceRolls.length > 0 && !rolling && (
+                  <div className="dice-result neutral">
+                    <span className="dice-number">{diceTotal}</span>
+                    <span className="dice-label">[{diceRolls.join(', ')}]{diceBonus ? ` ${diceBonus > 0 ? '+' : ''}${diceBonus}` : ''}</span>
                   </div>
                 )}
               </div>

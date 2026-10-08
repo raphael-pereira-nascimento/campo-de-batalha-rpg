@@ -420,6 +420,14 @@ export const api = {
     }
     return request('/api/dungeons');
   },
+  shareCharacter: (payload) => {
+    if (isOffline()) return Promise.reject(new Error('Offline'));
+    return auth('/api/share/characters', { method: 'POST', body: JSON.stringify(payload) });
+  },
+  getSharedCharacter: (id) => {
+    return request(`/api/share/characters/${id}`);
+  },
+  // ── Ranking/Wallet ──
   getRanking: () => {
     if (isOffline()) {
       const chars = getOfflineCharacters().map((c) => ({
