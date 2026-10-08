@@ -5,8 +5,10 @@ import {
   effectiveAttributes,
   deriveStats,
   gemsAttrs,
+  POTIONS,
 } from '../src/game/data.js';
 import { gemIsRaw } from '../src/game/gems.js';
+import { DANO_MULT } from '../src/game/sistema.js';
 
 const anao = { id: 'anao', bonus: { forca: 1, resistencia: 1 } };
 const rockman = { id: 'rockman', bonus: { forca: 1, resistencia: 1 } };
@@ -98,9 +100,30 @@ describe('deriveStats — vida/mana pela classe primária', () => {
     expect(lvl1.mpMax).toBe(intFinal * 10);
   });
 
-  it('defesa soma o defesa dos equipamentos', () => {
+  it('defesa soma os equipamentos na escala do dano (× 10)', () => {
     const equipment = { armadura: { defesa: 8 }, arma: null };
-    expect(deriveStats([], 1, attrs, equipment).defesa).toBe(8);
+    expect(deriveStats([], 1, attrs, equipment).defesa).toBe(8 * DANO_MULT);
+  });
+
+  // Reforma do dano (provisório — ver sistema.js): igual vida/mana, sem dados.
+  it('Dano = (FOR Final + danoBase da arma) × 10', () => {
+    const equipment = { arma: { danoBase: 7 } };
+    const stats = deriveStats(classes, 1, attrs, equipment);
+    const forcaFinal = 5 + 3; // base 5 + guerreiro 3
+    expect(stats.dano).toBe((forcaFinal + 7) * 10);
+  });
+
+  it('Dano sem arma usa o valor das mãos nuas (2)', () => {
+    expect(deriveStats(classes, 1, attrs, {}).dano).toBe((5 + 3 + 2) * 10);
+  });
+
+  // Poções de HP acompanharam a escala da vida (25/60 → 250/600).
+  it('poções de HP na mesma escala da vida (× 10)', () => {
+    expect(POTIONS.pocao_cura.cura).toBe(250);
+    expect(POTIONS.pocao_cura_grande.cura).toBe(600);
+    // Elixires de mana ficam como estão: custos de magia continuam 4–12 MP.
+    expect(POTIONS.elixir_mana.mana).toBe(25);
+    expect(POTIONS.elixir_mana_grande.mana).toBe(60);
   });
 });
 

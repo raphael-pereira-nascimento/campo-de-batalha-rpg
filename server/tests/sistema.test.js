@@ -18,6 +18,15 @@ import {
   poolDeXp,
   XP_TETO_PARTICIPACAO,
   XP_MINIMO_PARTICIPACAO,
+  DANO_MULT,
+  DANO_COEF_ATAQUE,
+  DANO_COEF_MEGA,
+  DANO_COEF_MAGICO,
+  danoBaseDaArma,
+  danoFisicoAtaque,
+  danoFisicoGolpe,
+  danoMagico,
+  curaMagica,
 } from '../src/game/sistema.js';
 
 describe('Mana — fórmula confirmada ((INT Final) × 10)', () => {
@@ -50,6 +59,47 @@ describe('Mana — recuperação = gasto ÷ 2 (arredondando para cima)', () => {
   it('gasto zero ou negativo não recupera nada', () => {
     expect(manaRecuperada(0)).toBe(0);
     expect(manaRecuperada(-4)).toBe(0);
+  });
+});
+
+describe('Dano — fórmula provisória (Atributo Final × 10, sem dados)', () => {
+  it('mantém a escala e os coeficientes em um único lugar', () => {
+    expect(DANO_MULT).toBe(10); // a mesma escala da vida/mana
+    expect(DANO_COEF_ATAQUE).toBe(1.5);
+    expect(DANO_COEF_MEGA).toBe(2.2);
+    expect(DANO_COEF_MAGICO).toBe(1.4);
+  });
+
+  it('ataque básico = (FOR Final + danoBase da arma) × 10', () => {
+    expect(danoFisicoAtaque(12, 7)).toBe(190);
+    expect(danoFisicoAtaque(11, 2)).toBe(130); // mãos nuas
+    expect(danoFisicoAtaque(0, 0)).toBe(0);
+  });
+
+  it('golpe de habilidade = FOR Final × poder% × coef × 10', () => {
+    expect(danoFisicoGolpe(10, 200)).toBe(300); // ×1,5 padrão
+    expect(danoFisicoGolpe(10, 250, 1, DANO_COEF_MEGA)).toBe(550); // mega ×2,2
+    expect(danoFisicoGolpe(10, 200, 0.5)).toBe(150); // buffs multiplicam a base
+  });
+
+  it('mágica = INT Final × poder% × 1,4 × 10', () => {
+    expect(danoMagico(10, 240)).toBe(336);
+    expect(danoMagico(10, 100)).toBe(140);
+    expect(danoMagico(4, 200, 1.5)).toBe(168); // com buff de 50%
+  });
+
+  it('danoBaseDaArma cobre mãos nuas e arma sem danoBase', () => {
+    expect(danoBaseDaArma(null)).toBe(2);
+    expect(danoBaseDaArma(undefined)).toBe(2);
+    expect(danoBaseDaArma({ nome: 'Faca Torta' })).toBe(4);
+    expect(danoBaseDaArma({ danoBase: 9 })).toBe(9);
+  });
+
+  it('cura = INT Final × poder% × 1,4 × 10 (mesma escala da vida)', () => {
+    expect(curaMagica(10, 200)).toBe(280); // feitiço "Cura" (200%)
+    expect(curaMagica(10, 120)).toBe(168); // "Cura em Massa" (120%)
+    expect(curaMagica(10, 200, 1, DANO_COEF_MEGA)).toBe(440); // cura mega × 2,2
+    expect(curaMagica(4, 100)).toBe(56);
   });
 });
 

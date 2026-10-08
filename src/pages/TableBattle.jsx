@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { ATTRIBUTE_NAMES } from '../config.js';
+import { danoFisicoAtaque, danoBaseDaArma } from '../game/sistema.js';
 
 const BUFF_DEBUFF_PRESETS = [
   { id: 'forca_up', name: 'Força+', icon: '💪', type: 'buff', stat: 'forca', value: 2 },
@@ -24,7 +25,7 @@ const uid = () => `tb_${_nextId++}`;
 function makeFighter(name, team, attrs = {}) {
   const a = { forca: 5, inteligencia: 5, resistencia: 5, destreza: 5, reflexos: 5, ...attrs };
   const hpMax = 500 + (a.resistencia || 5) * 10;
-  const mpMax = 10 + (a.inteligencia || 5) * 2;
+  const mpMax = (a.inteligencia || 5) * 10; // mana = INT × 10 (mesma regra do combate principal)
   return {
     id: uid(), name, team,
     hp: hpMax, hpMax, mp: mpMax, mpMax,
@@ -57,7 +58,9 @@ function computeHitChance(attacker, defender) {
 }
 
 function computeDamage(attacker, isCrit) {
-  const base = effectiveStat(attacker, 'forca') * 2 + Math.floor(Math.random() * 4) + 1;
+  // Mesmo sistema do combate principal: (FOR Final + danoBase da arma) × 10 — sem dados.
+  // Lutadores de mesa não têm equipamento => mãos nuas (danoBaseDaArma(null) = 2).
+  const base = danoFisicoAtaque(effectiveStat(attacker, 'forca'), danoBaseDaArma(null));
   return isCrit ? base * 2 : base;
 }
 

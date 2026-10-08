@@ -3,7 +3,7 @@
 import { BattleManager } from '../server/src/game/battleManager.js';
 import { MONSTERS } from '../server/src/game/monsters.js';
 import { estadoEclipse } from '../server/src/game/eclipse.js';
-import { manaMaxFrom, manaRecuperada, distribuirXp } from '../server/src/game/sistema.js';
+import { manaMaxFrom, manaRecuperada, distribuirXp, danoFisicoAtaque, danoFisicoGolpe, danoMagico, curaMagica, DANO_MULT } from '../server/src/game/sistema.js';
 import { montarEncontro, DUNGEONS } from '../server/src/game/dungeons.js';
 
 const log = (...a) => console.log(...a);
@@ -12,6 +12,14 @@ log('── Mana ──');
 log('INT 10, +0 bônus  =>', manaMaxFrom(10, 10), '(esperado 100)');
 log('INT 10, +6 bônus  =>', manaMaxFrom(10, 16), '(esperado 160)');
 log('recuperação 5/10/15/20/30 =>', [5, 10, 15, 20, 30].map(manaRecuperada).join(', '), '(esperado 3,5,8,10,15)');
+
+log('\n── Dano (provisório — escala ×10, igual vida/mana) ──');
+log('FOR 12 + arma 7           =>', danoFisicoAtaque(12, 7), '(esperado 190)');
+log('FOR 10, golpe 200% (×1.5) =>', danoFisicoGolpe(10, 200), '(esperado 300)');
+log('FOR 10, mega 250% (×2.2)  =>', danoFisicoGolpe(10, 250, 1, 2.2), '(esperado 550)');
+log('INT 10, magia 240% (×1.4) =>', danoMagico(10, 240), '(esperado 336)');
+log('INT 10, cura 200% (×1.4)   =>', curaMagica(10, 200), '(esperado 280)');
+log('defesa de armadura 6      =>', 6 * DANO_MULT, '(esperado 60)');
 
 log('\n── Eclipse ──');
 for (const dia of [1, 25, 28, 30, 31]) {
@@ -59,7 +67,7 @@ manager.startBattle({ battleId: battle.id, playerId: 'p1' });
 const hero = battle.participants.find((p) => !p.isMonster);
 const morcego = battle.participants.find((p) => p.monsterId === 'morcego_gigante');
 const horda = battle.participants.find((p) => p.monsterId === 'horda_goblins');
-log(`hero: hp ${hero.hpMax} mp ${hero.mpMax} (mana = INT 10 x2 + bônus)`);
+log(`hero: hp ${hero.hpMax} mp ${hero.mpMax} (mana = INT Final x10)`);
 log(`morcego: voando=${morcego.voando} altitude=${morcego.altitude}`);
 log(`horda: ${horda.horda.quantidade} corpos, hp ${horda.hpMax}, xp/unit ${horda.xpPorUnidade}`);
 
@@ -91,10 +99,12 @@ noTurnoDoHero(() => {
   log('após subir:', hero.voando ? `alt=${hero.altitude} mp=${hero.mp}` : 'aterrissou');
 });
 
-// Dano em horda: 30 de dano com 20 hp/unidade => 1 abatido (limite q-1)
+// Dano em horda: o pool é hpPorUnidade × qtd; os corpos caem quando o HP
+// cruza o limite de hpPorUnidade (aqui 702 = 520 × eclipse 1.35).
+// A horda está em defesa => 1600 ÷ 2 = 800 cruza 1 limite => 1 abatido.
 log('\nhorda antes:', horda.horda.quantidade, 'corpos');
-manager._applyDamage(horda, 55, battle, hero, 'physical');
-log('após 55 de dano:', horda.horda.quantidade, 'corpos, hp', horda.hp, '/', horda.hpMax, '| kills do herói:', hero.kills);
+manager._applyDamage(horda, 1600, battle, hero, 'physical');
+log('após 1600 de dano:', horda.horda.quantidade, 'corpos, hp', horda.hp, '/', horda.hpMax, '| kills do herói:', hero.kills);
 
 log('\n── XP por participação ──');
 const fake = [

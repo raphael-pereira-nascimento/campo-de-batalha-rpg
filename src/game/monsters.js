@@ -1,6 +1,7 @@
 // Bestiário do Campo de Batalha.
 // Cada monstro tem atributos na escala 1-10 (mesma dos jogadores).
-// Vida = Resistência × 10 e Mana = Inteligência × 2 (mesma fórmula dos jogadores).
+// Vida = 500 + (Resistência × 10) e Mana = (Inteligência × 10)
+// (mesma fórmula dos jogadores — reformulação da vida/mana).
 // Chefes (escalaChefe: true) têm vida = soma do HP dos jogadores x multiplicador,
 // e ganham múltiplas ações por turno conforme o número de jogadores.
 // Hordas (horda.quantidade) têm vida = HP individual × quantidade.
@@ -82,7 +83,7 @@ export const MONSTERS = {
     arma: { nome: 'Adaga Tortas', danoBase: 6, elemento: 'fisico' },
     spells: [],
     passiva: 'Ligeiro: esquiva 15% mais e envenena com suas lâminas.',
-    efeitos: { esquivaBonus: 0.15, ataqueStatus: { tipo: 'veneno', turnos: 3, dano: 3 } },
+    efeitos: { esquivaBonus: 0.15, ataqueStatus: { tipo: 'veneno', turnos: 3, dano: 30 } },
     fraquezas: ['luz'],
     resistencias: ['trevas'],
   },
@@ -95,7 +96,7 @@ export const MONSTERS = {
     arma: { nome: 'Presas', danoBase: 8 },
     spells: [],
     passiva: 'Alcateia: ataca em bando e suas mordidas causam sangramento.',
-    efeitos: { ataqueStatus: { tipo: 'sangramento', turnos: 2, dano: 4 } },
+    efeitos: { ataqueStatus: { tipo: 'sangramento', turnos: 2, dano: 40 } },
   },
   esqueleto_arqueiro: {
     id: 'esqueleto_arqueiro',
@@ -225,7 +226,8 @@ export function defFromCustomMonster(row) {
 // Monta um monstro pronto para entrar em batalha.
 // `playerHpSum` só é usado para chefes: vida = soma do HP dos jogadores x multiplicador.
 export function buildMonster(def, playerHpSum = 0) {
-  const hpPorUnidade = Math.round(def.attributes.resistencia * 10);
+  // Mesma fórmula de vida dos jogadores (reforma da vida): 500 + (RES × 10).
+  const hpPorUnidade = 500 + Math.round(def.attributes.resistencia * 10);
   // Monstros não têm bônus separados de atributo: usa INT × 10
   const mpMax = manaMaxFrom(def.attributes.inteligencia, def.attributes.inteligencia);
   let hp = hpPorUnidade;

@@ -245,3 +245,64 @@ export function poolDeXp({ chefeDerrotado = false, monstrosDerrotados = [], ecli
   for (const xp of monstrosDerrotados) pool += Number(xp) || 0;
   return Math.round(pool * (eclipseMult || 1));
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   6. DANO — PROVISÓRIO (mesmo padrão da vida/mana: Atributo Final, sem dados)
+   Reforma autorizada pelo criador: o dano deixa de ser por dados (d6) e vira
+   uma fórmula determinística pelos Atributos Finais, como vida e mana.
+
+   Dano físico (ataque básico) = (FOR Final + danoBase da arma) × 10
+   Golpe físico (habilidade)   = FOR Final × poder% × 1,5 × 10   (mega: × 2,2)
+   Dano mágico                 = INT Final × poder% × 1,4 × 10
+   Cura (magia de suporte)     = INT Final × poder% × 1,4 × 10   (cura mega: × 2,2)
+
+   A defesa da armadura e o dano por turno (DoT) usam a MESMA escala ×10.
+   Poções de HP também: 250 / 600 (na mesma proporção de 25 / 60 na vida antiga).
+   O acerto continua sendo o d20; crítico (×2), elementos e buffs continuam
+   sendo multiplicadores aplicados POR CIMA da base.
+
+   Todos os números abaixo são PROVISÓRIOS: balanceamento isolado aqui para
+   ser ajustado em um único lugar, sem mexer na lógica de combate.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export const DANO_MULT = 10; // escala do dano (a mesma da vida/mana: atributo × 10)
+export const DANO_COEF_ATAQUE = 1.5; // golpe físico de habilidade comum
+export const DANO_COEF_MEGA = 2.2; // ultimate / especial
+export const DANO_COEF_MAGICO = 1.4; // magia
+
+/** danoBase de uma arma (ou das mãos nuas) — mesma regra em todos os pontos. */
+export function danoBaseDaArma(arma) {
+  return arma ? arma.danoBase || 4 : 2;
+}
+
+/** Dano físico do ataque básico = (FOR Final + danoBase da arma) × 10 × mult. */
+export function danoFisicoAtaque(forcaFinal, armaDanoBase = 0, mult = 1) {
+  const forca = Number(forcaFinal) || 0;
+  const arma = Number(armaDanoBase) || 0;
+  return Math.max(0, Math.round((forca + arma) * DANO_MULT * (Number(mult) || 1)));
+}
+
+/** Golpe físico de habilidade = FOR Final × poder% × coef × 10 × mult. */
+export function danoFisicoGolpe(forcaFinal, poderPct = 100, mult = 1, coef = DANO_COEF_ATAQUE) {
+  const forca = Number(forcaFinal) || 0;
+  return Math.max(
+    0,
+    Math.round(forca * (Number(coef) || 1) * ((Number(poderPct) || 0) / 100) * DANO_MULT * (Number(mult) || 1)),
+  );
+}
+
+/** Dano mágico = INT Final × poder% × 1,4 × 10 × mult. */
+export function danoMagico(intFinal, poderPct = 100, mult = 1, coef = DANO_COEF_MAGICO) {
+  const inteligencia = Number(intFinal) || 0;
+  return Math.max(
+    0,
+    Math.round(inteligencia * (Number(coef) || 1) * ((Number(poderPct) || 0) / 100) * DANO_MULT * (Number(mult) || 1)),
+  );
+}
+
+/**
+ * Cura = INT Final × poder% × 1,4 × 10 × mult — MESMA fórmula da magia
+ * (cura na escala da vida, para acompanhar a reforma). Cura mega usa DANO_COEF_MEGA.
+ */
+export function curaMagica(intFinal, poderPct = 100, mult = 1, coef = DANO_COEF_MAGICO) {
+  return danoMagico(intFinal, poderPct, mult, coef);
+}

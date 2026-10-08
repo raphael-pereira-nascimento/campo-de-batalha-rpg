@@ -92,6 +92,8 @@ const SECTIONS = [
     conteudo: (
       <>
         <p>Combate baseado em turnos, com D20 como principal dado. Sem posicionamento tático extremamente detalhado.</p>
+        <p><strong>Versão atual do sistema de dano:</strong> Dano físico = (Força Final + danoBase da arma) × 10 · Golpe de habilidade = Força Final × poder% × 1,5 × 10 (mega: × 2,2) · Dano mágico = (Inteligência Final × 10) × poder% × 1,4 · Cura = (Inteligência Final × 10) × poder% × 1,4 (cura mega: × 2,2) · Poções de HP restauram 250 / 600 — tudo na mesma escala da vida.</p>
+        <p>O dano é determinístico pelos Atributos Finais (sem dados), como a vida e a mana. A defesa da armadura reduz o dano na mesma escala (× 10); o acerto ainda é decidido no D20, e crítico (×2), elementos e buffs são multiplicadores por cima. Constantes provisórias — ajuste único em <code>sistema.js</code>.</p>
         <p>Distância simplificada: perto, médio alcance, longe, fora do alcance.</p>
         <p><strong>Estados e condições:</strong> voando, ferido, envenenado, atordoado, queimando, congelado, sangrando, efeitos mágicos, buffs e debuffs.</p>
       </>
