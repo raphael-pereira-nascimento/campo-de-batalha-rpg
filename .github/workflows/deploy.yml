@@ -36,8 +36,12 @@ jobs:
       - name: Build frontend
         run: npm run build
         env:
+          VITE_BASE: /campo-de-batalha-rpg/
           VITE_API_URL: https://campo-de-batalha-rpg.onrender.com
           VITE_SOCKET_URL: https://campo-de-batalha-rpg.onrender.com
+
+      - name: SPA fallback para links diretos (/share/*)
+        run: cp dist/index.html dist/404.html
 
       - uses: actions/configure-pages@v5
 

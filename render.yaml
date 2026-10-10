@@ -1,18 +1,27 @@
+# Blueprint do Render: backend/API + banco Postgres.
+# Obs.: bancos Postgres vão na chave "databases:" (não em "services: type: pg",
+# sintaxe antiga que fazia o Blueprint falhar).
+databases:
+  - name: campo-de-batalha-db
+    plan: free
+    databaseName: campo_batalha_rpg
+    ipAllowList: [] # somente conexões internas (rede privada do Render)
+
 services:
   - type: web
     name: campo-de-batalha-rpg
     runtime: node
     plan: free
-    buildCommand: npm install --prefix server
+    # Instala as dependências (servidor + raiz, incluindo devDeps p/ o vite) e
+    # compila o frontend. Sem o build, o Render não tem a pasta dist/.
+    buildCommand: npm install --prefix server && npm install --include=dev && npm run build
+    # Roda as migrações do banco antes de subir (idempotente).
+    preDeployCommand: npm run init-db --prefix server
     startCommand: node server/src/index.js
     envVars:
       - key: DATABASE_URL
-        sync: false
-      - key: PORT
-        value: 3000
-
-  - type: pg
-    name: campo-de-batalha-db
-    plan: free
-    databaseName: campo_batalha_rpg
-    ipAllowList: []
+        fromDatabase:
+          name: campo-de-batalha-db
+          property: connectionString
+      - key: NODE_VERSION
+        value: "20"

@@ -14,11 +14,21 @@ const ToolShop = lazy(() => import('./pages/ToolShop.jsx'));
 const Dungeons = lazy(() => import('./pages/Dungeons.jsx'));
 const ShareView = lazy(() => import('./pages/ShareView.jsx'));
 
-const SHARE_MATCH = typeof window !== 'undefined' ? window.location.pathname.match(/^\/share\/([A-Za-z0-9_-]+)/) : null;
+// Detecta a rota /share/:id levando em conta a base do deploy. No GitHub Pages
+// o app fica em /campo-de-batalha-rpg/, então o caminho é /campo-de-batalha-rpg/share/:id.
+const BASE_URL = import.meta.env.BASE_URL || '/';
+function shareIdFromPath() {
+  if (typeof window === 'undefined') return null;
+  let path = window.location.pathname;
+  path = path.startsWith(BASE_URL) ? path.slice(BASE_URL.length) : path.replace(/^\/+/, '');
+  const m = path.match(/^share\/([A-Za-z0-9_-]+)/);
+  return m ? m[1] : null;
+}
+const SHARE_MATCH = shareIdFromPath();
 
 export default function App() {
   const [view, setView] = useState('home');
-  const [share, setShare] = useState(SHARE_MATCH ? SHARE_MATCH[1] : null);
+  const [share, setShare] = useState(SHARE_MATCH);
   const [player, setPlayer] = useState(null);
   const [characters, setCharacters] = useState([]);
   const [customClasses, setCustomClasses] = useState([]);

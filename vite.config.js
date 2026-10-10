@@ -2,10 +2,12 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(() => ({
-  // Base absoluta: os links públicos de compartilhamento (/share/:id) são abertos
-  // em sub-rotas — com base relativa o navegador procura /share/assets/* e o
-  // catch-all do servidor devolve HTML (MIME errado → tela branca).
-  base: '/',
+  // Base configurável por ambiente:
+  //  - Local e Render servem na raiz → base '/'.
+  //  - GitHub Pages serve em subpasta (/campo-de-batalha-rpg/) e o workflow
+  //    define VITE_BASE. Base absoluta na raiz quebrava o Pages (assets 404 →
+  //    tela branca); base relativa quebrava as sub-rotas /share/:id.
+  base: process.env.VITE_BASE || '/',
   plugins: [react()],
   server: {
     port: 5173,

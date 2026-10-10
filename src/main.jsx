@@ -25,9 +25,8 @@ initConnection().finally(() => {
   window.__APP_MOUNTED__ = true;
 });
 
-// Registra o service worker apenas em produção (PWA instalável).
-// Caminho ABSOLUTO: com caminho relativo, em /share/* o navegador resolvia
-// ./sw.js para /share/sw.js (HTML em vez de JS → erro de MIME no console).
+// Registra o service worker apenas em produção (PWA instalável). Usa BASE_URL
+// para funcionar tanto na raiz quanto em subpasta (GitHub Pages).
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {});
 }
