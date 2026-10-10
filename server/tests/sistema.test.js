@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   MANA_MULT_INT,
   MANA_RECOVERY_DIVISOR,
+  MANA_RECOVERY_CAP_PCT,
   manaMaxFrom,
   manaRecuperada,
   pesoAtributo,
@@ -51,14 +52,34 @@ describe('Mana — fórmula confirmada ((INT Final) × 10)', () => {
   });
 });
 
-describe('Mana — recuperação = gasto ÷ 2 (arredondando para cima)', () => {
+describe('Mana — recuperação = gasto ÷ 2, teto de 10% do MP total', () => {
   it('cobre os exemplos do criador', () => {
-    expect([5, 10, 15, 20, 30].map(manaRecuperada)).toEqual([3, 5, 8, 10, 15]);
+    expect([5, 10, 15, 20, 30].map((g) => manaRecuperada(g))).toEqual([3, 5, 8, 10, 15]);
   });
 
   it('gasto zero ou negativo não recupera nada', () => {
     expect(manaRecuperada(0)).toBe(0);
     expect(manaRecuperada(-4)).toBe(0);
+  });
+
+  it('metade do gasto abaixo de 10% do MP total recupera normal', () => {
+    // 10% de 100 = 10; metade de 8 = 4 → recupera 4.
+    expect(manaRecuperada(8, 100)).toBe(4);
+  });
+
+  it('metade do gasto acima de 10% do MP total é limitada ao teto', () => {
+    // 10% de 100 = 10; metade de 60 = 30 → limitado a 10.
+    expect(manaRecuperada(60, 100)).toBe(10);
+  });
+
+  it('sem MP total informado mantém a regra base (gasto ÷ 2)', () => {
+    expect(manaRecuperada(60)).toBe(30);
+  });
+
+  it('o teto é 10% do MP máximo', () => {
+    expect(MANA_RECOVERY_CAP_PCT).toBe(0.1);
+    // 10% de 50 = 5; metade de 40 = 20 → limitado a 5.
+    expect(manaRecuperada(40, 50)).toBe(5);
   });
 });
 

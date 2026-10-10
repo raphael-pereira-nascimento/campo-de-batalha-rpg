@@ -28,12 +28,22 @@ export function manaMaxFrom(intBase, intFinal, outros = 0) {
    Regra: "RECUPERAÇÃO = GASTO DE MANA ÷ 2".
    Arredondamento: metade para cima, conforme os exemplos do criador
    (5→3, 10→5, 15→8, 20→10, 30→15).
+   TETO: a recuperação por turno não passa de 10% do MP TOTAL (máximo).
+   Se metade do gasto for menor que os 10% do total, recupera normal;
+   se for maior, recupera apenas os 10% do MP total.
    ═══════════════════════════════════════════════════════════════════════════ */
 export const MANA_RECOVERY_DIVISOR = 2;
 
-export function manaRecuperada(gasto) {
+// Teto da recuperação por turno: fração do MP MÁXIMO (10% = 0.1). Confirmada.
+export const MANA_RECOVERY_CAP_PCT = 0.1;
+
+export function manaRecuperada(gasto, mpMax = 0) {
   const g = Math.max(0, Number(gasto) || 0);
-  return Math.round(g / MANA_RECOVERY_DIVISOR);
+  const base = Math.round(g / MANA_RECOVERY_DIVISOR);
+  const total = Math.max(0, Number(mpMax) || 0);
+  if (total <= 0) return base;
+  const cap = Math.round(total * MANA_RECOVERY_CAP_PCT);
+  return Math.max(0, Math.min(base, cap));
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

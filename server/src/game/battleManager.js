@@ -528,12 +528,14 @@ export class BattleManager {
 
   _resolveTurnGains(battle, p) {
     const efeito = efeitosDe(p);
-    // Recuperação de mana CONFIRMADA: o que foi gasto ÷ 2 (+ passivas de raça).
+    // Recuperação de mana CONFIRMADA: o que foi gasto ÷ 2, no máximo 10% do MP total.
     const gastoTurno = Number(p.manaGastoTurno) || 0;
     const rec = this._regenMana(p);
     p.manaGastoTurno = 0;
     if (rec > 0) {
-      battle.log.push(makeLog(`💧 ${p.charName} recupera ${rec} de MP (gasto ${gastoTurno} ÷ 2).`, 'heal'));
+      const base = manaRecuperada(gastoTurno);
+      const teto = base > rec ? ' (teto de 10% do MP atingido)' : '';
+      battle.log.push(makeLog(`💧 ${p.charName} recupera ${rec} de MP (gasto ${gastoTurno} ÷ 2${teto}).`, 'heal'));
     }
     if (efeito.regenMana) {
       const extra = efeito.regenMana;
@@ -608,14 +610,14 @@ export class BattleManager {
     return { ...p, attributes: this._rollAttrs(p) };
   }
 
-  // Recuperação de mana no fim do turno: GASTO ÷ 2 (regra confirmada).
-  // O gasto medido é o do turno que acabou de passar (manaGastoTurno).
-  // Respeita o máximo e monstros não recuperam mana.
+  // Recuperação de mana no fim do turno: GASTO ÷ 2, limitado a 10% do MP
+  // total (regra confirmada). O gasto medido é o do turno que acabou de passar
+  // (manaGastoTurno). Respeita o máximo e monstros não recuperam mana.
   _regenMana(p) {
     if (p.isMonster || !p.alive) return 0;
     const gasto = Number(p.manaGastoTurno) || 0;
     if (gasto <= 0) return 0;
-    const gain = manaRecuperada(gasto);
+    const gain = manaRecuperada(gasto, p.mpMax);
     if (gain <= 0) return 0;
     const before = p.mp;
     p.mp = clamp(p.mp + gain, 0, p.mpMax);

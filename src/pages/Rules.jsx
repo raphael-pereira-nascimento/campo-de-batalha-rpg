@@ -82,6 +82,7 @@ const SECTIONS = [
           <li>20 Mana → recupera 10</li>
           <li>30 Mana → recupera 15</li>
         </ul>
+        <p><strong>TETO:</strong> a recuperação por turno não passa de <strong>10% do MP total</strong>. Se a metade do gasto for menor que 10% do MP máximo, recupera normal; se for maior, recupera só os 10%.</p>
         <p>A recuperação natural NÃO deve ser tão alta a ponto de tornar poções inúteis.</p>
       </>
     ),
