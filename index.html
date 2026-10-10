@@ -8,6 +8,37 @@
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="manifest" href="/manifest.json" />
     <title>Campo de Batalha RPG</title>
+    <script>
+      // Anti-tela-branca: se a raiz continuar vazia após alguns segundos, o bundle
+      // não carregou (versão antiga salva no navegador / arquivo ausente no cache).
+      // Em vez de uma página branca, mostra um painel com a opção de recarregar.
+      (function () {
+        var ROOT_ID = 'root';
+        var DONE = false;
+        var FIRED = false;
+        function showPanel() {
+          if (FIRED) return;
+          FIRED = true;
+          var root = document.getElementById(ROOT_ID);
+          if (!root) return;
+          root.innerHTML =
+            '<div style="max-width:430px;margin:14vh auto 0;padding:30px;border:1px solid #4a3a5e;border-radius:12px;background:#221733;color:#eee;font-family:system-ui,sans-serif;text-align:center">' +
+            '<div style="font-size:42px">⚔️</div>' +
+            '<h1 style="font-size:20px;margin:12px 0 8px">Não foi possível carregar o jogo</h1>' +
+            '<p style="font-size:14px;line-height:1.5;color:#b8a9cf;margin:0 0 20px">O navegador guardou uma cópia antiga dos arquivos. Recarregue (ou <strong>Ctrl+F5</strong> para forçar) e o problema desaparece.</p>' +
+            '<button type="button" onclick="location.reload()" style="padding:11px 24px;border:0;border-radius:8px;background:#8b5fbf;color:#fff;font-size:15px;cursor:pointer">Recarregar agora</button>' +
+            '</div>';
+        }
+        function check() {
+          if (DONE) return;
+          if (window.__APP_MOUNTED__) { DONE = true; return; }
+          var root = document.getElementById(ROOT_ID);
+          if (root && root.childNodes.length === 0) showPanel();
+        }
+        setTimeout(check, 5000);
+        setTimeout(check, 12000);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

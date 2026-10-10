@@ -20,9 +20,14 @@ initConnection().finally(() => {
       </ErrorBoundary>
     </React.StrictMode>,
   );
+  // Sinaliza ao guard do index.html que a app montou (desliga o painel
+  // anti-tela-branca).
+  window.__APP_MOUNTED__ = true;
 });
 
 // Registra o service worker apenas em produção (PWA instalável).
+// Caminho ABSOLUTO: com caminho relativo, em /share/* o navegador resolvia
+// ./sw.js para /share/sw.js (HTML em vez de JS → erro de MIME no console).
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
 }

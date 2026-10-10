@@ -430,13 +430,26 @@ app.delete('/api/custom-skills/:id', requireAuth, async (req, res) => {
 // Frontend build (produção)
 const clientDist = path.join(__dirname, '../../dist');
 if (fs.existsSync(clientDist)) {
-  app.use(express.static(clientDist));
+  // Cache inteligente: a "casca" (index.html) nunca fica em cache (sempre
+  // revalida, pois muda a cada build) e os assets hasheados (/assets/*) são
+  // imutáveis — o nome do arquivo contém o hash do conteúdo.
+  const staticOpts = {
+    setHeaders(res, filePath) {
+      if (filePath.endsWith('index.html') || filePath.endsWith('sw.js')) {
+        res.setHeader('Cache-Control', 'no-cache');
+      } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
+  };
+  app.use(express.static(clientDist, staticOpts));
   // SPA catch-all: apenas páginas — nunca serve index.html no lugar de assets.
   // (um /assets/* pedido quando o arquivo ainda não existe vira 404, não HTML.)
   app.get('*', (req, res) => {
     if (!req.path.startsWith('/api/') && (req.path.startsWith('/assets/') || req.path.startsWith('/icon-') || req.path.startsWith('/manifest'))) {
-      return res.status(404).type('text').send('Not found');
+      return res.status(404).type('text').set('Cache-Control', 'no-store').send('Not found');
     }
+    res.set('Cache-Control', 'no-cache');
     res.sendFile(path.join(clientDist, 'index.html'));
   });
 } else {
