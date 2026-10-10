@@ -9,7 +9,7 @@ const rootEl = document.getElementById('root');
 rootEl.innerHTML =
   '<p style="font-family: system-ui, sans-serif; padding: 24px; color: #ccc">' +
   '⚔️ Carregando o Campo de Batalha...<br />' +
-  '<small>Se o servidor estiver acordando, isso pode levar alguns segundos.</small></p>';
+  '<small>Aguardando o servidor (modo online/offline)...</small></p>';
 
 // Aguarda a sonda de conexão decidir entre modo online e offline.
 initConnection().finally(() => {

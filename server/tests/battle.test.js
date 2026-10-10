@@ -503,3 +503,69 @@ describe('BattleManager — melhorias do Mestre', () => {
     ).toThrow();
   });
 });
+
+describe('BattleManager — arma utilitária', () => {
+  beforeEach(() => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function montar(manager, util) {
+    const character = makeCharacter({
+      equipment: { armas: { utilitaria: util }, arma: util },
+    });
+    const battle = manager.createBattle({
+      name: 'T',
+      mode: 'mestre',
+      host: 'p1',
+      hostName: 'M',
+      character,
+    });
+    manager.addMonster({ battleId: battle.id, hostId: 'p1', monsterDef: makeMonsterDef() });
+    manager.startBattle({ battleId: battle.id, playerId: 'p1' });
+    const hero = battle.participants.find((q) => !q.isMonster);
+    const boss = battle.participants.find((q) => q.isMonster);
+    return { battle, hero, boss };
+  }
+
+  function ateTurnoDoHeroi(manager, battle, hero, boss) {
+    let guard = 0;
+    while (battle.participants[battle.turnOrder[battle.currentTurnIndex]] !== hero && guard < 60) {
+      guard += 1;
+      const cur = battle.participants[battle.turnOrder[battle.currentTurnIndex]];
+      const id = cur.isMonster ? cur.uid : cur.characterId;
+      const targetId = cur.isMonster ? hero.characterId : boss.uid;
+      manager.handleAction({
+        battleId: battle.id,
+        characterId: id,
+        playerId: 'p1',
+        action: { type: 'attack', targetId },
+      });
+    }
+  }
+
+  it('ataca com a utilitária, consome 1 uso e aplica o debuff', () => {
+    const { manager } = makeManager();
+    const util = {
+      id: 'rede_encantada',
+      nome: 'Rede Encantada',
+      categoria: 'utilitaria',
+      danoBase: 2,
+      usosMax: 2,
+      efeito: { tipo: 'lentidao', turnos: 2 },
+    };
+    const { battle, hero, boss } = montar(manager, util);
+    expect(hero.wpnUsos[util.id]).toBe(2);
+    ateTurnoDoHeroi(manager, battle, hero, boss);
+    manager.handleAction({
+      battleId: battle.id,
+      characterId: hero.characterId,
+      playerId: hero.playerId,
+      action: { type: 'attackUtility', targetId: boss.uid },
+    });
+    expect(hero.wpnUsos[util.id]).toBe(1);
+    expect(boss.statuses.map((s) => s.id)).toContain('lentidao');
+  });
+});

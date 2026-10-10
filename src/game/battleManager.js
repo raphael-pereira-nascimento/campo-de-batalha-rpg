@@ -23,6 +23,8 @@ import {
   magicDamage,
   efeitosDeHabilidades,
   MAX_PLAYERS_PER_BATTLE,
+  armasDeEquipamento,
+  melhorArma,
 } from './data.js';
 import {
   manaRecuperada,
@@ -316,6 +318,14 @@ export class BattleManager {
       ultimateModeMult: 0,
       ultimateSkillUsed: false,
       cooldowns: {},
+      // ── Arsenal: usos restantes das armas utilitárias nesta batalha ──
+      wpnUsos: (() => {
+        const usos = {};
+        for (const { arma } of armasDeEquipamento(character.equipment)) {
+          if (arma.categoria === 'utilitaria' && arma.usosMax) usos[arma.id] = arma.usosMax;
+        }
+        return usos;
+      })(),
       drunk: false,
       // ── Mana: gasto do turno (recuperação = gasto ÷ 2) ──
       manaGastoTurno: 0,
@@ -1092,7 +1102,7 @@ export class BattleManager {
 
     const kind = skill.tipo === 'fisico' ? 'physical' : 'magic';
     // Alcance vertical da magia: algumas magias não alcançam voadores.
-    const alcance = this._alcanceVerticalDoGolpe(p, skill, p.equipment?.arma || null);
+    const alcance = this._alcanceVerticalDoGolpe(p, skill, melhorArma(p.equipment));
     if (foraDoAlcanceVertical(alcance, target)) {
       battle.log.push(
         makeLog(`🕊️ ${skill.nome} não alcança ${target.charName} na altitude ${target.altitude} (alcance vertical ${alcance}).`, 'miss'),
@@ -1177,7 +1187,7 @@ export class BattleManager {
     }
 
     const kind = skill.tipo === 'fisico' ? 'physical' : 'magic';
-    const alcance = this._alcanceVerticalDoGolpe(p, skill, p.equipment?.arma || null);
+    const alcance = this._alcanceVerticalDoGolpe(p, skill, melhorArma(p.equipment));
     if (foraDoAlcanceVertical(alcance, target)) {
       battle.log.push(
         makeLog(`🕊️ ${skill.nome} não alcança ${target.charName} na altitude ${target.altitude} (alcance vertical ${alcance}).`, 'miss'),
@@ -1292,8 +1302,26 @@ export class BattleManager {
     switch (action.type) {
       case 'attack': {
         if (!target || !target.alive) throw new Error('Escolha um alvo vivo.');
-        const weapon = p.equipment.arma ? EQUIPMENT.armas[p.equipment.arma.id] : null;
+        const weapon = melhorArma(p.equipment);
         this._resolveAttack(battle, p, target, weapon);
+        break;
+      }
+      case 'attackUtility': {
+        // Arma utilitária: causa dano + aplica debuff, consumindo 1 uso.
+        if (!target || !target.alive) throw new Error('Escolha um alvo vivo.');
+        const util = (armasDeEquipamento(p.equipment) || []).find((e) => e.slot === 'utilitaria');
+        if (!util || !util.arma) throw new Error('Nenhuma arma utilitária equipada.');
+        const restante = (p.wpnUsos && p.wpnUsos[util.arma.id]) ?? util.arma.usosMax ?? 1;
+        if (restante <= 0) throw new Error(`${util.arma.nome} está sem usos nesta batalha.`);
+        p.wpnUsos = p.wpnUsos || {};
+        p.wpnUsos[util.arma.id] = restante - 1;
+        if (util.arma.efeito) {
+          battle.log.push(makeLog(`🧰 ${p.charName} usa ${util.arma.nome}.`));
+        }
+        this._resolveAttack(battle, p, target, util.arma);
+        if (target.alive && util.arma.efeito) {
+          this._applyStatus(battle, target, util.arma.efeito, p);
+        }
         break;
       }
       case 'magic': {
@@ -1458,7 +1486,7 @@ export class BattleManager {
         return;
       }
     }
-    const weapon = p.equipment.arma ? EQUIPMENT.armas[p.equipment.arma.id] : null;
+    const weapon = melhorArma(p.equipment);
     this._resolveAttack(battle, p, target, weapon);
   }
 

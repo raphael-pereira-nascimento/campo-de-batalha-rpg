@@ -12,9 +12,13 @@ const TableBattle = lazy(() => import('./pages/TableBattle.jsx'));
 const GemForge = lazy(() => import('./pages/GemForge.jsx'));
 const ToolShop = lazy(() => import('./pages/ToolShop.jsx'));
 const Dungeons = lazy(() => import('./pages/Dungeons.jsx'));
+const ShareView = lazy(() => import('./pages/ShareView.jsx'));
+
+const SHARE_MATCH = typeof window !== 'undefined' ? window.location.pathname.match(/^\/share\/([A-Za-z0-9_-]+)/) : null;
 
 export default function App() {
   const [view, setView] = useState('home');
+  const [share, setShare] = useState(SHARE_MATCH ? SHARE_MATCH[1] : null);
   const [player, setPlayer] = useState(null);
   const [characters, setCharacters] = useState([]);
   const [customClasses, setCustomClasses] = useState([]);
@@ -133,6 +137,27 @@ export default function App() {
       );
     }
     return <div className="loading">Carregando o Campo de Batalha...</div>;
+  }
+
+  if (share) {
+    return (
+      <Suspense fallback={<div className="loading">Carregando ficha compartilhada...</div>}>
+        <ShareView
+          shareId={share}
+          player={player}
+          gameData={gameData}
+          onImported={() => {
+            setShare(null);
+            setView('characters');
+            if (player) refreshCharacters();
+          }}
+          onHome={() => {
+            setShare(null);
+            setView(player ? 'characters' : 'home');
+          }}
+        />
+      </Suspense>
+    );
   }
 
   if (view === 'home') {

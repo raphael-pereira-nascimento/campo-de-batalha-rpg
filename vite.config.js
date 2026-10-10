@@ -2,9 +2,10 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(() => ({
-  // Base relativa: funciona no GitHub Pages, em servidos locais e atrás de proxies
-  // (caminhos absolutos quebravam o build com "tela branca" fora do subpath esperado).
-  base: './',
+  // Base absoluta: os links públicos de compartilhamento (/share/:id) são abertos
+  // em sub-rotas — com base relativa o navegador procura /share/assets/* e o
+  // catch-all do servidor devolve HTML (MIME errado → tela branca).
+  base: '/',
   plugins: [react()],
   server: {
     port: 5173,

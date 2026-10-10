@@ -6,6 +6,9 @@ import {
   deriveStats,
   gemsAttrs,
   POTIONS,
+  EQUIPMENT,
+  armasDeEquipamento,
+  melhorArma,
 } from '../src/game/data.js';
 import { gemIsRaw } from '../src/game/gems.js';
 import { DANO_MULT } from '../src/game/sistema.js';
@@ -153,5 +156,81 @@ describe('gemas — estado bruto/polido e efeitos por slot', () => {
     };
     const eff = effectiveAttributes(attrs, equipment);
     expect(eff.inteligencia).toBe(7); // 3 + 2 + 2
+  });
+});
+
+describe('arsenal — até 3 armas (perto/distancia/utilitaria)', () => {
+  it('todo item do catálogo tem categoria válida', () => {
+    for (const it of Object.values(EQUIPMENT.armas)) {
+      expect(['perto', 'distancia', 'utilitaria']).toContain(it.categoria);
+    }
+  });
+
+  it('armas utilitárias têm limite de usos por batalha', () => {
+    const utilitarias = Object.values(EQUIPMENT.armas).filter((a) => a.categoria === 'utilitaria');
+    expect(utilitarias.length).toBeGreaterThan(0);
+    for (const a of utilitarias) expect(a.usosMax).toBeGreaterThan(0);
+  });
+
+  it('armasDeEquipamento lê as 3 categorias', () => {
+    const equipment = {
+      armas: {
+        perto: { id: 'espada_longa', danoBase: 7, bonus: { forca: 2 } },
+        distancia: { id: 'arco_longo', danoBase: 8, bonus: { destreza: 3 } },
+        utilitaria: { id: 'rede_encantada', danoBase: 2, usosMax: 3 },
+      },
+    };
+    const lista = armasDeEquipamento(equipment);
+    expect(lista.map((e) => e.slot)).toEqual(['perto', 'distancia', 'utilitaria']);
+  });
+
+  it('armasDeEquipamento inclui a arma legada (equipment.arma) sem duplicar', () => {
+    const legado = { id: 'espada_curta', danoBase: 4, bonus: { forca: 1 } };
+    // Só arma legada:
+    expect(armasDeEquipamento({ arma: legado }).map((e) => e.slot)).toEqual(['perto']);
+    // Legada duplicada dentro de armas.perto não conta duas vezes:
+    const lista = armasDeEquipamento({ arma: legado, armas: { perto: legado } });
+    expect(lista).toHaveLength(1);
+  });
+
+  it('melhorArma escolhe a de maior dano base', () => {
+    const equipment = {
+      armas: {
+        perto: { id: 'espada_curta', danoBase: 4 },
+        distancia: { id: 'rifle_de_caca', danoBase: 9 },
+        utilitaria: { id: 'rede_encantada', danoBase: 2 },
+      },
+    };
+    expect(melhorArma(equipment).id).toBe('rifle_de_caca');
+    expect(melhorArma({})).toBeNull();
+  });
+
+  it('os bônus das 3 armas somam nos atributos efetivos (sem duplicar a legada)', () => {
+    const attrs = { forca: 5, inteligencia: 3, resistencia: 4, destreza: 3, reflexos: 3 };
+    const perto = { id: 'espada_longa', danoBase: 7, bonus: { forca: 2 } };
+    const equipment = {
+      arma: perto,
+      armas: {
+        perto,
+        distancia: { id: 'arco_longo', danoBase: 8, bonus: { destreza: 3 } },
+        utilitaria: { id: 'rede_encantada', danoBase: 2 },
+      },
+    };
+    const eff = effectiveAttributes(attrs, equipment);
+    expect(eff.forca).toBe(7); // 5 + 2 (arma legada contada 1x)
+    expect(eff.destreza).toBe(6); // 3 + 3
+  });
+
+  it('deriveStats usa a melhor arma para o dano', () => {
+    const attrs = { forca: 5, inteligencia: 3, resistencia: 4, destreza: 3, reflexos: 3 };
+    const classes = [{ id: 'guerreiro', primary: true, bonus: { forca: 3 } }];
+    const equipment = {
+      armas: {
+        perto: { id: 'espada_curta', danoBase: 4 },
+        distancia: { id: 'rifle_de_caca', danoBase: 9 },
+      },
+    };
+    const stats = deriveStats(classes, 1, attrs, equipment);
+    expect(stats.dano).toBe((5 + 3 + 9) * 10);
   });
 });

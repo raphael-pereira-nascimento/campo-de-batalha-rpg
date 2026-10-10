@@ -11,9 +11,11 @@ export default function Characters({ player, characters, gameData, customClasses
   const [importError, setImportError] = useState('');
   const [shareModal, setShareModal] = useState(null); // character
   const [shareResult, setShareResult] = useState(null);
+  const [shareCopied, setShareCopied] = useState(false);
   const [pasteModal, setPasteModal] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [pasteError, setPasteError] = useState('');
+  const [pasteBusy, setPasteBusy] = useState(false);
   const fileRef = useRef(null);
 
   const created = () => {
@@ -82,6 +84,10 @@ export default function Characters({ player, characters, gameData, customClasses
                     const res = await shareCharacter(c);
                     setShareResult(res);
                     setShareModal(c);
+                    setShareCopied(false);
+                    if (res.url && navigator.clipboard) {
+                      try { await navigator.clipboard.writeText(res.url); setShareCopied(true); } catch { /* segue sem copiar */ }
+                    }
                   } catch (e) {
                     alert(e.message);
                   }
@@ -109,10 +115,21 @@ export default function Characters({ player, characters, gameData, customClasses
             {shareResult.offline ? (
               <p className="muted">Modo offline: copie este JSON para compartilhar.</p>
             ) : (
-              <p className="muted">Link gerado para 30 dias:</p>
+              <p className="muted">
+                Link público por 30 dias (abre a ficha pronta para ver e importar){shareCopied ? ' — ✅ link copiado!' : ''}
+              </p>
             )}
             {shareResult.url && (
               <input value={shareResult.url} readOnly style={{ width: '100%', fontSize: 12, padding: 6 }} />
+            )}
+            {shareResult.url && (
+              <button
+                className="ghost"
+                style={{ marginTop: 6 }}
+                onClick={() => window.open(shareResult.url, '_blank', 'noopener')}
+              >
+                👁️ Ver página pública
+              </button>
             )}
             <textarea
               value={shareResult.json}
@@ -121,10 +138,12 @@ export default function Characters({ player, characters, gameData, customClasses
             />
             <div className="modal-actions">
               {shareResult.url && (
-                <button onClick={async () => { try { await navigator.clipboard.writeText(shareResult.url); alert('Link copiado!'); } catch { alert('Não foi possível copiar.'); } }}>Copiar link</button>
+                <button onClick={async () => { try { await navigator.clipboard.writeText(shareResult.url); setShareCopied(true); alert('Link copiado!'); } catch { alert('Não foi possível copiar.'); } }}>
+                  {shareCopied ? '✅ Link copiado' : 'Copiar link'}
+                </button>
               )}
               <button onClick={async () => { try { await navigator.clipboard.writeText(shareResult.json); alert('JSON copiado!'); } catch { alert('Não foi possível copiar.'); } }}>Copiar JSON</button>
-              <button className="ghost" onClick={() => { setShareModal(null); setShareResult(null); }}>Fechar</button>
+              <button className="ghost" onClick={() => { setShareModal(null); setShareResult(null); setShareCopied(false); }}>Fechar</button>
             </div>
           </div>
         </div>
@@ -142,33 +161,36 @@ export default function Characters({ player, characters, gameData, customClasses
             />
             {pasteError && <p className="error">{pasteError}</p>}
             <div className="modal-actions">
-              <button onClick={async () => {
+              <button disabled={pasteBusy} onClick={async () => {
+                setPasteBusy(true);
+                setPasteError('');
                 try {
                   const data = await resolveSharedCharacter(pasteText);
-                  const created = await api.createCharacter(player.id, {
+                  // Mesmo caminho do FichaForm: playerId dentro do payload e apenas
+                  // campos conhecidos — o servidor revalida tudo (sem dados forjados).
+                  await api.createCharacter({
+                    playerId: player.id,
                     name: data.name,
-                    level: data.level,
-                    xp: data.xp,
+                    gender: data.gender,
                     attributes: data.attributes,
-                    classes: data.classes,
                     races: data.races,
+                    classes: data.classes,
+                    passiva: data.passiva,
                     skills: data.skills,
-                    spells: data.spells,
                     ultimate: data.ultimate,
                     especial: data.especial,
-                    inventory: data.inventory || [],
                     equipment: data.equipment,
-                    passiva: data.passiva,
-                    gender: data.gender,
-                    custom_class_name: data.custom_class_name,
+                    habilidades: data.habilidades || [],
                   });
                   setPasteModal(false);
                   setPasteText('');
                   onRefresh();
                 } catch (e) {
                   setPasteError(e.message);
+                } finally {
+                  setPasteBusy(false);
                 }
-              }}>Importar ficha</button>
+              }}>{pasteBusy ? 'Importando…' : 'Importar ficha'}</button>
               <button className="ghost" onClick={() => { setPasteModal(false); setPasteText(''); setPasteError(''); }}>Cancelar</button>
             </div>
           </div>

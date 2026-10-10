@@ -354,16 +354,31 @@ export const api = {
       const chars = getOfflineCharacters();
       const c = chars.find((ch) => ch.id === id);
       if (c) {
+        // Arsenal: uma arma por categoria (perto/distancia/utilitaria) + armadura.
+        const SLOT_ARMA = { arma_perto: 'perto', arma_distancia: 'distancia', arma_utilitaria: 'utilitaria' };
+        const categoria = SLOT_ARMA[slot] || (slot === 'arma' ? 'perto' : null);
+        c.equipment = c.equipment || {};
         let item = null;
         if (itemId) {
-          // Guarda a definição COMPLETA do item (dano/defesa/bônus/slots de gema),
-          // igual ao servidor — antes salvava só { id } e as stats zeravam.
-          const catalog = slot === 'arma' ? EQUIPMENT.armas : EQUIPMENT.armaduras;
-          const def = catalog[itemId];
-          item = def ? { id: itemId, ...def } : null;
+          if (categoria) {
+            // Guarda a definição COMPLETA do item (dano/bônus/slots de gema).
+            const def = EQUIPMENT.armas[itemId];
+            const catDef = def && (def.categoria || (def.alcance === 'corpo' ? 'perto' : 'distancia'));
+            if (def && catDef === categoria) item = { id: itemId, ...def };
+          } else {
+            const def = EQUIPMENT.armaduras[itemId];
+            item = def ? { id: itemId, ...def } : null;
+          }
         }
-        c.equipment = c.equipment || {};
-        c.equipment[slot] = item;
+        if (categoria) {
+          const armas = { ...(c.equipment.armas || {}) };
+          armas[categoria] = item;
+          const primaria = armas.perto || armas.distancia || armas.utilitaria;
+          c.equipment.armas = armas;
+          c.equipment.arma = primaria ? { ...primaria } : null;
+        } else {
+          c.equipment.armadura = item;
+        }
         const stats = applyMaxMults(
           deriveStats(c.classes || [], c.level || 1, c.attributes, c.equipment, c.races || []),
           efeitosDaFicha(c),

@@ -18,7 +18,7 @@ foreach ($f in $identicos) {
   Copy-Item (Join-Path $src $f) (Join-Path $dst $f) -Force
 }
 
-# battleManager.js precisa dos 3 ajustes do servidor.
+# battleManager.js precisa dos 2 ajustes do servidor.
 Copy-Item (Join-Path $src 'battleManager.js') (Join-Path $dst 'battleManager.js') -Force
 $p = Join-Path $dst 'battleManager.js'
 $c = [System.IO.File]::ReadAllText($p)
@@ -32,10 +32,11 @@ $c2 = [regex]::Replace($c, '(?s)function clamp\(v, min, max\) \{\r?\n  return Ma
 if ($c2 -eq $c) { throw 'clamp local não encontrado no battleManager.js do cliente.' }
 $c = $c2
 
-$arma = 'const weapon = p.equipment.arma ? EQUIPMENT.armas[p.equipment.arma.id] : null;'
-$armaServidor = 'const weapon = p.equipment.arma ? EQUIPMENT.armas[p.equipment.arma.id] || p.equipment.arma : null;'
+# A arma do ataque básico sai do próprio equipamento (melhorArma), sem lookup
+# no catálogo — então o antigo fallback de monstro deixou de existir.
+$arma = 'const weapon = melhorArma(p.equipment);'
 $n = ([regex]::Matches($c, [regex]::Escape($arma))).Count
-$c = $c.Replace($arma, $armaServidor)
+if ($n -lt 1) { throw 'Resolução de arma (melhorArma) não encontrada no battleManager.js do cliente.' }
 
 [System.IO.File]::WriteAllText($p, $c, $utf8)
-Write-Host "Sincronizado: $($identicos -join ', ') e battleManager.js ($n armas com fallback)."
+Write-Host "Sincronizado: $($identicos -join ', ') e battleManager.js ($n resoluções de arma via melhorArma)."

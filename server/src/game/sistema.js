@@ -274,6 +274,57 @@ export function danoBaseDaArma(arma) {
   return arma ? arma.danoBase || 4 : 2;
 }
 
+// ═══ ARSENAL — até 3 armas (uma por categoria) ═══
+// Categorias: 'perto' (corpo a corpo) | 'distancia' (à distância) |
+// 'utilitaria' (ferramenta com limites de uso). Regra do criador.
+export const ARMAS_SLOTS = ['perto', 'distancia', 'utilitaria'];
+
+export const ARMA_CATEGORIA_INFO = {
+  perto: { nome: 'Corpo a corpo', icon: '⚔️' },
+  distancia: { nome: 'À distância', icon: '🏹' },
+  utilitaria: { nome: 'Utilitária', icon: '🧰' },
+};
+
+/**
+ * Lista as armas equipadas, sem duplicar a arma legada `equipment.arma`.
+ * Cada entrada: { slot, arma }. A arma legada é tratada como 'perto'.
+ */
+export function armasDeEquipamento(equipment = {}) {
+  const out = [];
+  const vistos = new Set();
+  const armas = equipment.armas && typeof equipment.armas === 'object' ? equipment.armas : {};
+  for (const slot of ARMAS_SLOTS) {
+    const a = armas[slot];
+    if (!a) continue;
+    out.push({ slot, arma: a });
+    if (a.id) vistos.add(a.id);
+  }
+  if (equipment.arma && !vistos.has(equipment.arma.id)) {
+    out.push({ slot: 'perto', arma: equipment.arma });
+  }
+  return out;
+}
+
+/** Arma "ativa" para o ataque básico: a de maior dano base (empate → primeira equipada). */
+export function melhorArma(equipment = {}) {
+  let melhor = null;
+  const melhorDano = () => (melhor ? Number(melhor.danoBase) || 0 : -1);
+  for (const { arma } of armasDeEquipamento(equipment)) {
+    const dano = Number(arma.danoBase) || 0;
+    if (dano > melhorDano()) melhor = arma;
+  }
+  return melhor;
+}
+
+/** Categoria de um item de arma (onde ele se encaixa nos 3 slots do arsenal). */
+export function categoriaDeArma(arma) {
+  if (!arma) return null;
+  if (arma.categoria && ARMAS_SLOTS.includes(arma.categoria)) return arma.categoria;
+  // Fallback por características legadas (antes do campo categoria existir).
+  if (arma.alcance === 'corpo') return 'perto';
+  return 'distancia';
+}
+
 /** Dano físico do ataque básico = (FOR Final + danoBase da arma) × 10 × mult. */
 export function danoFisicoAtaque(forcaFinal, armaDanoBase = 0, mult = 1) {
   const forca = Number(forcaFinal) || 0;

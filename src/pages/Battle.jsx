@@ -3,6 +3,7 @@ import { api, getSocket, emitAck, isOffline, applyOfflineRewards } from '../api.
 import StatBar from '../components/StatBar.jsx';
 import { playLogKind, play, isMuted, toggleMute } from '../utils/sfx.js';
 import { VOO, ALTITUDES } from '../game/sistema.js';
+import { melhorArma, armasDeEquipamento } from '../game/data.js';
 
 const CLASS_ICONS = { guerreiro: '🛡️', mago: '🔮', arqueiro: '🏹', clerigo: '✝️', assassino: '🗡️', paladino: '⚔️' };
 const MONSTER_ICON = '👾';
@@ -150,6 +151,15 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
   const myChars = useMemo(() => participants.filter((p) => p.playerId === player.id), [participants, player.id]);
   const active = currentIsMine ? currentChar : isMasterTurn ? currentChar : myChars[0];
 
+  // Armas do arsenal do personagem ativo (para o ataque básico e a utilitária).
+  const armaMelhor = active ? melhorArma(active.equipment) : null;
+  const armaUtil = active
+    ? (armasDeEquipamento(active.equipment).find((e) => e.slot === 'utilitaria') || {}).arma || null
+    : null;
+  const utilUsos = armaUtil
+    ? (active.wpnUsos && active.wpnUsos[armaUtil.id]) ?? armaUtil.usosMax ?? 1
+    : 0;
+
   const heroes = useMemo(() => participants.filter((p) => !p.isMonster), [participants]);
   const enemies = useMemo(() => participants.filter((p) => p.isMonster), [participants]);
   const teamA = useMemo(() => participants.filter((p) => p.team === 'A'), [participants]);
@@ -206,6 +216,7 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
   };
 
   const doAttack = () => act({ type: 'attack', targetId: targetId || aliveTargets[0]?.characterId });
+  const doUtility = () => act({ type: 'attackUtility', targetId: targetId || aliveTargets[0]?.characterId });
   const doDefend = () => act({ type: 'defend' });
   const doDodge = () => act({ type: 'dodge' });
   const doVoo = (dir) => act({ type: 'voo', dir });
@@ -524,9 +535,24 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
               {actionType === 'attack' && (
                 <div className="action-body">
                   <TargetSelect targets={aliveTargets} value={targetId} onChange={setTargetId} />
+                  {active && armaMelhor && (
+                    <p className="muted small">
+                      ⚔️ Arma ativa: <strong>{armaMelhor.nome}</strong> (dano {armaMelhor.danoBase})
+                    </p>
+                  )}
                   <button onClick={doAttack} disabled={busy || !aliveTargets.length}>
                     Atacar
                   </button>
+                  {active && armaUtil && (
+                    <button
+                      className={busy ? '' : 'ghost'}
+                      onClick={doUtility}
+                      disabled={busy || !aliveTargets.length || utilUsos <= 0}
+                      title={utilUsos <= 0 ? 'Sem usos restantes nesta batalha.' : (armaUtil.efeito ? `Efeito: ${armaUtil.efeito.tipo} (${armaUtil.efeito.turnos} turnos)` : '')}
+                    >
+                      🧰 {armaUtil.nome} ({utilUsos} uso{utilUsos === 1 ? '' : 's'})
+                    </button>
+                  )}
                 </div>
               )}
 

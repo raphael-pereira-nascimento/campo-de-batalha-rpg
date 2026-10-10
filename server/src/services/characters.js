@@ -265,8 +265,18 @@ export function buildCharacterData(playerId, { name, gender, attributes, races, 
   const normHabils = normalizeHabilidades(habilidades);
 
   const attrs = validateAttributes(attributes);
+  // Arsenal: até 3 armas, uma por categoria (perto/distancia/utilitaria).
+  const armasIn = equipment?.armas && typeof equipment.armas === 'object' ? equipment.armas : {};
+  const armas = {
+    perto: armasIn.perto ? { ...armasIn.perto } : null,
+    distancia: armasIn.distancia ? { ...armasIn.distancia } : null,
+    utilitaria: armasIn.utilitaria ? { ...armasIn.utilitaria } : null,
+  };
+  const armaPrimaria = armas.perto || armas.distancia || armas.utilitaria;
   const equipmentObj = {
-    arma: equipment?.arma ? { ...equipment.arma } : null,
+    // arma (legado/ativa) aponta para a primária; armas guarda o arsenal.
+    arma: armaPrimaria ? { ...armaPrimaria } : null,
+    armas,
     armadura: equipment?.armadura ? { ...equipment.armadura } : null,
   };
 
@@ -390,32 +400,79 @@ function jsonOrObj(value) {
   return typeof value === 'string' ? JSON.parse(value) : value;
 }
 
+// Slots de arma do arsenal: cada categoria tem o próprio slot (uma arma por vez).
+const SLOT_ARMA = {
+  arma_perto: 'perto',
+  arma_distancia: 'distancia',
+  arma_utilitaria: 'utilitaria',
+};
+
 export async function equipItem(characterId, slot, itemId) {
   const char = await getCharacter(characterId);
   if (!char) throw new Error('Personagem não encontrado.');
 
-  const catalog = slot === 'arma' ? EQUIPMENT.armas : EQUIPMENT.armaduras;
+  const categoria = SLOT_ARMA[slot] || (slot === 'arma' ? 'perto' : null);
   let item = null;
   if (itemId) {
-    item = catalog[itemId] ? { id: itemId, ...catalog[itemId] } : null;
-    if (!item) {
-      const custom = await getCustomEquipment(itemId);
-      if (custom && custom.tipo === slot) {
-        item = {
-          id: custom.id,
-          nome: custom.nome,
-          danoBase: custom.dano_base,
-          defesa: custom.defesa,
-          bonus: custom.bonus || {},
-          penalidade: custom.penalidade || {},
-          maleficio: custom.maleficio || '',
-        };
+    if (categoria) {
+      itemId = String(itemId);
+      const preset = EQUIPMENT.armas[itemId];
+      item =
+        preset && preset.categoria === categoria
+          ? { id: itemId, ...preset }
+          : null;
+      if (!item) {
+        const custom = await getCustomEquipment(itemId);
+        if (custom && custom.tipo === 'arma') {
+          const catCustom =
+            custom.categoria || (custom.alcance === 'corpo' ? 'perto' : 'distancia');
+          if (catCustom !== categoria) {
+            throw new Error(`Este item não é uma arma de ${categoria}.`);
+          }
+          item = {
+            id: custom.id,
+            nome: custom.nome,
+            tipo: 'arma',
+            categoria,
+            danoBase: custom.dano_base,
+            defesa: custom.defesa,
+            bonus: custom.bonus || {},
+            penalidade: custom.penalidade || {},
+            maleficio: custom.maleficio || '',
+          };
+        }
+      }
+    } else {
+      const preset = EQUIPMENT.armaduras[itemId];
+      item = preset ? { id: itemId, ...preset } : null;
+      if (!item) {
+        const custom = await getCustomEquipment(itemId);
+        if (custom && custom.tipo === 'armadura') {
+          item = {
+            id: custom.id,
+            nome: custom.nome,
+            tipo: 'armadura',
+            defesa: custom.defesa,
+            bonus: custom.bonus || {},
+            penalidade: custom.penalidade || {},
+            maleficio: custom.maleficio || '',
+          };
+        }
       }
     }
     if (!item) throw new Error('Item não existe.');
   }
 
-  const equipment = { ...char.equipment, [slot]: item };
+  let equipment;
+  if (categoria) {
+    const armas = { ...((char.equipment && char.equipment.armas) || {}) };
+    armas[categoria] = item;
+    const armaPrimaria = armas.perto || armas.distancia || armas.utilitaria;
+    equipment = { ...(char.equipment || {}), armas, arma: armaPrimaria ? { ...armaPrimaria } : null };
+  } else {
+    equipment = { ...(char.equipment || {}), armadura: item };
+  }
+
   const stats = applyMaxMults(
     deriveStats(char.classes, char.level, char.attributes, equipment, char.races),
     efeitosDaFicha(char.races, char.habilidades),

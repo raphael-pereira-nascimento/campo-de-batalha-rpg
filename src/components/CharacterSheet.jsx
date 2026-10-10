@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import { ATTRIBUTES, ATTRIBUTE_NAMES } from '../config.js';
 import { GEMS, GEM_RARITY, gemIsRaw } from '../game/gems.js';
 import { deriveStats } from '../game/data.js';
-import { cargaMaxima, VOO } from '../game/sistema.js';
+import { cargaMaxima, VOO, armasDeEquipamento, categoriaDeArma, ARMAS_SLOTS, ARMA_CATEGORIA_INFO } from '../game/sistema.js';
 import StatBar from './StatBar.jsx';
 
 const CLASS_ICONS = {
@@ -109,8 +109,10 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
     }
   };
 
-  const armas = [
-    ...Object.entries(gameData.equipment.armas).map(([id, it]) => ({ id, label: `${it.nome} (dano ${it.danoBase})` })),
+  const armasDaCategoria = (categoria) => [
+    ...Object.entries(gameData.equipment.armas)
+      .filter(([, it]) => (it.categoria || categoriaDeArma(it)) === categoria)
+      .map(([id, it]) => ({ id, label: `${it.nome} (dano ${it.danoBase}${it.usosMax ? ` · ${it.usosMax} usos` : ''})` })),
     ...customEquipment
       .filter((e) => e.tipo === 'arma')
       .map((e) => ({ id: e.id, label: `${e.nome} (dano ${e.dano_base}) ✨` })),
@@ -121,6 +123,11 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
       .filter((e) => e.tipo === 'armadura')
       .map((e) => ({ id: e.id, label: `${e.nome} (def ${e.defesa}) ✨` })),
   ];
+  // Arma atual de uma categoria (suporta fichas antigas sem `armas`).
+  const armaAtual = (categoria) =>
+    character.equipment?.armas?.[categoria]?.id ||
+    (categoria === 'perto' ? character.equipment?.arma?.id || '' : '') ||
+    '';
 
   const equipSummary = (item) =>
     item
@@ -266,23 +273,25 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
       <div className="sheet-section">
         <h4>Equipamento</h4>
         <div className="equip-row">
+          {ARMAS_SLOTS.map((cat) => (
+            <label key={cat}>
+              {ARMA_CATEGORIA_INFO[cat].icon} {ARMA_CATEGORIA_INFO[cat].nome}
+              <select
+                value={armaAtual(cat)}
+                disabled={busy === `arma_${cat}`}
+                onChange={(e) => equip(`arma_${cat}`, e.target.value)}
+              >
+                <option value="">— Nenhuma —</option>
+                {armasDaCategoria(cat).map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
           <label>
-            Arma
-            <select
-              value={(character.equipment?.arma?.id) || ''}
-              disabled={busy === 'arma'}
-              onChange={(e) => equip('arma', e.target.value)}
-            >
-              <option value="">— Nenhuma —</option>
-              {armas.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Armadura
+            🛡️ Armadura
             <select
               value={(character.equipment?.armadura?.id) || ''}
               disabled={busy === 'armadura'}
@@ -297,14 +306,20 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
             </select>
           </label>
         </div>
-        {(character.equipment?.arma || character.equipment?.armadura) && (
+        {(armasDeEquipamento(character.equipment).length || character.equipment?.armadura) && (
           <div className="spell-list">
-            {character.equipment?.arma && (
-              <div className="spell-chip">
-                <span>⚔️ {character.equipment.arma.nome}</span>
-                <small>dano {character.equipment.arma.danoBase} · {equipSummary(character.equipment.arma)}{character.equipment.arma.maleficio ? ` · ⚠️ ${character.equipment.arma.maleficio}` : ''}</small>
+            {armasDeEquipamento(character.equipment).map(({ slot, arma }) => (
+              <div className="spell-chip" key={slot}>
+                <span>
+                  {ARMA_CATEGORIA_INFO[slot].icon} {arma.nome}
+                  {arma.usosMax ? ` (${arma.usosMax} usos)` : ''}
+                </span>
+                <small>
+                  dano {arma.danoBase} · {equipSummary(arma)}
+                  {arma.maleficio ? ` · ⚠️ ${arma.maleficio}` : ''}
+                </small>
               </div>
-            )}
+            ))}
             {character.equipment?.armadura && (
               <div className="spell-chip">
                 <span>🛡️ {character.equipment.armadura.nome}</span>

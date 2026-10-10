@@ -18,7 +18,16 @@ import {
   PASSIVAS_EXTRAS,
 } from '../config.js';
 import { applyGenderToRace } from '../game/races.js';
-import { manaMaxFrom, danoFisicoAtaque, danoBaseDaArma } from '../game/sistema.js';
+import {
+  manaMaxFrom,
+  danoFisicoAtaque,
+  danoBaseDaArma,
+  armasDeEquipamento,
+  melhorArma,
+  categoriaDeArma,
+  ARMAS_SLOTS,
+  ARMA_CATEGORIA_INFO,
+} from '../game/sistema.js';
 
 const STEP_NAMES = [
   'Identidade',
@@ -70,8 +79,9 @@ function effFor(attrs, races, classes, equipment) {
   const eff = { ...attrs };
   for (const [k, v] of Object.entries(raceBonusTotal(races))) eff[k] = (eff[k] || 0) + v;
   for (const [k, v] of Object.entries(classBonusTotal(classes))) eff[k] = (eff[k] || 0) + v;
-  for (const item of [equipment.arma, equipment.armadura]) {
-    if (!item) continue;
+  // Equipamento: todas as armas do arsenal (até 3) + armadura.
+  const itens = [...armasDeEquipamento(equipment).map((e) => e.arma), equipment.armadura].filter(Boolean);
+  for (const item of itens) {
     for (const [k, v] of Object.entries(item.bonus || {})) eff[k] = (eff[k] || 0) + v;
     for (const [k, v] of Object.entries(item.penalidade || {})) eff[k] = (eff[k] || 0) - Math.abs(v);
   }
@@ -90,7 +100,10 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
   const [skills, setSkills] = useState([]);
   const [ultimate, setUltimate] = useState(null);
   const [especial, setEspecial] = useState(null);
-  const [equipment, setEquipment] = useState({ arma: null, armadura: null });
+  const [equipment, setEquipment] = useState({
+    armas: { perto: null, distancia: null, utilitaria: null },
+    armadura: null,
+  });
   const [attrs, setAttrs] = useState(emptyAttrs());
   const [habilidades, setHabilidades] = useState([]);
   const [customRaces, setCustomRaces] = useState([]);
@@ -114,8 +127,8 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
     const hpMax = 500 + eff.resistencia * 10;
     // Regra confirmada: Mana = INT × 2 + BR + BC (não cresce por nível).
     const mpMax = manaMaxFrom(attrs.inteligencia, eff.inteligencia);
-    // Dano do ataque básico = (FOR Final + danoBase da arma) × 10 (provisório).
-    const dano = danoFisicoAtaque(eff.forca, danoBaseDaArma(equipment?.arma));
+    // Dano do ataque básico = (FOR Final + danoBase da melhor arma) × 10 (provisório).
+    const dano = danoFisicoAtaque(eff.forca, danoBaseDaArma(melhorArma(equipment)));
     return { hpMax, mpMax, dano, eff };
   }, [attrs, races, classes, equipment]);
 
@@ -168,7 +181,16 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
         skills,
         ultimate,
         especial,
-        equipment: { arma: equipment.arma || null, armadura: equipment.armadura || null },
+        equipment: {
+          armas: {
+            perto: equipment.armas?.perto || null,
+            distancia: equipment.armas?.distancia || null,
+            utilitaria: equipment.armas?.utilitaria || null,
+          },
+          arma:
+            equipment.armas?.perto || equipment.armas?.distancia || equipment.armas?.utilitaria || null,
+          armadura: equipment.armadura || null,
+        },
         habilidades,
       });
       onCreated();
@@ -913,30 +935,65 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player 
   const [publish, setPublish] = useState(false);
   const [form, setForm] = useState({
     tipo: 'arma',
+    categoria: 'perto',
     nome: '',
     dano_base: 6,
     defesa: 4,
+    usos_max: 3,
+    efeito_tipo: '',
+    efeito_turnos: 2,
+    efeito_dano: 50,
     bonus: {},
     penalidade: {},
     maleficio: '',
   });
-  const [armaPick, setArmaPick] = useState('');
+  const [armaPicks, setArmaPicks] = useState({ perto: '', distancia: '', utilitaria: '' });
   const [armaduraPick, setArmaduraPick] = useState('');
 
-  const presetArmas = Object.values(gameData.equipment.armas);
-  const presetArmaduras = Object.values(gameData.equipment.armaduras);
+  // O id do catálogo é a CHAVE do objeto — Object.values perde o id e o select
+  // não consegue equipar (option value ficava undefined). Usamos Object.entries.
+  const presetArmas = Object.entries(gameData.equipment.armas).map(([id, it]) => ({ id, ...it }));
+  const presetArmaduras = Object.entries(gameData.equipment.armaduras).map(([id, it]) => ({ id, ...it }));
   const customArmas = customEquipment.filter((e) => e.tipo === 'arma');
   const customArmaduras = customEquipment.filter((e) => e.tipo === 'armadura');
 
-  const applyArma = () => {
-    if (!armaPick) return;
-    const src = [...presetArmas, ...customArmas].find((a) => a.id === armaPick || a.nome === armaPick);
+  const armasDaCategoria = (categoria) =>
+    [...presetArmas.filter((a) => (a.categoria || categoriaDeArma(a)) === categoria), ...customArmas].map((a) => ({
+      ...a,
+      _categoria: categoria,
+    }));
+
+  const applyArma = (categoria) => {
+    const pick = armaPicks[categoria];
+    if (!pick) return;
+    const src = armasDaCategoria(categoria).find((a) => a.id === pick || a.nome === pick);
     if (!src) return;
-    const isCustom = customArmas.some((a) => a.id === armaPick);
+    const isCustom = customArmas.some((a) => a.id === pick);
     const def = isCustom
-      ? { id: armaPick, nome: src.nome, danoBase: Number(src.dano_base), bonus: src.bonus || {}, penalidade: src.penalidade || {}, maleficio: src.maleficio || '' }
-      : { id: src.id, nome: src.nome, danoBase: src.danoBase, bonus: src.bonus || {}, penalidade: src.penalidade || {}, maleficio: src.maleficio || '' };
-    setEquipment((eq) => ({ ...eq, arma: def }));
+      ? {
+          id: pick,
+          nome: src.nome,
+          categoria,
+          danoBase: Number(src.dano_base),
+          bonus: src.bonus || {},
+          penalidade: src.penalidade || {},
+          maleficio: src.maleficio || '',
+        }
+      : {
+          id: src.id,
+          nome: src.nome,
+          categoria,
+          danoBase: src.danoBase,
+          bonus: src.bonus || {},
+          penalidade: src.penalidade || {},
+          maleficio: src.maleficio || '',
+          socketSlots: src.socketSlots,
+          alcance: src.alcance,
+          usosMax: src.usosMax,
+          efeito: src.efeito,
+        };
+    setEquipment((eq) => ({ ...eq, armas: { ...(eq.armas || {}), [categoria]: def } }));
+    setArmaPicks((p) => ({ ...p, [categoria]: '' }));
   };
 
   const applyArmadura = () => {
@@ -955,17 +1012,57 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player 
 
   const createItem = async () => {
     if (!form.nome.trim()) return;
+    const efeito =
+      form.tipo === 'arma' && form.categoria === 'utilitaria' && form.efeito_tipo
+        ? {
+            tipo: form.efeito_tipo,
+            turnos: Math.max(1, form.efeito_turnos),
+            dano: ['queimadura', 'veneno'].includes(form.efeito_tipo) ? form.efeito_dano : undefined,
+          }
+        : null;
     const def =
       form.tipo === 'arma'
-        ? { id: `arma_${Date.now()}`, nome: form.nome.trim(), danoBase: form.dano_base, bonus: form.bonus, penalidade: form.penalidade, maleficio: form.maleficio }
-        : { id: `armadura_${Date.now()}`, nome: form.nome.trim(), defesa: form.defesa, bonus: form.bonus, penalidade: form.penalidade, maleficio: form.maleficio };
-    setEquipment((eq) => ({ ...eq, [form.tipo]: def }));
+        ? {
+            id: `arma_${Date.now()}`,
+            nome: form.nome.trim(),
+            categoria: form.categoria,
+            danoBase: form.dano_base,
+            usosMax: form.categoria === 'utilitaria' ? Math.max(1, form.usos_max) : undefined,
+            efeito,
+            bonus: form.bonus,
+            penalidade: form.penalidade,
+            maleficio: form.maleficio,
+          }
+        : {
+            id: `armadura_${Date.now()}`,
+            nome: form.nome.trim(),
+            defesa: form.defesa,
+            bonus: form.bonus,
+            penalidade: form.penalidade,
+            maleficio: form.maleficio,
+          };
+    if (form.tipo === 'arma') {
+      setEquipment((eq) => ({ ...eq, armas: { ...(eq.armas || {}), [form.categoria]: def } }));
+    } else {
+      setEquipment((eq) => ({ ...eq, armadura: def }));
+    }
     if (publish) {
       try {
-        await api.createCustomEquipment({ creatorId: player.id, nome: form.nome, tipo: form.tipo, dano_base: form.dano_base, defesa: form.defesa, bonus: form.bonus, penalidade: form.penalidade, maleficio: form.maleficio });
+        await api.createCustomEquipment({
+          creatorId: player.id,
+          nome: form.nome,
+          tipo: form.tipo,
+          categoria: form.categoria,
+          dano_base: form.dano_base,
+          defesa: form.defesa,
+          usos_max: form.usos_max,
+          bonus: form.bonus,
+          penalidade: form.penalidade,
+          maleficio: form.maleficio,
+        });
       } catch (_e) { /* opcional */ }
     }
-    setForm({ tipo: 'arma', nome: '', dano_base: 6, defesa: 4, bonus: {}, penalidade: {}, maleficio: '' });
+    setForm({ tipo: 'arma', categoria: 'perto', nome: '', dano_base: 6, defesa: 4, usos_max: 3, efeito_tipo: '', efeito_turnos: 2, efeito_dano: 50, bonus: {}, penalidade: {}, maleficio: '' });
     setCreating(false);
   };
 
@@ -979,26 +1076,34 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player 
   return (
     <div className="stack">
       <div className="form-row">
+        {ARMAS_SLOTS.map((cat) => {
+          const info = ARMA_CATEGORIA_INFO[cat];
+          const catalogo = presetArmas.filter((a) => (a.categoria || categoriaDeArma(a)) === cat);
+          return (
+            <label key={cat}>
+              {info.icon} {info.nome}
+              <select value={armaPicks[cat]} onChange={(e) => setArmaPicks((p) => ({ ...p, [cat]: e.target.value }))}>
+                <option value="">Escolher arma...</option>
+                <optgroup label="Catálogo">
+                  {catalogo.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.nome} (dano {a.danoBase}{a.usosMax ? ` · ${a.usosMax} usos` : ''})
+                    </option>
+                  ))}
+                </optgroup>
+                {customArmas.length > 0 && (
+                  <optgroup label="Criadas">
+                    {customArmas.map((a) => (
+                      <option key={a.id} value={a.id}>{a.nome} (dano {a.dano_base})</option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </label>
+          );
+        })}
         <label>
-          Arma
-          <select value={armaPick} onChange={(e) => setArmaPick(e.target.value)}>
-            <option value="">Escolher arma...</option>
-            <optgroup label="Catálogo">
-              {presetArmas.map((a) => (
-                <option key={a.id} value={a.id}>{a.nome} (dano {a.danoBase})</option>
-              ))}
-            </optgroup>
-            {customArmas.length > 0 && (
-              <optgroup label="Criadas">
-                {customArmas.map((a) => (
-                  <option key={a.id} value={a.id}>{a.nome} (dano {a.dano_base})</option>
-                ))}
-              </optgroup>
-            )}
-          </select>
-        </label>
-        <label>
-          Armadura
+          🛡️ Armadura
           <select value={armaduraPick} onChange={(e) => setArmaduraPick(e.target.value)}>
             <option value="">Escolher armadura...</option>
             <optgroup label="Catálogo">
@@ -1017,7 +1122,11 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player 
         </label>
       </div>
       <div className="join-controls">
-        <button onClick={applyArma} disabled={!armaPick}>Equipar arma</button>
+        {ARMAS_SLOTS.map((cat) => (
+          <button key={cat} onClick={() => applyArma(cat)} disabled={!armaPicks[cat]}>
+            Equipar {ARMA_CATEGORIA_INFO[cat].nome.toLowerCase()}
+          </button>
+        ))}
         <button onClick={applyArmadura} disabled={!armaduraPick}>Equipar armadura</button>
         <button className="ghost" onClick={() => setCreating((c) => !c)}>
           {creating ? 'Fechar' : '✍️ Criar equipamento'}
@@ -1034,6 +1143,18 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player 
                 <option value="armadura">Armadura</option>
               </select>
             </label>
+            {form.tipo === 'arma' && (
+              <label>
+                Categoria
+                <select value={form.categoria} onChange={(e) => setForm((f) => ({ ...f, categoria: e.target.value }))}>
+                  {ARMAS_SLOTS.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {ARMA_CATEGORIA_INFO[cat].icon} {ARMA_CATEGORIA_INFO[cat].nome}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label>
               Nome
               <input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} maxLength={40} placeholder={form.tipo === 'arma' ? 'Ex.: Espada de Cinzas' : 'Ex.: Manto do Crepúsculo'} />
@@ -1048,6 +1169,37 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player 
                 Defesa
                 <input type="number" min={1} max={20} value={form.defesa} onChange={(e) => setForm((f) => ({ ...f, defesa: Number(e.target.value) }))} />
               </label>
+            )}
+            {form.tipo === 'arma' && form.categoria === 'utilitaria' && (
+              <>
+                <label>
+                  Usos por batalha
+                  <input type="number" min={1} max={10} value={form.usos_max} onChange={(e) => setForm((f) => ({ ...f, usos_max: Number(e.target.value) }))} />
+                </label>
+                <label>
+                  Efeito
+                  <select value={form.efeito_tipo} onChange={(e) => setForm((f) => ({ ...f, efeito_tipo: e.target.value }))}>
+                    <option value="">Nenhum (só dano)</option>
+                    <option value="lentidao">🐢 Lentidão</option>
+                    <option value="cegueira">🌫️ Cegueira</option>
+                    <option value="fraqueza">💢 Fraqueza</option>
+                    <option value="queimadura">🔥 Queimadura</option>
+                    <option value="veneno">☠️ Veneno</option>
+                  </select>
+                </label>
+                {form.efeito_tipo && (
+                  <label>
+                    Turnos
+                    <input type="number" min={1} max={9} value={form.efeito_turnos} onChange={(e) => setForm((f) => ({ ...f, efeito_turnos: Number(e.target.value) }))} />
+                  </label>
+                )}
+                {['queimadura', 'veneno'].includes(form.efeito_tipo) && (
+                  <label>
+                    Dano/turno
+                    <input type="number" min={1} max={500} value={form.efeito_dano} onChange={(e) => setForm((f) => ({ ...f, efeito_dano: Number(e.target.value) }))} />
+                  </label>
+                )}
+              </>
             )}
           </div>
           <div className="attrs mini">
@@ -1076,14 +1228,27 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player 
       )}
 
       <div className="chosen-list">
-        {equipment.arma && (
-          <div className="chosen-chip">
-            <strong>⚔️ {equipment.arma.nome}</strong>
-            <span className="tag">dano {equipment.arma.danoBase}</span>
-            <span className="muted small">{bonusSummary(equipment.arma)}</span>
-            <button className="ghost remove-x" onClick={() => setEquipment((eq) => ({ ...eq, arma: null }))}>✕</button>
-          </div>
-        )}
+        {ARMAS_SLOTS.map((cat) => {
+          const arma = equipment.armas?.[cat];
+          if (!arma) return null;
+          const info = ARMA_CATEGORIA_INFO[cat];
+          return (
+            <div className="chosen-chip" key={cat}>
+              <strong>{info.icon} {arma.nome}</strong>
+              <span className="tag">{info.nome}</span>
+              <span className="tag">dano {arma.danoBase}</span>
+              {arma.usosMax ? <span className="tag">{arma.usosMax} usos</span> : null}
+              {arma.efeito ? <span className="tag">efeito: {arma.efeito.tipo}</span> : null}
+              <span className="muted small">{bonusSummary(arma)}</span>
+              <button
+                className="ghost remove-x"
+                onClick={() => setEquipment((eq) => ({ ...eq, armas: { ...(eq.armas || {}), [cat]: null } }))}
+              >
+                ✕
+              </button>
+            </div>
+          );
+        })}
         {equipment.armadura && (
           <div className="chosen-chip">
             <strong>🛡️ {equipment.armadura.nome}</strong>
@@ -1092,7 +1257,7 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player 
             <button className="ghost remove-x" onClick={() => setEquipment((eq) => ({ ...eq, armadura: null }))}>✕</button>
           </div>
         )}
-        {!equipment.arma && !equipment.armadura && <p className="muted">Sem equipamento.</p>}
+        {!armasDeEquipamento(equipment).length && !equipment.armadura && <p className="muted">Sem equipamento.</p>}
       </div>
     </div>
   );
@@ -1217,7 +1382,12 @@ function Summary({ name, gender, races, classes, passiva, skills, ultimate, espe
       )}
       {ultimate && <p><strong>Ultimate:</strong> {ultimate.nome} ({ultimate.poder}%) {ultimate.modo ? `· ${ultimate.modo.turnos}t +${ultimate.modo.danoMultPct}%` : ''}</p>}
       {especial && <p><strong>Especial:</strong> {especial.nome} ({especial.poder}%)</p>}
-      {equipment.arma && <p className="muted small">⚔️ {equipment.arma.nome}</p>}
+      {armasDeEquipamento(equipment).map(({ slot, arma }) => (
+        <p className="muted small" key={slot}>
+          {ARMA_CATEGORIA_INFO[slot].icon} {arma.nome}
+          {arma.usosMax ? ` (${arma.usosMax} usos)` : ''}
+        </p>
+      ))}
       {equipment.armadura && <p className="muted small">🛡️ {equipment.armadura.nome}</p>}
       <div className="form-meta">
         <span>Vida: <strong>{stats.hpMax}</strong></span>

@@ -252,7 +252,7 @@ app.post('/api/share/characters', requireAuth, (req, res) => {
     const host = req.get('host');
     const proto = req.protocol || 'http';
     const base = `${proto}://${host}`;
-    res.json({ ok: true, id: rec.id, url: `${base}/share/characters/${rec.id}` });
+    res.json({ ok: true, id: rec.id, url: `${base}/share/${rec.id}` });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
@@ -431,7 +431,14 @@ app.delete('/api/custom-skills/:id', requireAuth, async (req, res) => {
 const clientDist = path.join(__dirname, '../../dist');
 if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
-  app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+  // SPA catch-all: apenas páginas — nunca serve index.html no lugar de assets.
+  // (um /assets/* pedido quando o arquivo ainda não existe vira 404, não HTML.)
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api/') && (req.path.startsWith('/assets/') || req.path.startsWith('/icon-') || req.path.startsWith('/manifest'))) {
+      return res.status(404).type('text').send('Not found');
+    }
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
 } else {
   // Sem build do frontend, a API continua funcionando e a raiz explica o problema
   // (evita a tela em branco ao abrir http://localhost:3000).

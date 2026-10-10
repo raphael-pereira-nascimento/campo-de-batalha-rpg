@@ -29,7 +29,7 @@ export async function resolveSharedCharacter(input) {
   const trimmed = (input || '').trim();
   if (!trimmed) throw new Error('Cole um link ou JSON válido.');
 
-  const match = trimmed.match(/\/share\/characters\/([A-Za-z0-9_-]+)/);
+  const match = trimmed.match(/\/share\/(?:characters\/)?([A-Za-z0-9_-]+)/);
   if (match) {
     const id = match[1];
     if (isOffline()) throw new Error('Não é possível abrir links compartilhados no modo offline.');
