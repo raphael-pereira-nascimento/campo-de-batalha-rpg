@@ -1039,8 +1039,9 @@ export class BattleManager {
     const alvos =
       spec.tipo === 'area' ? aliados : [aliados[Math.floor(Math.random() * aliados.length)]];
     const elem = elemento || 'fisico';
+    const multBase = spec.danoMult || 1;
     for (const t of alvos) {
-      const total = Math.max(1, Math.round(danoBase * MULTI_FOGO_AMIGO_MULT * this._elemMult(elem, t)));
+      const total = Math.max(1, Math.round(danoBase * multBase * MULTI_FOGO_AMIGO_MULT * this._elemMult(elem, t)));
       battle.log.push(makeLog(`💥 ${p.charName} atinge o aliado ${t.charName} por engano: ${total} de dano.`, 'damage'));
       this._applyDamage(t, total, battle, p, kind);
     }
@@ -1098,7 +1099,7 @@ export class BattleManager {
         return;
       }
       const elemM = this._elemMult(atkElem, t);
-      const multSec = i > 0 ? spec.splash : 1;
+      const multSec = i > 0 ? spec.splash : spec.danoMult;
       const total = Math.round(danoBase * (res.crit ? 2 : 1) * multSec * elemM);
       const elemTag = elemM > 1 ? ` ⚡${atkElem} fragiliza!` : elemM < 1 ? ` 🛡${atkElem} resistido!` : '';
       battle.log.push(
@@ -1170,7 +1171,7 @@ export class BattleManager {
         return;
       }
       const em = this._elemMult(elem, t);
-      const multSec = i > 0 ? spec.splash : 1;
+      const multSec = i > 0 ? spec.splash : spec.danoMult;
       const total = Math.round(danoBase * (res.crit ? 2 : 1) * multSec * em);
       const tag = em > 1 ? ` ⚡${elem} fragiliza!` : em < 1 ? ` 🛡${elem} resistido!` : '';
       const dif = res.dificuldade ? ` dificuldade +${res.dificuldade}.` : '';

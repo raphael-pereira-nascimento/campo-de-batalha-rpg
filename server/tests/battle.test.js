@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BattleManager } from '../src/game/battleManager.js';
 import { MONSTERS, buildMonster } from '../src/game/monsters.js';
+import { MULTI_AREA_MULT, MULTI_CONE_MULT } from '../src/game/sistema.js';
 
 function makeCharacter(overrides = {}) {
   return {
@@ -785,6 +786,34 @@ describe('BattleManager — golpes multi-alvo', () => {
     const danoVizinho = antes[1] - monstros[1].hp;
     expect(danoPrincipal).toBeGreaterThan(0);
     expect(danoVizinho).toBe(Math.round(danoPrincipal * 0.5));
+  });
+
+  it('área/cone reduzem o dano por alvo em relação ao alvo único', () => {
+    // Rolagem fixa (d20 = 2) garante acerto nos dois casos, sem crítico.
+    const unico = setupMulti();
+    vi.spyOn(Math, 'random').mockReturnValue(0.06);
+    const antesU = unico.monstros[0].hp;
+    unico.manager._resolveSkill(unico.battle, unico.hero, unico.monstros[0], golpe({}));
+    const danoUnico = antesU - unico.monstros[0].hp;
+    vi.restoreAllMocks();
+
+    const area = setupMulti();
+    vi.spyOn(Math, 'random').mockReturnValue(0.06);
+    const antesA = area.monstros[0].hp;
+    area.manager._resolveSkill(area.battle, area.hero, area.monstros[0], golpe({ alvo: 'area' }));
+    const danoArea = antesA - area.monstros[0].hp;
+
+    const cone = setupMulti();
+    vi.spyOn(Math, 'random').mockReturnValue(0.06);
+    const antesC = cone.monstros[0].hp;
+    cone.manager._resolveSkill(cone.battle, cone.hero, cone.monstros[0], golpe({ alvo: 'cone', alvos: 2 }), [cone.monstros[1]]);
+    const danoCone = antesC - cone.monstros[0].hp;
+
+    expect(danoUnico).toBeGreaterThan(0);
+    // ±1 tolera arredondamentos independentes de cada alvo.
+    expect(Math.abs(danoArea - Math.round(danoUnico * MULTI_AREA_MULT))).toBeLessThanOrEqual(1);
+    expect(Math.abs(danoCone - Math.round(danoUnico * MULTI_CONE_MULT))).toBeLessThanOrEqual(1);
+    expect(danoCone).toBeGreaterThan(danoArea);
   });
 
   it('sem modo multi, atinge só o principal (comportamento antigo)', () => {

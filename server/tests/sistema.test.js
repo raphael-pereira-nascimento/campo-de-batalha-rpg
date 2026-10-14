@@ -33,6 +33,8 @@ import {
   DIFICULDADE_MAX,
   MULTI_ALVO_PADRAO,
   MULTI_SPLASH_PADRAO,
+  MULTI_AREA_MULT,
+  MULTI_CONE_MULT,
   MULTI_DESVIO_LIMIAR,
   MULTI_DESVIO_CHANCE,
   ALVO_TIPOS,
@@ -313,33 +315,46 @@ describe('XP — divisão por participação', () => {
 });
 
 describe('Multi-alvo — normalização do alvo (área/cone/explosão)', () => {
-  it('padrão é alvo único', () => {
+  it('padrão é alvo único (dano cheio)', () => {
     const s = alvoNormalizado();
     expect(s.tipo).toBe('unico');
     expect(s.max).toBe(1);
     expect(s.splash).toBe(1);
+    expect(s.danoMult).toBe(1);
   });
 
-  it('área atinge todos (max alto) e não tem splash', () => {
+  it('área atinge todos (max alto) com dano reduzido por alvo', () => {
     const s = alvoNormalizado({ alvo: 'area' });
     expect(s.tipo).toBe('area');
     expect(s.max).toBeGreaterThan(10);
-    expect(s.splash).toBe(1);
+    expect(s.danoMult).toBe(MULTI_AREA_MULT);
+    expect(s.splash).toBe(MULTI_AREA_MULT);
   });
 
-  it('cone respeita o nº de alvos (padrão 3, faixa 2..10)', () => {
+  it('cone respeita o nº de alvos (padrão 3, faixa 2..10) e reduz o dano por alvo', () => {
     expect(alvoNormalizado({ alvo: 'cone' }).max).toBe(MULTI_ALVO_PADRAO);
     expect(alvoNormalizado({ alvo: 'cone', alvos: 5 }).max).toBe(5);
     expect(alvoNormalizado({ alvo: 'cone', alvos: 1 }).max).toBe(2);
     expect(alvoNormalizado({ alvo: 'cone', alvos: 99 }).max).toBe(10);
+    const c = alvoNormalizado({ alvo: 'cone' });
+    expect(c.danoMult).toBe(MULTI_CONE_MULT);
+    expect(c.splash).toBe(MULTI_CONE_MULT);
   });
 
-  it('explosão usa o multiplicador de splash (padrão 50%)', () => {
-    expect(alvoNormalizado({ alvo: 'explosao' }).splash).toBe(MULTI_SPLASH_PADRAO);
+  it('explosão: principal cheio e vizinhos com o splash (padrão 50%)', () => {
+    const s = alvoNormalizado({ alvo: 'explosao' });
+    expect(s.danoMult).toBe(1);
+    expect(s.splash).toBe(MULTI_SPLASH_PADRAO);
     expect(alvoNormalizado({ alvo: 'explosao', splash: 0.25 }).splash).toBe(0.25);
     // valores inválidos caem no padrão / teto
     expect(alvoNormalizado({ alvo: 'explosao', splash: 0 }).splash).toBe(MULTI_SPLASH_PADRAO);
     expect(alvoNormalizado({ alvo: 'explosao', splash: 3 }).splash).toBe(1);
+  });
+
+  it('permite ajustar o dano por alvo do golpe (danoMult)', () => {
+    expect(alvoNormalizado({ alvo: 'area', danoMult: 0.8 }).danoMult).toBe(0.8);
+    expect(alvoNormalizado({ alvo: 'cone', danoMult: 3 }).danoMult).toBe(1);
+    expect(alvoNormalizado({ alvo: 'area', danoMult: 0 }).danoMult).toBe(MULTI_AREA_MULT);
   });
 
   it('compatibilidade: `todos` num golpe ofensivo passa a significar área', () => {

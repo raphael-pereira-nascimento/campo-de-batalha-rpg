@@ -153,6 +153,7 @@ export function skillFromSpell(s) {
     alvo: s.alvo || null,
     alvos: s.alvos || null,
     splash: s.splash || null,
+    danoMult: s.danoMult || null,
     status: s.status ? { ...s.status } : null,
     elemento: s.elemento || null,
     alcanceVertical: s.alcanceVertical || null,

@@ -839,13 +839,18 @@ function needsTargetSkill(s) {
 function ExtrasDeAlvo({ spec, targets, value, onChange }) {
   if (!spec || spec.tipo === 'unico') return null;
   if (spec.tipo === 'area') {
-    return <p className="hint alvo-hint">💥 Atinge TODOS os inimigos vivos com 100% do dano.</p>;
+    const pct = Math.round((spec.danoMult || 1) * 100);
+    return <p className="hint alvo-hint">💥 Atinge TODOS os inimigos vivos com {pct}% do dano em cada.</p>;
   }
   const limite = Math.max(0, (spec.max || 1) - 1);
+  const resumo =
+    spec.tipo === 'explosao'
+      ? `principal 100% · vizinhos ${Math.round((spec.splash || 0.5) * 100)}%`
+      : `cada alvo ${Math.round((spec.danoMult || 1) * 100)}%`;
   return (
     <div className="extra-targets">
       <span className="field-label">
-        {spec.tipo === 'cone' ? '🔺 Alvos do cone' : '💣 Vizinhos da explosão'} (até {limite})
+        {spec.tipo === 'cone' ? '🔺 Alvos do cone' : '💣 Vizinhos da explosão'} (até {limite} · {resumo})
       </span>
       {targets.length === 0 ? (
         <span className="muted small">Sem outros alvos disponíveis.</span>

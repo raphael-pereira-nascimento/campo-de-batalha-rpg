@@ -121,6 +121,7 @@ export function normalizeSkill(s = {}) {
     alvo: ALVO_TIPOS[s.alvo] || null,
     alvos: s.alvos ? clampInt(s.alvos, 2, 10) : null,
     splash: s.splash ? clampFloat(s.splash, 0.1, 1) : null,
+    danoMult: s.danoMult ? clampFloat(s.danoMult, 0.1, 1) : null,
     status: normalizeStatus(s.status),
     desc: String(s.desc || '').slice(0, 200),
   };
@@ -248,6 +249,7 @@ function presetSkillsFrom(classes) {
         alvo: s.alvo || null,
         alvos: s.alvos || null,
         splash: s.splash || null,
+        danoMult: s.danoMult || null,
         status: s.status ? { ...s.status } : null,
         desc: s.desc || '',
       });

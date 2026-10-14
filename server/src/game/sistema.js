@@ -418,9 +418,17 @@ export function dificuldadeDoGolpe({ poder = DIFICULDADE_PODER_REF, status = nul
    ═══════════════════════════════════════════════════════════════════════════ */
 export const MULTI_ALVO_PADRAO = 3; // nº máx. de alvos em cone/explosão
 export const MULTI_SPLASH_PADRAO = 0.5; // dano dos alvos secundários na explosão
+export const MULTI_AREA_MULT = 0.55; // dano por alvo em área (acerta todos)
+export const MULTI_CONE_MULT = 0.7; // dano por alvo em cone (até N escolhidos)
 export const MULTI_DESVIO_LIMIAR = 1; // falha crítica (d20 <= 1) pode desviar o golpe
 export const MULTI_DESVIO_CHANCE = 0.5; // chance de o desvio acertar aliados
 export const MULTI_FOGO_AMIGO_MULT = 0.5; // dano do golpe desviado nos aliados
+
+// Limita um multiplicador de dano ao intervalo (0, 1]; usa o padrão se inválido.
+function clampMult(v, fallback) {
+  const n = Number(v);
+  return n > 0 ? Math.min(1, n) : fallback;
+}
 
 export const ALVO_TIPOS = {
   unico: 'Alvo único',
@@ -439,10 +447,16 @@ export const ALVO_LABEL = {
 
 /**
  * Normaliza o modo de alvo de um golpe/arma. Aceita:
- *   { alvo: 'area'|'cone'|'explosao', alvos: N, splash: 0.5 }
+ *   { alvo: 'area'|'cone'|'explosao', alvos: N, splash: 0.5, danoMult: 0.6 }
  * Compatibilidade: golpes antigos só tinham `todos` (antes valia só para cura);
  * num golpe ofensivo, `todos: true` passa a significar 'area'.
- * Retorna { tipo, max, splash }.
+ * Retorna { tipo, max, splash, danoMult }:
+ *   - `danoMult`  → multiplicador de dano do alvo principal (também dos demais
+ *                   em área/cone, que são uniformes).
+ *   - `splash`    → multiplicador de dano dos alvos secundários.
+ * Espalhar o golpe reduz o dano por alvo: área 55%, cone 70%; na explosão o
+ * principal leva 100% e os vizinhos o splash (padrão 50%). Pode ser ajustado
+ * por golpe via `danoMult`/`splash`.
  */
 export function alvoNormalizado(golpe = {}) {
   const g = golpe || {};
@@ -453,13 +467,11 @@ export function alvoNormalizado(golpe = {}) {
   }
   const alvos = Math.max(2, Math.min(10, Number(g.alvos) || MULTI_ALVO_PADRAO));
   const max = tipo === 'unico' ? 1 : tipo === 'area' ? 99 : alvos;
-  const splash =
-    tipo === 'explosao'
-      ? Number(g.splash) > 0
-        ? Math.min(1, Number(g.splash))
-        : MULTI_SPLASH_PADRAO
-      : 1;
-  return { tipo, max, splash };
+  const tipoMult = tipo === 'area' ? MULTI_AREA_MULT : tipo === 'cone' ? MULTI_CONE_MULT : 1;
+  const padraoSplash = tipo === 'explosao' ? MULTI_SPLASH_PADRAO : tipoMult;
+  const danoMult = clampMult(g.danoMult, tipoMult);
+  const splash = clampMult(g.splash, padraoSplash);
+  return { tipo, max, splash, danoMult };
 }
 
 /**

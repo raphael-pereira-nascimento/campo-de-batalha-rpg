@@ -1,4 +1,4 @@
-import { ALVO_TIPOS } from '../game/sistema.js';
+import { ALVO_TIPOS, MULTI_AREA_MULT, MULTI_CONE_MULT } from '../game/sistema.js';
 
 // Opções curtas de modo de alvo (rótulos completos ficam em sistema.js).
 const TIPOS = [
@@ -20,12 +20,14 @@ export default function AlvoSelect({ alvo, alvos, splash, onChange, disabled = f
   const tipo = ALVO_TIPOS[alvo] ? alvo : 'unico';
   const max = alvos || 3;
   const splashPct = Math.round((splash || 0.5) * 100);
+  const areaPct = Math.round(MULTI_AREA_MULT * 100);
+  const conePct = Math.round(MULTI_CONE_MULT * 100);
 
   const desc =
     tipo === 'area'
-      ? 'Varre a área: acerta TODOS os inimigos vivos com 100% do dano.'
+      ? `Varre a área: acerta TODOS os inimigos vivos com ${areaPct}% do dano em cada.`
       : tipo === 'cone'
-        ? `Projéteis em leque: você escolhe até ${max} inimigos, todos com 100% do dano.`
+        ? `Projéteis em leque: você escolhe até ${max} inimigos, cada um com ${conePct}% do dano.`
         : tipo === 'explosao'
           ? `Alvo principal com 100% + até ${max - 1} vizinhos escolhidos com ${splashPct}% do dano.`
           : 'Um único alvo — o padrão de qualquer golpe.';

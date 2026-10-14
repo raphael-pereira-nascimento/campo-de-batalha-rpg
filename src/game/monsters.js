@@ -264,6 +264,7 @@ export function buildMonster(def, playerHpSum = 0) {
             alvo: def.arma.alvo || null,
             alvos: def.arma.alvos || null,
             splash: def.arma.splash || null,
+            danoMult: def.arma.danoMult || null,
           }
         : null,
       armadura: null,

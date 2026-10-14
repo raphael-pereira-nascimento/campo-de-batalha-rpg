@@ -37,7 +37,7 @@ for (const caso of [
   { rotulo: 'todos+magia (compat)', golpe: { todos: true, tipo: 'magia' } },
 ]) {
   const s = alvoNormalizado(caso.golpe);
-  log(`${caso.rotulo.padEnd(20)} => tipo=${s.tipo} max=${s.max} splash=${s.splash}`);
+  log(`${caso.rotulo.padEnd(20)} => tipo=${s.tipo} max=${s.max} danoMult=${s.danoMult} splash=${s.splash}`);
 }
 log('fogo amigo d20=5         =>', desviouParaAliado(5, 0.1), '(esperado false)');
 log('fogo amigo d20=1, r=0.1  =>', desviouParaAliado(1, 0.1), '(esperado true)');
