@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, getSocket, emitAck, isOffline, applyOfflineRewards } from '../api.js';
 import StatBar from '../components/StatBar.jsx';
 import { playLogKind, play, isMuted, toggleMute } from '../utils/sfx.js';
-import { VOO, ALTITUDES } from '../game/sistema.js';
+import { VOO, ALTITUDES, dificuldadeDoGolpe } from '../game/sistema.js';
 import { melhorArma, armasDeEquipamento } from '../game/data.js';
 
 const CLASS_ICONS = { guerreiro: '🛡️', mago: '🔮', arqueiro: '🏹', clerigo: '✝️', assassino: '🗡️', paladino: '⚔️' };
@@ -562,7 +562,7 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                     <option value="">Escolha a magia...</option>
                     {spellData.map(({ id, data }) => (
                       <option key={id} value={id} disabled={data.custo > active.mp}>
-                        {data.nome} · MP {data.custo} {data.custo > active.mp ? '(MP insuficiente)' : ''}
+                        {data.nome} · MP {data.custo} · dif. {difDaMagia(data)} {data.custo > active.mp ? '(MP insuficiente)' : ''}
                       </option>
                     ))}
                   </select>
@@ -581,7 +581,7 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                     <option value="">Escolha o item...</option>
                     {(active.inventory || []).map((it, i) => (
                       <option key={i} value={it.id}>
-                        {it.nome}
+                        {it.emoji ? `${it.emoji} ` : ''}{it.nome}
                       </option>
                     ))}
                   </select>
@@ -667,7 +667,7 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                             onClick={() => act({ type: 'ultimateSkill', targetId: targetId || null })}
                             disabled={busy || !aliveTargets.length || (megaNeedsTarget(active.ultimate) && !targetId)}
                           >
-                            ⚡ Golpe Ultimate: {active.ultimate.nome}
+                            ⚡ Golpe Ultimate: {active.ultimate.nome} · dif. {difDaMega(active.ultimate)}
                           </button>
                         </>
                       )}
@@ -686,7 +686,7 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                         onClick={() => act({ type: 'especial', targetId: targetId || null })}
                         disabled={busy || (active.especialBar || 0) < 100 || !aliveTargets.length || (megaNeedsTarget(active.especial) && !targetId)}
                       >
-                        💫 {active.especial.nome} (100%)
+                        💫 {active.especial.nome} (100%) · dif. {difDaMega(active.especial)}
                       </button>
                     </>
                   )}
@@ -711,6 +711,15 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
       </div>
     </div>
   );
+}
+
+// Dificuldade exibida ao jogador (mesma fórmula usada no d20 pelo combate).
+function difDaMagia(data) {
+  return dificuldadeDoGolpe({ poder: Math.round((data.poder || 1) * 100), status: data.status || null });
+}
+
+function difDaMega(mega) {
+  return dificuldadeDoGolpe({ poder: Number(mega.poder) || 0, status: mega.status || null });
 }
 
 function needsTarget(spellId, spells) {

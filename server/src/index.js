@@ -22,7 +22,7 @@ import {
   socketGem,
   unsocketGem,
 } from './services/characters.js';
-import { CLASSES, SPELLS, EQUIPMENT, POTIONS, STATUS_DEFS } from './game/data.js';
+import { CLASSES, SPELLS, EQUIPMENT, POTIONS, STATUS_DEFS, TAVERN_DRINKS } from './game/data.js';
 import { RACES } from './game/races.js';
 import { MONSTERS } from './game/monsters.js';
 import { DUNGEONS } from './game/dungeons.js';
@@ -122,6 +122,62 @@ app.post('/api/shop/buy', requireAuth, async (req, res) => {
           cura: item.cura || null,
           mana: item.mana || null,
           removeStatus: item.removeStatus || null,
+        });
+        await query('UPDATE characters SET inventory = $1 WHERE id = $2', [
+          JSON.stringify(inventory),
+          characterId,
+        ]);
+      }
+    }
+    res.json({ ok: true, item });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+// ── Taverna: bebidas (consumíveis de batalha) ──
+app.get('/api/tavern', (_req, res) => {
+  res.json({ ok: true, items: TAVERN_DRINKS });
+});
+
+app.post('/api/tavern/buy', requireAuth, async (req, res) => {
+  try {
+    const { itemId, characterId } = req.body;
+    const item = TAVERN_DRINKS[itemId];
+    if (!item) throw new Error('Bebida inválida.');
+    const { rows } = await query(
+      'SELECT wallet_cents FROM players WHERE id = $1 FOR UPDATE',
+      [req.player.id],
+    );
+    if (!rows.length) throw new Error('Jogador não encontrado.');
+    if (Number(rows[0].wallet_cents) < item.preco) throw new Error('Ouro insuficiente.');
+    await query('UPDATE players SET wallet_cents = wallet_cents - $1 WHERE id = $2', [
+      item.preco,
+      req.player.id,
+    ]);
+    if (characterId) {
+      const { rows: charRows } = await query(
+        'SELECT inventory FROM characters WHERE id = $1 AND player_id = $2',
+        [characterId, req.player.id],
+      );
+      if (charRows.length) {
+        const inventory = typeof charRows[0].inventory === 'string'
+          ? JSON.parse(charRows[0].inventory)
+          : (charRows[0].inventory || []);
+        inventory.push({
+          id: itemId,
+          nome: item.nome,
+          tipo: item.tipo,
+          emoji: item.emoji || null,
+          cura: item.cura || null,
+          mana: item.mana || null,
+          removeStatus: item.removeStatus || null,
+          status: item.status || null,
+          buffFisico: item.buffFisico || null,
+          buffMagico: item.buffMagico || null,
+          buffTurns: item.buffTurns || null,
+          drunk: item.drunk || false,
+          drunkTurns: item.drunkTurns || 0,
         });
         await query('UPDATE characters SET inventory = $1 WHERE id = $2', [
           JSON.stringify(inventory),

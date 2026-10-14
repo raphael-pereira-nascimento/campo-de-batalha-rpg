@@ -36,6 +36,7 @@ import {
   poolDeXp,
   danoFisicoGolpe,
   curaMagica,
+  dificuldadeDoGolpe,
   DANO_COEF_MEGA,
   VOO,
   ALCANCE_VERTICAL,
@@ -327,6 +328,7 @@ export class BattleManager {
         return usos;
       })(),
       drunk: false,
+      drunkTurns: 0,
       // ── Mana: gasto do turno (recuperação = gasto ÷ 2) ──
       manaGastoTurno: 0,
       // ── Voo ──
@@ -572,6 +574,13 @@ export class BattleManager {
         p.buffMagic = 1;
       }
     }
+    if (p.drunk && p.drunkTurns > 0) {
+      p.drunkTurns -= 1;
+      if (p.drunkTurns === 0) {
+        p.drunk = false;
+        battle.log.push(makeLog(`🍺 ${p.charName} recuperou a sobriedade.`, 'info'));
+      }
+    }
     if (p.ultimateMode) {
       p.ultimateModeTurns -= 1;
       if (p.ultimateModeTurns <= 0) {
@@ -728,7 +737,7 @@ export class BattleManager {
     battle.log.push(makeLog(`🕊️ ${p.charName} ${dir === 'descer' ? 'desce' : 'sobe'} para a altitude ${novo} (controle ${Math.round(controle)}).`, 'buff'));
   }
 
-  _rollToHit(attacker, defender, kind) {
+  _rollToHit(attacker, defender, kind, { poder = 100, status = null } = {}) {
     const dodgeBonus = this._dodgeBonus(defender);
     const stAtk = statusEffects(attacker);
     const stDef = statusEffects(defender);
@@ -751,12 +760,14 @@ export class BattleManager {
         : pesoAtributo('esquiva', defA);
       chance = clamp(0.35 + (acc - dodge) * 0.03 - dodgeBonus - stAtk.accPenalty + stDef.dodgePenalty, 0.15, 0.95);
     }
-    const threshold = Math.round(20 * chance);
+    // Dificuldade do golpe: golpes mais fortes/efeitos mais pesados reduzem o alvo.
+    const dificuldade = dificuldadeDoGolpe({ poder, status });
+    const threshold = clamp(Math.round(20 * chance) - dificuldade, 1, 19);
     const res = rollAttack();
-    if (res.isCrit) return { hit: true, crit: true, roll: res.rolls[0], chance: threshold };
-    if (res.isFail) return { hit: false, crit: false, roll: res.rolls[0], chance: threshold };
-    if (res.rolls[0] >= critThresh) return { hit: true, crit: true, roll: res.rolls[0], chance: threshold };
-    return { hit: res.rolls[0] <= threshold, crit: false, roll: res.rolls[0], chance: threshold };
+    if (res.isCrit) return { hit: true, crit: true, roll: res.rolls[0], chance: threshold, dificuldade };
+    if (res.isFail) return { hit: false, crit: false, roll: res.rolls[0], chance: threshold, dificuldade };
+    if (res.rolls[0] >= critThresh) return { hit: true, crit: true, roll: res.rolls[0], chance: threshold, dificuldade };
+    return { hit: res.rolls[0] <= threshold, crit: false, roll: res.rolls[0], chance: threshold, dificuldade };
   }
 
   _physMult(p) {
@@ -1111,13 +1122,13 @@ export class BattleManager {
       );
       return;
     }
-    const res = this._rollToHit(p, target, kind);
+    const res = this._rollToHit(p, target, kind, { poder: skill.poder, status: skill.status });
     if (res.roll === 1) {
       battle.log.push(makeLog(`❌ ${p.charName} falha ao usar ${skill.nome}! (d20 = 1)`, 'miss'));
       return;
     }
     if (!res.hit) {
-      battle.log.push(makeLog(`💨 ${p.charName} erra ${skill.nome} em ${target.charName}. (d20 = ${res.roll}, precisava de ${res.chance})`, 'miss'));
+      battle.log.push(makeLog(`💨 ${p.charName} erra ${skill.nome} em ${target.charName}. (d20 = ${res.roll}, precisava de ${res.chance}${res.dificuldade ? `, dificuldade +${res.dificuldade}` : ''})`, 'miss'));
       return;
     }
     this._marcarAcerto(p);
@@ -1135,7 +1146,7 @@ export class BattleManager {
     const skElemTag = skElemM > 1 ? ` ⚡${skElem} fragiliza!` : skElemM < 1 ? ` 🛡${skElem} resistido!` : '';
     battle.log.push(
       makeLog(
-        `${res.crit ? '✨ CRÍTICO! ' : ''}✨ ${p.charName} usa ${skill.nome} em ${target.charName}: ${total} de dano (${skill.poder}%).${skElemTag}`,
+        `${res.crit ? '✨ CRÍTICO! ' : ''}✨ ${p.charName} usa ${skill.nome} em ${target.charName}: ${total} de dano (${skill.poder}%).${res.dificuldade ? ` dificuldade +${res.dificuldade}.` : ''}${skElemTag}`,
         'attack',
       ),
     );
@@ -1196,13 +1207,13 @@ export class BattleManager {
       );
       return;
     }
-    const res = this._rollToHit(p, target, kind);
+    const res = this._rollToHit(p, target, kind, { poder: skill.poder, status: skill.status });
     if (res.roll === 1) {
       battle.log.push(makeLog(`❌ ${p.charName} falha ao desferir ${skill.nome}! (d20 = 1)`, 'miss'));
       return;
     }
     if (!res.hit) {
-      battle.log.push(makeLog(`💨 ${p.charName} erra ${skill.nome} em ${target.charName}. (d20 = ${res.roll}, precisava de ${res.chance})`, 'miss'));
+      battle.log.push(makeLog(`💨 ${p.charName} erra ${skill.nome} em ${target.charName}. (d20 = ${res.roll}, precisava de ${res.chance}${res.dificuldade ? `, dificuldade +${res.dificuldade}` : ''})`, 'miss'));
       return;
     }
     this._marcarAcerto(p);
@@ -1220,7 +1231,7 @@ export class BattleManager {
     const meElemTag = meElemM > 1 ? ` ⚡${meElem} fragiliza!` : meElemM < 1 ? ` 🛡${meElem} resistido!` : '';
     battle.log.push(
       makeLog(
-        `${res.crit ? '✨ CRÍTICO! ' : ''}💫 ${p.charName} desfere ${skill.nome} em ${target.charName}: ${total} de dano (${skill.poder}%)!${meElemTag}`,
+        `${res.crit ? '✨ CRÍTICO! ' : ''}💫 ${p.charName} desfere ${skill.nome} em ${target.charName}: ${total} de dano (${skill.poder}%)!${res.dificuldade ? ` dificuldade +${res.dificuldade}.` : ''}${meElemTag}`,
         'attack',
       ),
     );
@@ -1230,7 +1241,7 @@ export class BattleManager {
   }
 
   _resolveItem(battle, p, item) {
-    if (item.tipo !== 'pocao') {
+    if (item.tipo !== 'pocao' && item.tipo !== 'bebida') {
       battle.log.push(makeLog(`❌ ${item.nome} não pode ser usado em combate.`, 'miss'));
       return;
     }
@@ -1240,16 +1251,47 @@ export class BattleManager {
       return;
     }
     p.inventory.splice(idx, 1);
+    const consumiu = [];
     if (item.cura) {
       const before = p.hp;
       p.hp = clamp(p.hp + item.cura, 0, p.hpMax);
-      battle.log.push(makeLog(`🧪 ${p.charName} usa ${item.nome}: cura ${p.hp - before} de HP.`, 'heal'));
+      consumiu.push(`cura ${p.hp - before} de HP`);
     }
     if (item.mana) {
       const before = p.mp;
       p.mp = clamp(p.mp + item.mana, 0, p.mpMax);
-      battle.log.push(makeLog(`🧪 ${p.charName} usa ${item.nome}: restaura ${p.mp - before} de MP.`, 'heal'));
+      consumiu.push(`restaura ${p.mp - before} de MP`);
     }
+    // Bebidas: efeitos extras (buff de dano, status em si, álcool e antídoto).
+    if (item.removeStatus) {
+      const alvos = Array.isArray(item.removeStatus) ? item.removeStatus : [item.removeStatus];
+      const antes = (p.statuses || []).length;
+      p.statuses = (p.statuses || []).filter((s) => !alvos.includes(s.id));
+      const removidos = antes - p.statuses.length;
+      if (removidos > 0) consumiu.push(`remove ${removidos} efeito(s) nocivo(s)`);
+    }
+    if (item.status) {
+      this._applyStatus(battle, p, item.status, null);
+    }
+    if (item.buffFisico) {
+      p.buffPhysical = (p.buffPhysical || 1) + item.buffFisico;
+      consumiu.push(`+${Math.round(item.buffFisico * 100)}% dano físico`);
+    }
+    if (item.buffMagico) {
+      p.buffMagic = (p.buffMagic || 1) + item.buffMagico;
+      consumiu.push(`+${Math.round(item.buffMagico * 100)}% dano mágico`);
+    }
+    if (item.buffFisico || item.buffMagico) {
+      p.buffTurns = Math.max(p.buffTurns || 0, item.buffTurns || 3);
+    }
+    if (item.drunk) {
+      p.drunk = true;
+      p.drunkTurns = Math.max(p.drunkTurns || 0, item.drunkTurns || 3);
+      consumiu.push('fica bêbado');
+    }
+    const icone = item.tipo === 'bebida' ? (item.emoji || '🍺') : '🧪';
+    const detalhe = consumiu.length ? `: ${consumiu.join(', ')}.` : '.';
+    battle.log.push(makeLog(`${icone} ${p.charName} usa ${item.nome}${detalhe}`, 'heal'));
   }
 
   handleAction({ battleId, characterId, playerId, action }) {

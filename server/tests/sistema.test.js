@@ -28,6 +28,9 @@ import {
   danoFisicoGolpe,
   danoMagico,
   curaMagica,
+  magnitudeDeStatus,
+  dificuldadeDoGolpe,
+  DIFICULDADE_MAX,
 } from '../src/game/sistema.js';
 
 describe('Mana — fórmula confirmada ((INT Final) × 10)', () => {
@@ -121,6 +124,32 @@ describe('Dano — fórmula provisória (Atributo Final × 10, sem dados)', () =
     expect(curaMagica(10, 120)).toBe(168); // "Cura em Massa" (120%)
     expect(curaMagica(10, 200, 1, DANO_COEF_MEGA)).toBe(440); // cura mega × 2,2
     expect(curaMagica(4, 100)).toBe(56);
+  });
+});
+
+describe('Dificuldade do golpe no d20 — provisória (rolar-menor)', () => {
+  it('golpe comum (100%) não pesa', () => {
+    expect(dificuldadeDoGolpe()).toBe(0);
+    expect(dificuldadeDoGolpe({ poder: 100 })).toBe(0);
+    expect(dificuldadeDoGolpe({ poder: 50 })).toBe(0);
+  });
+
+  it('cada +100% de poder soma +2', () => {
+    expect(dificuldadeDoGolpe({ poder: 150 })).toBe(1);
+    expect(dificuldadeDoGolpe({ poder: 200 })).toBe(2);
+    expect(dificuldadeDoGolpe({ poder: 300 })).toBe(4);
+  });
+
+  it('status aplicado pesa por turnos + dano/100', () => {
+    expect(magnitudeDeStatus(null)).toBe(0);
+    expect(magnitudeDeStatus({ turnos: 3, dano: 40 })).toBeCloseTo(3.4);
+    expect(dificuldadeDoGolpe({ status: { turnos: 2, dano: 60 } })).toBe(1); // 1,3 → 1
+    expect(dificuldadeDoGolpe({ poder: 200, status: { turnos: 2, dano: 60 } })).toBe(3); // 2 + 1,3
+  });
+
+  it('respeita o teto de dificuldade', () => {
+    expect(dificuldadeDoGolpe({ poder: 900 })).toBe(DIFICULDADE_MAX);
+    expect(DIFICULDADE_MAX).toBe(8);
   });
 });
 

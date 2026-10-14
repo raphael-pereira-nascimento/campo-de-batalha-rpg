@@ -221,6 +221,58 @@ export const ATTRIBUTE_NAMES = {
   reflexos: 'Reflexos',
 };
 
+// ── Taverna: bebidas (consumíveis usáveis em combate) ──
+// PROVISÓRIO. `preco` em cobre (ℛ). Efeitos lidos pelo _resolveItem do combate:
+//   cura          → HP instantâneo
+//   mana          → MP instantâneo
+//   status        → { tipo, turnos, dano } aplicado em si (ex.: regeneracao)
+//   buffFisico    → soma no multiplicador de dano físico (ex.: 0.20 = +20%) por buffTurns
+//   buffMagico    → soma no multiplicador de dano mágico por buffTurns
+//   removeStatus  → id (ou lista) de status removido de si
+//   drunk/drunkTurns → embriaguez: +1 Força, −1 Destreza e Reflexos nas rolagens
+export const TAVERN_DRINKS = {
+  cerveja_rustica: {
+    nome: 'Cerveja Rústica', tipo: 'bebida', preco: 25, emoji: '🍺',
+    cura: 60, drunk: true, drunkTurns: 4,
+    desc: 'Restaura 60 de HP, mas deixa bêbado (4 turnos): +1 Força, −1 Destreza e Reflexos.',
+  },
+  vinho_elfico: {
+    nome: 'Vinho Élfico', tipo: 'bebida', preco: 60, emoji: '🍷',
+    cura: 40, mana: 20,
+    desc: 'Restaura 40 de HP e 20 de MP. Leve e revigorante.',
+  },
+  kvas_de_mel: {
+    nome: 'Kvas de Mel', tipo: 'bebida', preco: 110, emoji: '🍯',
+    cura: 300,
+    desc: 'Bebida anã espessa: restaura 300 de HP.',
+  },
+  hidromel_brutal: {
+    nome: 'Hidromel Brutal', tipo: 'bebida', preco: 80, emoji: '🫗',
+    buffFisico: 0.2, buffTurns: 3,
+    desc: 'Fúria líquida: +20% de dano físico por 3 turnos.',
+  },
+  absinto_arcano: {
+    nome: 'Absinto Arcano', tipo: 'bebida', preco: 90, emoji: '🧪',
+    buffMagico: 0.2, buffTurns: 3,
+    desc: 'Arde de magia: +20% de dano mágico por 3 turnos.',
+  },
+  aguardente_anao: {
+    nome: 'Aguardente Anã', tipo: 'bebida', preco: 100, emoji: '🥃',
+    buffFisico: 0.15, buffTurns: 3, drunk: true, drunkTurns: 3,
+    desc: 'Poderosa: +15% de dano físico por 3 turnos, mas embriaga (3 turnos).',
+  },
+  cha_restaurador: {
+    nome: 'Chá Restaurador', tipo: 'bebida', preco: 70, emoji: '🍵',
+    removeStatus: ['veneno', 'sangramento', 'queimadura'],
+    desc: 'Antídoto quente: limpa Veneno, Sangramento e Queimadura.',
+  },
+  elixir_vigor: {
+    nome: 'Elixir do Vigor', tipo: 'bebida', preco: 120, emoji: '🌿',
+    status: { tipo: 'regeneracao', turnos: 4, dano: 120 },
+    desc: 'Regenera 120 de HP por turno durante 4 turnos.',
+  },
+};
+
 export const POINTS_TO_DISTRIBUTE = 30;
 export const MIN_ATTRIBUTE = 1;
 export const MAX_ATTRIBUTE = 10;

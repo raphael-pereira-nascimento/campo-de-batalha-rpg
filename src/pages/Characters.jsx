@@ -5,7 +5,7 @@ import { exportarFicha, importarFicha } from '../utils/fichaFile.js';
 import { api } from '../api.js';
 import { shareCharacter, resolveSharedCharacter } from '../utils/shareCharacter.js';
 
-export default function Characters({ player, characters, gameData, customClasses = [], onRefresh, onEnterLobby, onOpenRegistry, onOpenCompendium, onOpenRules, onOpenGemForge, onOpenToolShop, onOpenTableBattle, onOpenDungeons, onLogout }) {
+export default function Characters({ player, characters, gameData, customClasses = [], onRefresh, onEnterLobby, onOpenRegistry, onOpenCompendium, onOpenRules, onOpenGemForge, onOpenToolShop, onOpenTavern, onOpenTableBattle, onOpenDungeons, onLogout }) {
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState(null);
   const [importError, setImportError] = useState('');
@@ -52,6 +52,7 @@ export default function Characters({ player, characters, gameData, customClasses
           <button className="ghost" onClick={onOpenRules}>📖 Regras</button>
           <button className="ghost" onClick={onOpenGemForge}>🔮 Forja de Gemas</button>
           <button className="ghost" onClick={onOpenToolShop}>🛠️ Loja de Ferramentas</button>
+          <button className="ghost" onClick={onOpenTavern}>🍺 Taverna</button>
           <button className="ghost" onClick={onOpenRegistry}>
             📜 Registro do Mundo
           </button>

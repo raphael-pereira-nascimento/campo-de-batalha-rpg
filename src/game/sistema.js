@@ -367,3 +367,37 @@ export function danoMagico(intFinal, poderPct = 100, mult = 1, coef = DANO_COEF_
 export function curaMagica(intFinal, poderPct = 100, mult = 1, coef = DANO_COEF_MAGICO) {
   return danoMagico(intFinal, poderPct, mult, coef);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   7. DIFICULDADE DO GOLPE — PROVISÓRIO
+   Golpes mais fortes e efeitos (status/debuff) mais pesados exigem um d20
+   melhor. A dificuldade é um inteiro >= 0 que REDUZ o alvo de acerto
+   (o combate é "rolar-menor": acerta se d20 <= alvo − dificuldade).
+   O log mostra o alvo e "dificuldade +N".
+
+   Referências (provisórias — ajuste só aqui):
+   - Golpe comum (100% de poder): dificuldade 0.
+   - Cada +100% de poder somam +2.
+   - O status aplicado pesa por duração + dano por turno (dano ÷ 100).
+   ═══════════════════════════════════════════════════════════════════════════ */
+export const DIFICULDADE_PODER_REF = 100; // % de referência (não pesa)
+export const DIFICULDADE_PODER_COEF = 0.02; // cada +100% => +2
+export const DIFICULDADE_STATUS_COEF = 0.5; // peso do status (turnos + dano/100)
+export const DIFICULDADE_MAX = 8; // teto: nenhum golpe fica impossível
+
+/** Peso de um status de golpe: duração + dano por turno (dano ÷ 100). */
+export function magnitudeDeStatus(status) {
+  if (!status) return 0;
+  return (Number(status.turnos) || 0) + (Number(status.dano) || 0) / 100;
+}
+
+/**
+ * Dificuldade de um golpe no d20 (inteiro, 0..DIFICULDADE_MAX).
+ * `poder` em % (100 = golpe comum) e `status` que o golpe aplica ao alvo.
+ */
+export function dificuldadeDoGolpe({ poder = DIFICULDADE_PODER_REF, status = null } = {}) {
+  const dPoder =
+    Math.max(0, (Number(poder) || 0) - DIFICULDADE_PODER_REF) * DIFICULDADE_PODER_COEF;
+  const dStatus = magnitudeDeStatus(status) * DIFICULDADE_STATUS_COEF;
+  return Math.max(0, Math.min(DIFICULDADE_MAX, Math.round(dPoder + dStatus)));
+}

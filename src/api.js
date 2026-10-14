@@ -4,7 +4,7 @@ import { isOffline, setServerStatus, saveOfflinePlayer, getOfflinePlayer, getOff
 import { offlineBattle } from './offline/battle.js';
 import { MONSTERS } from './game/monsters.js';
 import { gemIsRaw } from './game/gems.js';
-import { EQUIPMENT, POTIONS, deriveStats, applyMaxMults, efeitosDeHabilidades } from './game/data.js';
+import { EQUIPMENT, POTIONS, deriveStats, applyMaxMults, efeitosDeHabilidades, TAVERN_DRINKS } from './game/data.js';
 import { DUNGEONS } from './game/dungeons.js';
 import {
   estadoMundo,
@@ -470,6 +470,49 @@ export const api = {
       return Promise.resolve({ ok: true });
     }
     return auth('/api/shop/buy', { method: 'POST', body: JSON.stringify({ itemId }) });
+  },
+  getTavern: () => {
+    if (isOffline()) {
+      return Promise.resolve({ ok: true, items: TAVERN_DRINKS });
+    }
+    return auth('/api/tavern');
+  },
+  buyDrink: (itemId, characterId) => {
+    if (isOffline()) {
+      const drink = TAVERN_DRINKS[itemId];
+      if (!drink) return Promise.reject(new Error('Bebida inválida.'));
+      const wallet = getOfflineWallet();
+      if (wallet < drink.preco) return Promise.reject(new Error('Ouro insuficiente.'));
+      addOfflineCoins(-drink.preco);
+      if (characterId) {
+        const chars = getOfflineCharacters();
+        const char = chars.find((c) => c.id === characterId);
+        if (char) {
+          char.inventory = char.inventory || [];
+          char.inventory.push({
+            id: itemId,
+            nome: drink.nome,
+            tipo: drink.tipo,
+            emoji: drink.emoji || null,
+            cura: drink.cura || null,
+            mana: drink.mana || null,
+            removeStatus: drink.removeStatus || null,
+            status: drink.status || null,
+            buffFisico: drink.buffFisico || null,
+            buffMagico: drink.buffMagico || null,
+            buffTurns: drink.buffTurns || null,
+            drunk: drink.drunk || false,
+            drunkTurns: drink.drunkTurns || 0,
+          });
+          saveOfflineCharacter(char);
+        }
+      }
+      return Promise.resolve({ ok: true, item: drink });
+    }
+    return auth('/api/tavern/buy', {
+      method: 'POST',
+      body: JSON.stringify({ itemId, characterId }),
+    });
   },
   listCustomClasses: () => {
     if (isOffline()) return Promise.resolve({ ok: true, classes: [] });

@@ -3,7 +3,8 @@
 import { BattleManager } from '../server/src/game/battleManager.js';
 import { MONSTERS } from '../server/src/game/monsters.js';
 import { estadoEclipse } from '../server/src/game/eclipse.js';
-import { manaMaxFrom, manaRecuperada, distribuirXp, danoFisicoAtaque, danoFisicoGolpe, danoMagico, curaMagica, DANO_MULT } from '../server/src/game/sistema.js';
+import { manaMaxFrom, manaRecuperada, distribuirXp, danoFisicoAtaque, danoFisicoGolpe, danoMagico, curaMagica, DANO_MULT, dificuldadeDoGolpe } from '../server/src/game/sistema.js';
+import { TAVERN_DRINKS } from '../server/src/game/data.js';
 import { montarEncontro, DUNGEONS } from '../server/src/game/dungeons.js';
 
 const log = (...a) => console.log(...a);
@@ -20,6 +21,27 @@ log('FOR 10, mega 250% (×2.2)  =>', danoFisicoGolpe(10, 250, 1, 2.2), '(esperad
 log('INT 10, magia 240% (×1.4) =>', danoMagico(10, 240), '(esperado 336)');
 log('INT 10, cura 200% (×1.4)   =>', curaMagica(10, 200), '(esperado 280)');
 log('defesa de armadura 6      =>', 6 * DANO_MULT, '(esperado 60)');
+
+log('\n── Dificuldade do golpe (provisório — reduz o alvo do d20) ──');
+log('comum 100%                =>', dificuldadeDoGolpe({ poder: 100 }), '(esperado 0)');
+log('200%                      =>', dificuldadeDoGolpe({ poder: 200 }), '(esperado 2)');
+log('300%                      =>', dificuldadeDoGolpe({ poder: 300 }), '(esperado 4)');
+log('200% + sangramento (2/60) =>', dificuldadeDoGolpe({ poder: 200, status: { turnos: 2, dano: 60 } }), '(esperado 3)');
+
+log('\n── Taverna (bebidas) ──');
+log('bebidas no catálogo       =>', Object.keys(TAVERN_DRINKS).length, '(esperado >= 6)');
+for (const [id, b] of Object.entries(TAVERN_DRINKS)) {
+  const efeitos = [
+    b.cura ? `+${b.cura} HP` : null,
+    b.mana ? `+${b.mana} MP` : null,
+    b.buffFisico ? `+${Math.round(b.buffFisico * 100)}% fis` : null,
+    b.buffMagico ? `+${Math.round(b.buffMagico * 100)}% mag` : null,
+    b.status ? `${b.status.tipo} ${b.status.turnos}t` : null,
+    b.removeStatus ? 'antídoto' : null,
+    b.drunk ? `bêbado ${b.drunkTurns}t` : null,
+  ].filter(Boolean).join(', ');
+  log(`  ${(b.emoji || '•')} ${b.nome.padEnd(18)} ${String(b.preco).padStart(3)}ℛ — ${efeitos}`);
+}
 
 log('\n── Eclipse ──');
 for (const dia of [1, 25, 28, 30, 31]) {

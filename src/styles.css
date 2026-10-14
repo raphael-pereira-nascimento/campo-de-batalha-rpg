@@ -37,6 +37,14 @@ button {
   padding: 10px 16px;
   cursor: pointer;
   transition: filter 0.15s, transform 0.05s;
+  /* Alinhamento consistente de ícone + texto em todos os botões. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1.25;
+  text-align: center;
+  max-width: 100%;
 }
 button:hover:not(:disabled) {
   filter: brightness(1.15);
@@ -84,6 +92,7 @@ select:focus {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
+  flex-wrap: wrap;
   padding: 16px 24px;
   background: rgba(10, 12, 26, 0.85);
   border-bottom: 1px solid var(--border);
@@ -101,6 +110,15 @@ select:focus {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+/* As ações do topo quebram linha e alinham à direita em qualquer largura. */
+.topbar-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 8px;
+}
+.topbar-actions button {
+  flex: 0 1 auto;
 }
 .player-name {
   color: var(--muted);
@@ -168,7 +186,7 @@ select:focus {
 
 .char-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
   gap: 20px;
 }
 
@@ -724,6 +742,25 @@ label {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+/* Botões de ação ocupam a largura da barra e ficam alinhados entre si. */
+.action-body > button,
+.action-body > select {
+  width: 100%;
+}
+/* Linha de botões (ex.: voo, defesa) quebra e distribui por igual. */
+.voo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.voo-actions > p {
+  flex: 1 1 100%;
+  margin: 0;
+}
+.voo-actions > button {
+  flex: 1 1 120px;
 }
 
 /* mestre */
@@ -1491,6 +1528,7 @@ button.danger {
 /* ─── Ações por ficha (exportar) ─── */
 .card-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 8px 12px 4px;
   border-top: 1px solid var(--border);
@@ -1946,6 +1984,17 @@ button.danger {
   .topbar h1 { font-size: 18px; }
   .topbar > div { flex-wrap: wrap; gap: 6px; }
   .topbar-actions, .topbar > div:last-child { justify-content: flex-end; }
+  /* Botões do topo em grade de 2 colunas, alinhados e com toque confortável. */
+  .topbar-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .topbar-actions > button,
+  .topbar-actions > .wallet-chip {
+    flex: 1 1 calc(50% - 6px);
+    min-height: 40px;
+  }
+  .char-grid { grid-template-columns: 1fr; }
   .battle-layout { grid-template-columns: 1fr; gap: 14px; }
   .arena { padding: 12px; min-height: 0; }
   .ff-stage { grid-template-columns: 1fr; gap: 6px; }
@@ -2913,7 +2962,7 @@ button.danger {
 .tools-empty { text-align: center; padding: 40px 20px; }
 .tools-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
   gap: 16px;
 }
 .tool-card {
@@ -3025,4 +3074,113 @@ button.danger {
 @media (max-width: 700px) {
   .tools-shop-head { flex-direction: column; align-items: flex-start; }
   .tools-grid { grid-template-columns: 1fr; }
+}
+
+/* ═══════════════════ Taverna ═══════════════════ */
+.tavern-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.tavern-head label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tavern-head select {
+  min-width: 200px;
+}
+.tavern-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr));
+  gap: 16px;
+}
+.tavern-card {
+  background: radial-gradient(circle at 0% 0%, rgba(255, 176, 59, 0.12), transparent 55%),
+    linear-gradient(160deg, #2a1d0c 0%, #160f06 100%);
+  border: 1px solid #a9781f;
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.tavern-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+.tavern-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.tavern-card-icon {
+  font-size: 26px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.tavern-card-head strong { font-size: 15px; }
+.tavern-card-desc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  min-height: 34px;
+}
+.tavern-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tavern-tag {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: #ffd9a0;
+}
+.tavern-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+}
+.tavern-price {
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffe08a;
+  border: 1px solid #d4af37;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: linear-gradient(160deg, #2a2408, #14110a);
+  white-space: nowrap;
+}
+.tavern-buy {
+  background: linear-gradient(135deg, #b8860b, #e0a02e);
+  color: #1a1205;
+  font-weight: 800;
+  padding: 9px 18px;
+  border-radius: 10px;
+}
+.tavern-buy:hover:not(:disabled) { filter: brightness(1.1); }
+.tavern-buy:disabled {
+  background: var(--panel-2);
+  color: var(--muted);
+}
+.tavern-foot { margin-top: 20px; }
+
+@media (max-width: 600px) {
+  .tavern-head { flex-direction: column; align-items: stretch; }
+  .tavern-grid { grid-template-columns: 1fr; }
 }

@@ -239,6 +239,16 @@ describe('BattleManager — efeitos de status', () => {
     expect(cego.chance).toBeLessThan(normal.chance);
   });
 
+  it('golpes mais fortes/efeitos mais pesados exigem um d20 melhor', () => {
+    const { manager } = makeManager();
+    const atk = { attributes: { destreza: 5, reflexos: 5, forca: 8, inteligencia: 4 }, statuses: [] };
+    const def = { attributes: { destreza: 5, reflexos: 5, inteligencia: 4 }, dodge: false, statuses: [] };
+    const comum = manager._rollToHit(atk, def, 'physical');
+    const forte = manager._rollToHit(atk, def, 'physical', { poder: 300, status: { turnos: 2, dano: 60 } });
+    expect(forte.dificuldade).toBeGreaterThan(0);
+    expect(forte.chance).toBeLessThan(comum.chance);
+  });
+
   it('monstro com ataqueStatus aplica o status ao acertar', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.1);
     const { manager } = makeManager();
@@ -280,7 +290,10 @@ describe('BattleManager — efeitos de status', () => {
 
 describe('BattleManager — fluxo completo de ultimate/especial', () => {
   beforeEach(() => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.4);
+    // d20 = 5: o herói acerta os golpes fortes (alvo >= 6 com a dificuldade
+    // nova) e o chefe (fraco, só acerta com <= 3) erra — assim o fluxo
+    // ultimate/especial roda sem a batalha terminar por morte do herói.
+    vi.spyOn(Math, 'random').mockReturnValue(0.2);
   });
   afterEach(() => {
     vi.restoreAllMocks();
@@ -602,5 +615,104 @@ describe('BattleManager — arma utilitária', () => {
     });
     expect(hero.wpnUsos[util.id]).toBe(1);
     expect(boss.statuses.map((s) => s.id)).toContain('lentidao');
+  });
+});
+
+describe('BattleManager — bebidas da taverna em combate', () => {
+  function makeBebedor() {
+    return {
+      charName: 'Hero',
+      alive: true,
+      hp: 100,
+      hpMax: 1000,
+      mp: 0,
+      mpMax: 100,
+      statuses: [],
+      inventory: [],
+      buffPhysical: 1,
+      buffMagic: 1,
+      buffTurns: 0,
+      drunk: false,
+      drunkTurns: 0,
+      races: [],
+      classes: [],
+      equipment: {},
+      voando: false,
+      ultimateMode: false,
+    };
+  }
+
+  it('bebida de cura consome o item e restaura HP', () => {
+    const { manager } = makeManager();
+    const battle = { log: [] };
+    const p = makeBebedor();
+    const cerveja = { id: 'cerveja_rustica', nome: 'Cerveja Rústica', tipo: 'bebida', cura: 60, drunk: true, drunkTurns: 4 };
+    p.inventory.push(cerveja);
+    manager._resolveItem(battle, p, cerveja);
+    expect(p.hp).toBe(160);
+    expect(p.drunk).toBe(true);
+    expect(p.drunkTurns).toBe(4);
+    expect(p.inventory.length).toBe(0);
+  });
+
+  it('bebida de buff aumenta o multiplicador de dano por buffTurns', () => {
+    const { manager } = makeManager();
+    const battle = { log: [] };
+    const p = makeBebedor();
+    const hidromel = { id: 'hidromel_brutal', nome: 'Hidromel', tipo: 'bebida', buffFisico: 0.2, buffTurns: 3 };
+    p.inventory.push(hidromel);
+    manager._resolveItem(battle, p, hidromel);
+    expect(p.buffPhysical).toBeCloseTo(1.2);
+    expect(p.buffTurns).toBe(3);
+  });
+
+  it('bebida regenerativa aplica o status em si', () => {
+    const { manager } = makeManager();
+    const battle = { log: [] };
+    const p = makeBebedor();
+    const vigor = { id: 'elixir_vigor', nome: 'Elixir do Vigor', tipo: 'bebida', status: { tipo: 'regeneracao', turnos: 4, dano: 120 } };
+    p.inventory.push(vigor);
+    manager._resolveItem(battle, p, vigor);
+    const regen = p.statuses.find((s) => s.id === 'regeneracao');
+    expect(regen).toBeTruthy();
+    expect(regen.turnos).toBe(4);
+  });
+
+  it('bebida antídoto remove os status nocivos listados', () => {
+    const { manager } = makeManager();
+    const battle = { log: [] };
+    const p = makeBebedor();
+    p.statuses = [
+      { id: 'veneno', turnos: 2, dano: 10 },
+      { id: 'sangramento', turnos: 2, dano: 10 },
+      { id: 'lentidao', turnos: 2, dano: 0 },
+    ];
+    const cha = { id: 'cha_restaurador', nome: 'Chá Restaurador', tipo: 'bebida', removeStatus: ['veneno', 'sangramento', 'queimadura'] };
+    p.inventory.push(cha);
+    manager._resolveItem(battle, p, cha);
+    expect(p.statuses.map((s) => s.id)).toEqual(['lentidao']);
+  });
+
+  it('itens de outros tipos continuam recusados', () => {
+    const { manager } = makeManager();
+    const battle = { log: [] };
+    const p = makeBebedor();
+    const ferramenta = { id: 'martelo', nome: 'Martelo', tipo: 'ferramenta' };
+    p.inventory.push(ferramenta);
+    manager._resolveItem(battle, p, ferramenta);
+    expect(p.inventory.length).toBe(1); // não consumiu
+    expect(battle.log.some((l) => l.text.includes('não pode ser usado'))).toBe(true);
+  });
+
+  it('a embriaguez temporária termina após drunkTurns', () => {
+    const { manager } = makeManager();
+    const battle = { log: [] };
+    const p = makeBebedor();
+    p.drunk = true;
+    p.drunkTurns = 1;
+    manager._resolveTurnGains(battle, p);
+    expect(p.drunkTurns).toBe(0);
+    expect(p.drunk).toBe(false);
+    expect(battle.log.some((l) => l.text.includes('recuperou a sobriedade'))).toBe(true);
   });
 });

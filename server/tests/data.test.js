@@ -6,6 +6,7 @@ import {
   deriveStats,
   gemsAttrs,
   POTIONS,
+  TAVERN_DRINKS,
   EQUIPMENT,
   armasDeEquipamento,
   melhorArma,
@@ -127,6 +128,36 @@ describe('deriveStats — vida/mana pela classe primária', () => {
     // Elixires de mana ficam como estão: custos de magia continuam 4–12 MP.
     expect(POTIONS.elixir_mana.mana).toBe(25);
     expect(POTIONS.elixir_mana_grande.mana).toBe(60);
+  });
+});
+
+describe('TAVERN_DRINKS — bebidas da taverna (usáveis em batalha)', () => {
+  it('catálogo tem bebidas com preço em cobre e tipo "bebida"', () => {
+    const ids = Object.keys(TAVERN_DRINKS);
+    expect(ids.length).toBeGreaterThanOrEqual(6);
+    for (const id of ids) {
+      const b = TAVERN_DRINKS[id];
+      expect(b.tipo).toBe('bebida');
+      expect(typeof b.preco).toBe('number');
+      expect(b.preco).toBeGreaterThan(0);
+      expect(typeof b.desc).toBe('string');
+      expect(b.desc.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('cobre os três eixos: cura, buffs e embriaguez', () => {
+    const temCura = Object.values(TAVERN_DRINKS).some((b) => b.cura > 0);
+    const temBuff = Object.values(TAVERN_DRINKS).some((b) => b.buffFisico || b.buffMagico);
+    const temDrunk = Object.values(TAVERN_DRINKS).some((b) => b.drunk);
+    expect(temCura).toBe(true);
+    expect(temBuff).toBe(true);
+    expect(temDrunk).toBe(true);
+  });
+
+  it('as bebidas alcoólicas definem a duração da embriaguez', () => {
+    for (const b of Object.values(TAVERN_DRINKS)) {
+      if (b.drunk) expect(b.drunkTurns).toBeGreaterThan(0);
+    }
   });
 });
 

@@ -11,6 +11,7 @@ const Rules = lazy(() => import('./pages/Rules.jsx'));
 const TableBattle = lazy(() => import('./pages/TableBattle.jsx'));
 const GemForge = lazy(() => import('./pages/GemForge.jsx'));
 const ToolShop = lazy(() => import('./pages/ToolShop.jsx'));
+const Tavern = lazy(() => import('./pages/Tavern.jsx'));
 const Dungeons = lazy(() => import('./pages/Dungeons.jsx'));
 const ShareView = lazy(() => import('./pages/ShareView.jsx'));
 
@@ -115,6 +116,17 @@ export default function App() {
     setWalletCents((c) => Math.max(0, c - preco));
   };
 
+  const abrirTaverna = async () => {
+    try {
+      const d = await api.getWallet();
+      const cents = d && d.wallet && typeof d.wallet === 'object' ? d.wallet.cents : Number(d?.wallet) || 0;
+      setWalletCents(cents);
+    } catch (_) {
+      // mantém o valor atual da carteira
+    }
+    setView('tavern');
+  };
+
   if (!gameData) {
     if (gameDataError) {
       return (
@@ -188,6 +200,7 @@ export default function App() {
         onOpenRules={() => setView('rules')}
         onOpenGemForge={() => setView('gemForge')}
         onOpenToolShop={abrirToolShop}
+        onOpenTavern={abrirTaverna}
         onOpenTableBattle={() => setView('tableBattle')}
         onOpenDungeons={() => setView('dungeons')}
         onLogout={handleLogout}
@@ -232,6 +245,18 @@ export default function App() {
         localAtual="Porto Ferro"
         onComprar={handleToolBuy}
         onBack={() => setView('characters')}
+      />
+    </Suspense>;
+  }
+
+  if (view === 'tavern') {
+    return <Suspense fallback={<div className="loading">Abrindo a taverna...</div>}>
+      <Tavern
+        player={player}
+        characters={characters}
+        onBack={() => setView('characters')}
+        onRefresh={refreshCharacters}
+        onWalletChange={setWalletCents}
       />
     </Suspense>;
   }
