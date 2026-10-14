@@ -8,6 +8,7 @@
 // Monstros com voaNatural já entram em voo e têm alcance vertical definido.
 
 import { manaMaxFrom } from './sistema.js';
+import { SPELLS, skillFromSpell } from './data.js';
 
 export const MONSTERS = {
   manequim: {
@@ -64,7 +65,7 @@ export const MONSTERS = {
     tipo: 'chefe',
     nivel: 25,
     attributes: { forca: 8, inteligencia: 4, resistencia: 9, destreza: 1, reflexos: 3 },
-    arma: { nome: 'Martelo de Rocha', danoBase: 16, elemento: 'terra' },
+    arma: { nome: 'Martelo de Rocha', danoBase: 16, elemento: 'terra', alvo: 'area' },
     spells: ['muralha'],
     passiva: 'Colosso: atinge vários inimigos, não sangra e não pode ser derrubado facilmente.',
     efeitos: { danoFisicoMult: 1.15, imune: ['sangramento', 'veneno'] },
@@ -179,7 +180,7 @@ export const MONSTERS = {
     tipo: 'inimigo',
     nivel: 8,
     attributes: { forca: 9, inteligencia: 1, resistencia: 8, destreza: 1, reflexos: 2 },
-    arma: { nome: 'Clava de Madeira', danoBase: 14 },
+    arma: { nome: 'Clava de Madeira', danoBase: 14, alvo: 'cone', alvos: 3 },
     spells: [],
     passiva: 'Força bruta: causa 10% a mais de dano físico e golpes entorpecem.',
     efeitos: { danoFisicoMult: 1.1, ataqueStatus: { tipo: 'lentidao', turnos: 2 } },
@@ -252,17 +253,23 @@ export function buildMonster(def, playerHpSum = 0) {
     attributes: { ...def.attributes },
     equipment: {
       arma: def.arma
-        ? { id: def.id + '_arma', nome: def.arma.nome, danoBase: def.arma.danoBase, elemento: def.arma.elemento || null }
+        ? {
+            id: def.id + '_arma',
+            nome: def.arma.nome,
+            danoBase: def.arma.danoBase,
+            elemento: def.arma.elemento || null,
+            categoria: def.arma.categoria || null,
+            alcance: def.arma.alcance || null,
+            // Multi-alvo: alguns monstros atacam vários inimigos (área/cone/explosão).
+            alvo: def.arma.alvo || null,
+            alvos: def.arma.alvos || null,
+            splash: def.arma.splash || null,
+          }
         : null,
       armadura: null,
     },
     spells: [...(def.spells || [])],
-    skills: (def.spells || [])
-      .map((id) => {
-        const s = { golpe_sangrento: { nome: 'Golpe Sangrento', tipo: 'magia', poder: 200, custo: 5 }, muralha: { nome: 'Muralha', tipo: 'defesa', poder: 25, custo: 6 } }[id];
-        return s ? { id: s.nome, ...s } : null;
-      })
-      .filter(Boolean),
+    skills: (def.spells || []).map((id) => skillFromSpell(SPELLS[id])).filter(Boolean),
     ultimate: null,
     especial: null,
     inventory: [],

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BattleManager } from '../src/game/battleManager.js';
+import { MONSTERS, buildMonster } from '../src/game/monsters.js';
 
 function makeCharacter(overrides = {}) {
   return {
@@ -714,5 +715,189 @@ describe('BattleManager — bebidas da taverna em combate', () => {
     expect(p.drunkTurns).toBe(0);
     expect(p.drunk).toBe(false);
     expect(battle.log.some((l) => l.text.includes('recuperou a sobriedade'))).toBe(true);
+  });
+});
+
+// ── Golpes multi-alvo (área / cone / explosão) ─────────────────────────────
+describe('BattleManager — golpes multi-alvo', () => {
+  // d20 = 5: acerta sempre, nunca desvia para aliados e nunca é crítico.
+  function setupMulti() {
+    vi.spyOn(Math, 'random').mockReturnValue(0.2);
+    const { manager } = makeManager();
+    const battle = manager.createBattle({
+      name: 'Multi',
+      mode: 'mestre',
+      host: 'p1',
+      hostName: 'M',
+      character: makeCharacter(),
+    });
+    const hero = battle.participants[0];
+    hero.mp = 100;
+    manager.addMonster({
+      battleId: battle.id,
+      hostId: 'p1',
+      monsterDef: { ...makeMonsterDef(), id: 'a', nome: 'Alvo A' },
+    });
+    manager.addMonster({
+      battleId: battle.id,
+      hostId: 'p1',
+      monsterDef: { ...makeMonsterDef(), id: 'b', nome: 'Alvo B' },
+    });
+    manager.startBattle({ battleId: battle.id, playerId: 'p1' });
+    const monstros = battle.participants.filter((q) => q.isMonster);
+    return { manager, battle, hero, monstros };
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  const golpe = (over = {}) => ({ id: 'g1', nome: 'Golpe', tipo: 'magia', poder: 150, custo: 0, ...over });
+
+  it('área atinge TODOS os inimigos vivos', () => {
+    const { manager, battle, hero, monstros } = setupMulti();
+    const antes = monstros.map((m) => m.hp);
+    manager._resolveSkill(battle, hero, monstros[0], golpe({ alvo: 'area' }));
+    expect(monstros[0].hp).toBeLessThan(antes[0]);
+    expect(monstros[1].hp).toBeLessThan(antes[1]);
+    const log = battle.log.map((l) => l.text).join('\n');
+    expect(log).toContain('em Alvo A');
+    expect(log).toContain('em Alvo B');
+  });
+
+  it('cone atinge o principal + os extras escolhidos', () => {
+    const { manager, battle, hero, monstros } = setupMulti();
+    const antes = monstros.map((m) => m.hp);
+    manager._resolveSkill(battle, hero, monstros[0], golpe({ alvo: 'cone', alvos: 2 }), [monstros[1]]);
+    expect(monstros[0].hp).toBeLessThan(antes[0]);
+    expect(monstros[1].hp).toBeLessThan(antes[1]);
+  });
+
+  it('explosão: principal leva 100% e o vizinho leva o splash (50%)', () => {
+    const { manager, battle, hero, monstros } = setupMulti();
+    const antes = monstros.map((m) => m.hp);
+    manager._resolveSkill(
+      battle,
+      hero,
+      monstros[0],
+      golpe({ alvo: 'explosao', alvos: 3, splash: 0.5 }),
+      [monstros[1]],
+    );
+    const danoPrincipal = antes[0] - monstros[0].hp;
+    const danoVizinho = antes[1] - monstros[1].hp;
+    expect(danoPrincipal).toBeGreaterThan(0);
+    expect(danoVizinho).toBe(Math.round(danoPrincipal * 0.5));
+  });
+
+  it('sem modo multi, atinge só o principal (comportamento antigo)', () => {
+    const { manager, battle, hero, monstros } = setupMulti();
+    const antes = monstros.map((m) => m.hp);
+    manager._resolveSkill(battle, hero, monstros[0], golpe({}), [monstros[1]]);
+    expect(monstros[0].hp).toBeLessThan(antes[0]);
+    expect(monstros[1].hp).toBe(antes[1]);
+  });
+
+  it('a área escolhe sozinha todos os inimigos; o máximo do cone é respeitado', () => {
+    const { manager, battle, hero, monstros } = setupMulti();
+    const specArea = { tipo: 'area', max: 99 };
+    expect(manager._alvosDoGolpe(battle, hero, specArea, monstros[0])).toHaveLength(2);
+    const specCone = { tipo: 'cone', max: 2 };
+    const alvos = manager._alvosDoGolpe(battle, hero, specCone, monstros[0], [monstros[1]]);
+    expect(alvos).toHaveLength(2);
+    // com max 1, o extra não entra
+    expect(manager._alvosDoGolpe(battle, hero, { tipo: 'cone', max: 1 }, monstros[0], [monstros[1]])).toHaveLength(1);
+  });
+
+  // Cena com 2 heróis aliados + 1 monstro, no modo mestre (existe fogo amigo).
+  function setupFogoAmigo() {
+    const { manager } = makeManager();
+    const battle = manager.createBattle({
+      name: 'FF',
+      mode: 'mestre',
+      host: 'p1',
+      hostName: 'M',
+      character: makeCharacter({ id: 'c1', name: 'Alfa' }),
+    });
+    const hero = battle.participants[0];
+    hero.mp = 100;
+    manager.joinBattle({
+      battleId: battle.id,
+      playerId: 'p2',
+      playerName: 'Beta',
+      character: makeCharacter({ id: 'c2', name: 'Beta' }),
+      team: null,
+    });
+    const aliado = battle.participants.find((q) => q.characterId === 'c2');
+    manager.addMonster({
+      battleId: battle.id,
+      hostId: 'p1',
+      monsterDef: { ...makeMonsterDef(), id: 'a', nome: 'Alvo A' },
+    });
+    manager.startBattle({ battleId: battle.id, playerId: 'p1' });
+    const monstro = battle.participants.find((q) => q.isMonster);
+    return { manager, battle, hero, aliado, monstro };
+  }
+
+  it('fogo amigo: falha crítica (d20 = 1) pode acertar os aliados (dano reduzido)', () => {
+    const { manager, battle, hero, aliado, monstro } = setupFogoAmigo();
+    vi.spyOn(Math, 'random').mockReturnValue(0); // d20 = 1 e r = 0 → desvia
+    const hpAliado = aliado.hp;
+    const hpAliadoMax = aliado.hpMax;
+    const hpMonstro = monstro.hp;
+
+    manager._resolveSkill(battle, hero, monstro, golpe({ alvo: 'area' }));
+
+    const log = battle.log.map((l) => l.text).join('\n');
+    expect(log).toContain('sai pela culatra');
+    expect(aliado.hp).toBeLessThan(hpAliadoMax);
+    expect(aliado.hp).toBeLessThan(hpAliado);
+    expect(monstro.hp).toBe(hpMonstro); // o inimigo não foi atingido
+  });
+
+  it('fogo amigo: falha crítica sem "azar" apenas erra, sem acertar aliados', () => {
+    const { manager, battle, hero, aliado, monstro } = setupFogoAmigo();
+    const spy = vi.spyOn(Math, 'random').mockReturnValue(0.9);
+    spy.mockReturnValueOnce(0); // 1ª rolagem (d20) = 1; depois r = 0.9 (sem azar)
+    const hpAliado = aliado.hp;
+    const hpMonstro = monstro.hp;
+
+    manager._resolveSkill(battle, hero, monstro, golpe({ alvo: 'area' }));
+
+    const log = battle.log.map((l) => l.text).join('\n');
+    expect(log).not.toContain('sai pela culatra');
+    expect(log).toContain('falha ao usar');
+    expect(aliado.hp).toBe(hpAliado);
+    expect(monstro.hp).toBe(hpMonstro);
+  });
+
+  it('fogo amigo: golpe de alvo único nunca acerta aliados', () => {
+    const { manager, battle, hero, aliado, monstro } = setupFogoAmigo();
+    vi.spyOn(Math, 'random').mockReturnValue(0); // d20 = 1 e r = 0
+    const hpAliado = aliado.hp;
+    const hpMonstro = monstro.hp;
+
+    manager._resolveSkill(battle, hero, monstro, golpe({})); // alvo único
+
+    const log = battle.log.map((l) => l.text).join('\n');
+    expect(log).not.toContain('sai pela culatra');
+    expect(log).toContain('falha ao usar');
+    expect(aliado.hp).toBe(hpAliado);
+    expect(monstro.hp).toBe(hpMonstro);
+  });
+});
+
+describe('Bestiário — golpes multi-alvo', () => {
+  it('o chefe Golem de Pedra varre a área e o Gigante dá um golpe em cone', () => {
+    const golem = buildMonster(MONSTERS.golem_pedra);
+    expect(golem.equipment.arma.alvo).toBe('area');
+
+    const gigante = buildMonster(MONSTERS.gigante);
+    expect(gigante.equipment.arma.alvo).toBe('cone');
+    expect(gigante.equipment.arma.alvos).toBe(3);
+  });
+
+  it('as habilidades dos monstros vêm do catálogo (skillFromSpell)', () => {
+    const golem = buildMonster(MONSTERS.golem_pedra);
+    const muralha = golem.skills.find((s) => s.nome === 'Muralha');
+    expect(muralha).toBeTruthy();
+    expect(muralha.tipo).toBe('defesa');
   });
 });

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { ATTRIBUTES, ATTRIBUTE_NAMES, SKILL_TYPES } from '../config.js';
+import { ALVO_LABEL } from '../game/sistema.js';
+import AlvoSelect from '../components/AlvoSelect.jsx';
 
 export default function Registry({ player, gameData, onBack }) {
   const [tab, setTab] = useState('classes');
@@ -598,7 +600,8 @@ function EquipmentRegistry({ player, equipment, onChanged, setError }) {
 }
 
 function SkillRegistry({ player, skills, onChanged, setError }) {
-  const [form, setForm] = useState({ nome: '', tipo: 'magia', poder: 150, custo: 5, cooldown: 0, todos: false });
+  const [form, setForm] = useState({ nome: '', tipo: 'magia', poder: 150, custo: 5, cooldown: 0, todos: false, alvo: 'unico', alvos: 3, splash: 0.5 });
+  const isDano = form.tipo === 'fisico' || form.tipo === 'magia';
 
   const save = async (e) => {
     e.preventDefault();
@@ -606,7 +609,7 @@ function SkillRegistry({ player, skills, onChanged, setError }) {
     setError('');
     try {
       await api.createCustomSkill({ creatorId: player.id, ...form });
-      setForm({ nome: '', tipo: 'magia', poder: 150, custo: 5, cooldown: 0, todos: false });
+      setForm({ nome: '', tipo: 'magia', poder: 150, custo: 5, cooldown: 0, todos: false, alvo: 'unico', alvos: 3, splash: 0.5 });
       onChanged();
     } catch (err) {
       setError(err.message);
@@ -654,11 +657,21 @@ function SkillRegistry({ player, skills, onChanged, setError }) {
               Recarga (turnos)
               <input type="number" min={0} max={20} value={form.cooldown} onChange={(e) => setForm((f) => ({ ...f, cooldown: Number(e.target.value) }))} />
             </label>
+          </div>
+          {isDano && (
+            <AlvoSelect
+              alvo={form.alvo}
+              alvos={form.alvos}
+              splash={form.splash}
+              onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
+            />
+          )}
+          {form.tipo === 'cura' && (
             <label className="check-label">
               <input type="checkbox" checked={form.todos} onChange={(e) => setForm((f) => ({ ...f, todos: e.target.checked }))} />
-              Atinge todos (AoE / cura em massa)
+              Cura em massa (todos os aliados)
             </label>
-          </div>
+          )}
           <button type="submit">Registrar Golpe</button>
         </form>
       </section>
@@ -674,6 +687,9 @@ function SkillRegistry({ player, skills, onChanged, setError }) {
                 <span className="tag">{s.poder}%</span>
                 <span className="tag">MP {s.custo}</span>
                 {s.cooldown > 0 && <span className="tag">⏳ {s.cooldown}t</span>}
+                {s.alvo && s.alvo !== 'unico' && (
+                  <span className="tag">◎ {ALVO_LABEL[s.alvo] || s.alvo}</span>
+                )}
                 {s.todos && <span className="tag">✦ Todos</span>}
                 <span className="tag">por {s.creator_name}</span>
               </div>

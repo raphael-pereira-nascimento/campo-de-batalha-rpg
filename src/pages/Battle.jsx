@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, getSocket, emitAck, isOffline, applyOfflineRewards } from '../api.js';
 import StatBar from '../components/StatBar.jsx';
 import { playLogKind, play, isMuted, toggleMute } from '../utils/sfx.js';
-import { VOO, ALTITUDES, dificuldadeDoGolpe } from '../game/sistema.js';
-import { melhorArma, armasDeEquipamento } from '../game/data.js';
+import { VOO, ALTITUDES, dificuldadeDoGolpe, alvoNormalizado, ALVO_LABEL } from '../game/sistema.js';
+import { melhorArma, armasDeEquipamento, skillFromSpell } from '../game/data.js';
 
 const CLASS_ICONS = { guerreiro: '🛡️', mago: '🔮', arqueiro: '🏹', clerigo: '✝️', assassino: '🗡️', paladino: '⚔️' };
 const MONSTER_ICON = '👾';
@@ -14,6 +14,7 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
   const [battle, setBattle] = useState(null);
   const [error, setError] = useState('');
   const [targetId, setTargetId] = useState('');
+  const [extraIds, setExtraIds] = useState([]);
   const [spellId, setSpellId] = useState('');
   const [itemId, setItemId] = useState('');
   const [actionType, setActionType] = useState('attack');
@@ -196,6 +197,20 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
 
   const megaNeedsTarget = (s) => s && (s.tipo === 'fisico' || s.tipo === 'magia');
 
+  // Monta a lista de ids alvo do golpe: o 1º é o principal; os demais são os
+  // extras de cone/explosão. Área escolhe sozinha no gerenciador.
+  const idsDeAlvo = (spec) => {
+    const primary = targetId || (aliveTargets[0] && aliveTargets[0].characterId) || null;
+    const multi = spec && (spec.tipo === 'cone' || spec.tipo === 'explosao');
+    const max = spec && spec.max ? spec.max : 1;
+    const extras = multi
+      ? extraIds.filter((id) => id && id !== primary).slice(0, Math.max(0, max - 1))
+      : [];
+    return [primary, ...extras].filter(Boolean);
+  };
+  const toggleExtra = (id) =>
+    setExtraIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
   const act = async (payload) => {
     if (!active) return;
     setBusy(true);
@@ -215,14 +230,19 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
     }
   };
 
-  const doAttack = () => act({ type: 'attack', targetId: targetId || aliveTargets[0]?.characterId });
+  const doAttack = () => {
+    const ids = idsDeAlvo(alvoNormalizado(armaMelhor || {}));
+    act({ type: 'attack', targetId: ids[0] || null, targetIds: ids });
+  };
   const doUtility = () => act({ type: 'attackUtility', targetId: targetId || aliveTargets[0]?.characterId });
   const doDefend = () => act({ type: 'defend' });
   const doDodge = () => act({ type: 'dodge' });
   const doVoo = (dir) => act({ type: 'voo', dir });
   const doMagic = () => {
     if (!spellId) return;
-    act({ type: 'magic', spellId, targetId: targetId || null });
+    const skill = resolverGolpe(active, gameData, spellId);
+    const ids = idsDeAlvo(alvoNormalizado(skill || {}));
+    act({ type: 'magic', spellId, targetId: ids[0] || null, targetIds: ids });
   };
   const doItem = () => act({ type: 'useItem', itemId });
 
@@ -317,9 +337,30 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
   }
 
   const canStart = battle.mode === 'mestre' ? heroes.length >= 1 && enemies.length >= 1 : participants.length >= 2;
-  const spellData = active?.spells?.length
-    ? active.spells.map((id) => ({ id, data: gameData.spells[id] || null })).filter((s) => s.data)
-    : [];
+  // Lista de golpes/magias do lutador: a ficha completa (`skills`) é a fonte
+  // confiável (inclui golpes personalizados e habilidades de monstros); ids
+  // soltos em `spells` são resolvidos pelo catálogo como reserva.
+  const skillData = (() => {
+    if (!active) return [];
+    const ids = [...((active.skills || []).map((s) => s && s.id)).filter(Boolean), ...(active.spells || [])];
+    const vistos = new Set();
+    const out = [];
+    for (const id of ids) {
+      if (vistos.has(id)) continue;
+      vistos.add(id);
+      const s = resolverGolpe(active, gameData, id);
+      if (s) out.push(s);
+    }
+    return out;
+  })();
+  const skillSel = skillData.find((s) => s.id === spellId) || null;
+  const specSel = alvoNormalizado(skillSel || {});
+  const specArma = alvoNormalizado(armaMelhor || {});
+  const megaSpec = (skill) => alvoNormalizado(skill || {});
+  const extraTargets = (spec) => {
+    const primary = targetId || (aliveTargets[0] && aliveTargets[0].characterId) || null;
+    return aliveTargets.filter((t) => t.characterId !== primary);
+  };
 
   return (
     <div className="page battle-page">
@@ -538,10 +579,21 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                   {active && armaMelhor && (
                     <p className="muted small">
                       ⚔️ Arma ativa: <strong>{armaMelhor.nome}</strong> (dano {armaMelhor.danoBase})
+                      {specArma.tipo !== 'unico' && (
+                        <>
+                          {' '}· <span className="tag">◎ {ALVO_LABEL[specArma.tipo]}</span>
+                        </>
+                      )}
                     </p>
                   )}
+                  <ExtrasDeAlvo
+                    spec={specArma}
+                    targets={extraTargets(specArma)}
+                    value={extraIds}
+                    onChange={toggleExtra}
+                  />
                   <button onClick={doAttack} disabled={busy || !aliveTargets.length}>
-                    Atacar
+                    {specArma.tipo === 'area' ? 'Atacar (todos)' : 'Atacar'}
                   </button>
                   {active && armaUtil && (
                     <button
@@ -558,19 +610,40 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
 
               {actionType === 'magic' && active && (
                 <div className="action-body">
-                  <select value={spellId} onChange={(e) => setSpellId(e.target.value)}>
+                  <select value={spellId} onChange={(e) => { setSpellId(e.target.value); }}>
                     <option value="">Escolha a magia...</option>
-                    {spellData.map(({ id, data }) => (
-                      <option key={id} value={id} disabled={data.custo > active.mp}>
-                        {data.nome} · MP {data.custo} · dif. {difDaMagia(data)} {data.custo > active.mp ? '(MP insuficiente)' : ''}
+                    {skillData.length === 0 && <option value="" disabled>Nenhum golpe/magia disponível.</option>}
+                    {skillData.map((s) => (
+                      <option key={s.id} value={s.id} disabled={(s.custo || 0) > active.mp}>
+                        {s.nome} · MP {s.custo || 0} · dif. {difDaMagia(s)}
+                        {s.alvo && s.alvo !== 'unico' ? ` · ◎${ALVO_LABEL[s.alvo] || s.alvo}` : ''}
+                        {(s.custo || 0) > active.mp ? ' (MP insuficiente)' : ''}
                       </option>
                     ))}
                   </select>
-                  {needsTarget(spellId, gameData.spells) && (
+                  {needsTargetSkill(skillSel) && (
                     <TargetSelect targets={aliveTargets} value={targetId} onChange={setTargetId} />
                   )}
-                  <button onClick={doMagic} disabled={busy || !spellId || (needsTarget(spellId, gameData.spells) && !targetId)}>
-                    Conjurar
+                  {needsTargetSkill(skillSel) && (
+                    <ExtrasDeAlvo
+                      spec={specSel}
+                      targets={extraTargets(specSel)}
+                      value={extraIds}
+                      onChange={toggleExtra}
+                    />
+                  )}
+                  {skillSel && skillSel.tipo === 'cura' && (
+                    <p className="hint">💚 {skillSel.todos ? 'Cura em massa: todos os aliados.' : 'Cura um aliado (padrão: você).'}</p>
+                  )}
+                  <button
+                    onClick={doMagic}
+                    disabled={
+                      busy ||
+                      !spellId ||
+                      (needsTargetSkill(skillSel) && !idsDeAlvo(specSel).length)
+                    }
+                  >
+                    Conjurar{specSel.tipo === 'area' ? ' (todos)' : ''}
                   </button>
                 </div>
               )}
@@ -663,9 +736,20 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                           {megaNeedsTarget(active.ultimate) && (
                             <TargetSelect targets={aliveTargets} value={targetId} onChange={setTargetId} />
                           )}
+                          {megaNeedsTarget(active.ultimate) && (
+                            <ExtrasDeAlvo
+                              spec={megaSpec(active.ultimate)}
+                              targets={extraTargets(megaSpec(active.ultimate))}
+                              value={extraIds}
+                              onChange={toggleExtra}
+                            />
+                          )}
                           <button
-                            onClick={() => act({ type: 'ultimateSkill', targetId: targetId || null })}
-                            disabled={busy || !aliveTargets.length || (megaNeedsTarget(active.ultimate) && !targetId)}
+                            onClick={() => {
+                              const ids = idsDeAlvo(megaSpec(active.ultimate));
+                              act({ type: 'ultimateSkill', targetId: ids[0] || null, targetIds: ids });
+                            }}
+                            disabled={busy || !aliveTargets.length || (megaNeedsTarget(active.ultimate) && !idsDeAlvo(megaSpec(active.ultimate)).length)}
                           >
                             ⚡ Golpe Ultimate: {active.ultimate.nome} · dif. {difDaMega(active.ultimate)}
                           </button>
@@ -682,9 +766,20 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                       {megaNeedsTarget(active.especial) && (
                         <TargetSelect targets={aliveTargets} value={targetId} onChange={setTargetId} />
                       )}
+                      {megaNeedsTarget(active.especial) && (
+                        <ExtrasDeAlvo
+                          spec={megaSpec(active.especial)}
+                          targets={extraTargets(megaSpec(active.especial))}
+                          value={extraIds}
+                          onChange={toggleExtra}
+                        />
+                      )}
                       <button
-                        onClick={() => act({ type: 'especial', targetId: targetId || null })}
-                        disabled={busy || (active.especialBar || 0) < 100 || !aliveTargets.length || (megaNeedsTarget(active.especial) && !targetId)}
+                        onClick={() => {
+                          const ids = idsDeAlvo(megaSpec(active.especial));
+                          act({ type: 'especial', targetId: ids[0] || null, targetIds: ids });
+                        }}
+                        disabled={busy || (active.especialBar || 0) < 100 || !aliveTargets.length || (megaNeedsTarget(active.especial) && !idsDeAlvo(megaSpec(active.especial)).length)}
                       >
                         💫 {active.especial.nome} (100%) · dif. {difDaMega(active.especial)}
                       </button>
@@ -714,18 +809,68 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
 }
 
 // Dificuldade exibida ao jogador (mesma fórmula usada no d20 pelo combate).
+// `data` aqui é um golpe já normalizado (poder em %), como os de `active.skills`.
 function difDaMagia(data) {
-  return dificuldadeDoGolpe({ poder: Math.round((data.poder || 1) * 100), status: data.status || null });
+  return dificuldadeDoGolpe({ poder: Number(data.poder) || 0, status: data.status || null });
 }
 
 function difDaMega(mega) {
   return dificuldadeDoGolpe({ poder: Number(mega.poder) || 0, status: mega.status || null });
 }
 
-function needsTarget(spellId, spells) {
-  const s = spells[spellId];
-  if (!s) return false;
-  return s.tipo === 'ataque' || s.tipo === 'cura';
+// Resolve um golpe por id: prioriza a ficha (`active.skills`) e cai para o
+// catálogo de magias (`spells`), aceitando também busca por nome.
+function resolverGolpe(active, gameData, id) {
+  if (!id) return null;
+  const daFicha = (active && active.skills) || [];
+  const achado = daFicha.find((s) => s && (s.id === id || s.nome === id));
+  if (achado) return achado;
+  const spells = (gameData && gameData.spells) || {};
+  if (spells[id]) return skillFromSpell(spells[id]);
+  const porNome = Object.values(spells).find((s) => s.nome === id);
+  return porNome ? skillFromSpell(porNome) : null;
+}
+
+function needsTargetSkill(s) {
+  return !!s && (s.tipo === 'fisico' || s.tipo === 'magia');
+}
+
+// Seleção de alvos extras para golpes de cone/explosão (área acerta sozinha).
+function ExtrasDeAlvo({ spec, targets, value, onChange }) {
+  if (!spec || spec.tipo === 'unico') return null;
+  if (spec.tipo === 'area') {
+    return <p className="hint alvo-hint">💥 Atinge TODOS os inimigos vivos com 100% do dano.</p>;
+  }
+  const limite = Math.max(0, (spec.max || 1) - 1);
+  return (
+    <div className="extra-targets">
+      <span className="field-label">
+        {spec.tipo === 'cone' ? '🔺 Alvos do cone' : '💣 Vizinhos da explosão'} (até {limite})
+      </span>
+      {targets.length === 0 ? (
+        <span className="muted small">Sem outros alvos disponíveis.</span>
+      ) : (
+        <div className="target-chips">
+          {targets.map((t) => {
+            const on = value.includes(t.characterId);
+            const cheio = !on && value.length >= limite;
+            return (
+              <button
+                key={t.characterId}
+                type="button"
+                className={`chip-btn${on ? ' on' : ''}`}
+                disabled={cheio}
+                title={t.isMonster ? t.monsterName : t.charName}
+                onClick={() => onChange(t.characterId)}
+              >
+                {t.charName}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function TargetSelect({ targets, value, onChange }) {

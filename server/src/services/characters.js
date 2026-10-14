@@ -17,6 +17,7 @@ import {
   STATUS_KEYS,
 } from '../game/data.js';
 import { RACES } from '../game/races.js';
+import { ALVO_TIPOS } from '../game/sistema.js';
 import { gemIsRaw } from '../game/gems.js';
 import { getCustomEquipment } from './customContent.js';
 import { clampInt, clampFloat } from '../utils.js';
@@ -117,6 +118,9 @@ export function normalizeSkill(s = {}) {
     custo: clampInt(s.custo ?? 0, 0, 99),
     cooldown: clampInt(s.cooldown ?? 0, 0, 20),
     todos: !!s.todos,
+    alvo: ALVO_TIPOS[s.alvo] || null,
+    alvos: s.alvos ? clampInt(s.alvos, 2, 10) : null,
+    splash: s.splash ? clampFloat(s.splash, 0.1, 1) : null,
     status: normalizeStatus(s.status),
     desc: String(s.desc || '').slice(0, 200),
   };
@@ -240,6 +244,10 @@ function presetSkillsFrom(classes) {
         custo: s.custo || 0,
         cooldown: 0,
         todos: s.nome === 'Cura em Massa',
+        // Multi-alvo do catálogo (área/cone/explosão).
+        alvo: s.alvo || null,
+        alvos: s.alvos || null,
+        splash: s.splash || null,
         status: s.status ? { ...s.status } : null,
         desc: s.desc || '',
       });

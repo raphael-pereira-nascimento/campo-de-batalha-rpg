@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { ATTRIBUTES, ATTRIBUTE_NAMES } from '../config.js';
 import { GEMS, GEM_RARITY, gemIsRaw } from '../game/gems.js';
-import { deriveStats } from '../game/data.js';
-import { cargaMaxima, VOO, armasDeEquipamento, categoriaDeArma, ARMAS_SLOTS, ARMA_CATEGORIA_INFO } from '../game/sistema.js';
+import { cargaMaxima, VOO, armasDeEquipamento, categoriaDeArma, ARMAS_SLOTS, ARMA_CATEGORIA_INFO, ALVO_LABEL } from '../game/sistema.js';
+import { deriveStats, skillFromSpell } from '../game/data.js';
 import StatBar from './StatBar.jsx';
 
 const CLASS_ICONS = {
@@ -16,17 +16,6 @@ const CLASS_ICONS = {
 };
 
 const SKILL_TYPE_ICONS = { fisico: '⚔️', magia: '✨', cura: '💚', buff: '🔮', defesa: '🛡️' };
-
-function skillFromSpell(s) {
-  return {
-    id: s.nome,
-    nome: s.nome,
-    tipo: s.tipo === 'ataque' ? 'magia' : s.tipo,
-    poder: Math.round((s.poder || 1) * 100),
-    custo: s.custo || 0,
-    desc: s.desc || '',
-  };
-}
 
 export default function CharacterSheet({ character, gameData, onChanged }) {
   const [busy, setBusy] = useState(null);
@@ -241,7 +230,10 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
           {skills.map((s) => (
             <div className="spell-chip" key={s.id} title={s.desc}>
               <span>{SKILL_TYPE_ICONS[s.tipo] || '✨'} {s.nome}</span>
-              <small>MP {s.custo} · {s.poder}%</small>
+              <small>
+                MP {s.custo} · {s.poder}%
+                {s.alvo && s.alvo !== 'unico' ? ` · ◎ ${ALVO_LABEL[s.alvo] || s.alvo}` : ''}
+              </small>
             </div>
           ))}
           {skills.length === 0 && <p className="muted">Nenhum golpe.</p>}

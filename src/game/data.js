@@ -50,7 +50,7 @@ export const CLASSES = {
     hpPerLevel: 12,
     mpPerLevel: 3,
     levelUp: 'forca',
-    spellList: ['golpe_sangrento', 'grito_de_guerra', 'muralha'],
+    spellList: ['golpe_sangrento', 'giro_de_espada', 'grito_de_guerra', 'muralha'],
   },
   mago: {
     id: 'mago',
@@ -60,7 +60,7 @@ export const CLASSES = {
     hpPerLevel: 6,
     mpPerLevel: 10,
     levelUp: 'inteligencia',
-    spellList: ['bola_de_fogo', 'raio', 'gelo', 'escudo_arcano'],
+    spellList: ['bola_de_fogo', 'onda_de_choque', 'raio', 'gelo', 'escudo_arcano'],
   },
   arqueiro: {
     id: 'arqueiro',
@@ -70,7 +70,7 @@ export const CLASSES = {
     hpPerLevel: 8,
     mpPerLevel: 5,
     levelUp: 'destreza',
-    spellList: ['tiro_preciso', 'chuva_de_flechas', 'flecha_ardente'],
+    spellList: ['tiro_preciso', 'chuva_de_flechas', 'salva_de_projeteis', 'flecha_ardente'],
   },
   clerigo: {
     id: 'clerigo',
@@ -108,16 +108,19 @@ export const ELEMENTOS = ['fisico', 'fogo', 'agua', 'terra', 'ar', 'luz', 'treva
 
 export const SPELLS = {
   golpe_sangrento: { nome: 'Golpe Sangrento', tipo: 'ataque', custo: 5, poder: 2.0, desc: 'Ataque físico brutal com força aumentada.', status: { tipo: 'sangramento', turnos: 2, dano: 60 }, alcanceVertical: 'terrestre' },
+  giro_de_espada: { nome: 'Giro de Espada', tipo: 'ataque', custo: 6, poder: 1.5, desc: 'Gira a arma em arco, atingindo vários inimigos à volta.', elemento: 'fisico', alvo: 'cone', alvos: 3, alcanceVertical: 'terrestre' },
   grito_de_guerra: { nome: 'Grito de Guerra', tipo: 'buff', custo: 6, poder: 0.15, desc: 'Aumenta o dano físico de todos os aliados.' },
   muralha: { nome: 'Muralha', tipo: 'defesa', custo: 6, poder: 0.25, desc: 'Reduz o dano recebido nesta rodada.' },
 
-  bola_de_fogo: { nome: 'Bola de Fogo', tipo: 'ataque', custo: 8, poder: 2.4, desc: 'Explosão de fogo devastadora.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3, dano: 50 } },
+  bola_de_fogo: { nome: 'Bola de Fogo', tipo: 'ataque', custo: 8, poder: 2.4, desc: 'Explosão de fogo devastadora: atinge o alvo e os vizinhos.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3, dano: 50 }, alvo: 'explosao', alvos: 3, splash: 0.5 },
+  onda_de_choque: { nome: 'Onda de Choque', tipo: 'ataque', custo: 8, poder: 1.7, desc: 'Leque de energia que atinge vários inimigos em cone.', elemento: 'ar', alvo: 'cone', alvos: 3 },
   raio: { nome: 'Raio', tipo: 'ataque', custo: 6, poder: 1.8, desc: 'Descarga elétrica precisa.', elemento: 'ar' },
   gelo: { nome: 'Gelo', tipo: 'ataque', custo: 7, poder: 1.6, desc: 'Congela o alvo e reduz a velocidade dele.', elemento: 'agua', status: { tipo: 'congelamento', turnos: 2 }, alcanceVertical: 'limitado' },
   escudo_arcano: { nome: 'Escudo Arcano', tipo: 'defesa', custo: 7, poder: 0.3, desc: 'Barreira mágica que absorve dano.' },
 
   tiro_preciso: { nome: 'Tiro Preciso', tipo: 'ataque', custo: 4, poder: 1.5, desc: 'Dano crítico elevado.', elemento: 'fisico', alcanceVertical: 'longo' },
-  chuva_de_flechas: { nome: 'Chuva de Flechas', tipo: 'ataque', custo: 9, poder: 2.2, desc: 'Acerta todos os inimigos.', elemento: 'fisico' },
+  chuva_de_flechas: { nome: 'Chuva de Flechas', tipo: 'ataque', custo: 9, poder: 2.2, desc: 'Acerta todos os inimigos.', elemento: 'fisico', alvo: 'area' },
+  salva_de_projeteis: { nome: 'Salva de Projéteis', tipo: 'ataque', custo: 7, poder: 1.4, desc: 'Dispara projéteis em leque contra vários inimigos.', elemento: 'fisico', alvo: 'cone', alvos: 3 },
   flecha_ardente: { nome: 'Flecha Ardente', tipo: 'ataque', custo: 6, poder: 1.9, desc: 'Flecha em chamas que causa queimadura.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3, dano: 60 }, alcanceVertical: 'longo' },
 
   cura: { nome: 'Cura', tipo: 'cura', custo: 6, poder: 2.0, desc: 'Restaura HP com base na inteligência.', elemento: 'luz' },
@@ -132,6 +135,30 @@ export const SPELLS = {
   golpe_sagrado: { nome: 'Golpe Sagrado', tipo: 'ataque', custo: 7, poder: 2.0, desc: 'Espada envolta em luz sagrada.', elemento: 'luz', alcanceVertical: 'terrestre' },
   escudo_divino: { nome: 'Escudo Divino', tipo: 'defesa', custo: 7, poder: 0.3, desc: 'Barreira sagrada que absorve dano.', elemento: 'luz' },
 };
+
+/**
+ * Converte uma entrada do catálogo SPELLS num "golpe" usado em combate.
+ * Fonte única usada pelo battleManager, pelos monstros e pela UI.
+ */
+export function skillFromSpell(s) {
+  if (!s) return null;
+  return {
+    id: s.nome,
+    nome: s.nome,
+    tipo: s.tipo === 'ataque' ? 'magia' : s.tipo,
+    poder: Math.round((s.poder || 1) * 100),
+    custo: s.custo || 0,
+    cooldown: 0,
+    todos: s.nome === 'Cura em Massa',
+    alvo: s.alvo || null,
+    alvos: s.alvos || null,
+    splash: s.splash || null,
+    status: s.status ? { ...s.status } : null,
+    elemento: s.elemento || null,
+    alcanceVertical: s.alcanceVertical || null,
+    desc: s.desc || '',
+  };
+}
 
 export const WEAPON_STATES = {
   otima:       { nome: 'Ótima',       cor: '#3ddc84', multDano: 1.0, multDefesa: 1.0 },
@@ -165,11 +192,12 @@ export const EQUIPMENT = {
     orbe_magico: { nome: 'Orbe Mágico', tipo: 'arma', categoria: 'distancia', danoBase: 2, bonus: { inteligencia: 3 }, socketSlots: 1, alcance: 'longo', recarga: 0, descricao: 'Esfera flutuante que amplifica magia pura.' },
     pistola: { nome: 'Pistola', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 6, bonus: { destreza: 1 }, socketSlots: 1, alcance: 'longo', recarga: 1, descricao: 'Rápida e letal, mas imprecisa à distância.' },
     mosquete: { nome: 'Mosquete', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 8, bonus: { forca: 1 }, socketSlots: 2, alcance: 'longo', recarga: 2, descricao: 'O clássico — lento mas devastador.' },
-    bacamarte: { nome: 'Bacamarte', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 7, bonus: { forca: 1 }, socketSlots: 1, alcance: 'medio', recarga: 2, descricao: 'Dispara chumbos em cone, eficaz contra grupos.' },
+    bacamarte: { nome: 'Bacamarte', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 7, bonus: { forca: 1 }, socketSlots: 1, alcance: 'medio', recarga: 2, alvo: 'cone', alvos: 3, descricao: 'Dispara chumbos em cone, eficaz contra grupos.' },
     rifle_de_caca: { nome: 'Rifle de Caça', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 9, bonus: { destreza: 2 }, socketSlots: 2, alcance: 'longo', recarga: 2, descricao: 'Precisão cirúrgica, cara e rara.' },
     besta_pesada: { nome: 'Besta Pesada', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 7, bonus: { forca: 1 }, socketSlots: 2, alcance: 'longo', recarga: 1, descricao: 'Mais lenta que arco mas ignora parcialmente defesa.' },
     cajado_de_fogo: { nome: 'Cajado de Fogo', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 4, bonus: { inteligencia: 2 }, socketSlots: 2, alcance: 'longo', recarga: 1, descricao: 'Cajado arcano que dispara projéteis de fogo incandescentes.' },
     arco_composto: { nome: 'Arco Composto', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 7, bonus: { destreza: 2 }, socketSlots: 2, alcance: 'longo', recarga: 0, descricao: 'Arco reforçado com lâmina — multiclasse de precisão.' },
+    canhao_de_mao: { nome: 'Canhão de Mão', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 10, bonus: { forca: 1 }, socketSlots: 2, alcance: 'medio', recarga: 3, alvo: 'explosao', alvos: 3, splash: 0.5, descricao: 'Disparo explosivo: atinge o alvo principal e os vizinhos com estilhaços.' },
 
     // ── Utilitárias (🧰) — possuem limites de uso por batalha ──
     // Valores de dano/usos/efeito são PROVISÓRIOS: ajuste tudo neste bloco.

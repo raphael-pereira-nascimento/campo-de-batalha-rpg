@@ -15,6 +15,7 @@ import {
   MAX_PLAYERS_PER_BATTLE,
   armasDeEquipamento,
   melhorArma,
+  skillFromSpell,
 } from './data.js';
 import {
   manaRecuperada,
@@ -28,6 +29,9 @@ import {
   curaMagica,
   dificuldadeDoGolpe,
   DANO_COEF_MEGA,
+  alvoNormalizado,
+  desviouParaAliado,
+  MULTI_FOGO_AMIGO_MULT,
   VOO,
   ALCANCE_VERTICAL,
   ALTITUDES,
@@ -52,22 +56,6 @@ function attrLabel(name) {
     reflexos: 'Reflexos',
   };
   return labels[name] || name;
-}
-
-function skillFromSpell(s) {
-  return {
-    id: s.nome,
-    nome: s.nome,
-    tipo: s.tipo === 'ataque' ? 'magia' : s.tipo,
-    poder: Math.round((s.poder || 1) * 100),
-    custo: s.custo || 0,
-    cooldown: 0,
-    todos: s.nome === 'Cura em Massa',
-    status: s.status ? { ...s.status } : null,
-    elemento: s.elemento || null,
-    alcanceVertical: s.alcanceVertical || null,
-    desc: s.desc || '',
-  };
 }
 
 function skillsOf(p) {
@@ -989,48 +977,216 @@ export class BattleManager {
     p.contribuicao.suporte += qtd;
   }
 
-  _resolveAttack(battle, p, target, weapon) {
+  // Lista os inimigos vivos de `p` conforme o modo da batalha.
+  _inimigos(battle, p) {
+    return battle.participants.filter((q) => {
+      if (!q.alive || q === p) return false;
+      if (battle.mode === 'mestre') return !!q.isMonster !== !!p.isMonster;
+      if (battle.mode === 'equipes') return q.team !== p.team;
+      return true; // 'todos': vale-tudo, todos os outros são adversários
+    });
+  }
+
+  // Lista os aliados vivos de `p` (para fogo amigo). No modo 'todos' não há aliados.
+  _aliadosDe(battle, p) {
+    return battle.participants.filter((q) => {
+      if (!q.alive || q === p) return false;
+      if (battle.mode === 'mestre') return !!q.isMonster === !!p.isMonster;
+      if (battle.mode === 'equipes') return q.team === p.team;
+      return false;
+    });
+  }
+
+  // Seleciona os alvos de um golpe: principal + extras escolhidos (cone/explosão)
+  // ou todos os inimigos (área). Mantém apenas inimigos vivos.
+  _alvosDoGolpe(battle, p, spec, primary, extras = []) {
+    const inimigos = this._inimigos(battle, p);
+    const out = [];
+    if (spec.tipo === 'area') {
+      if (primary && primary.alive && inimigos.includes(primary)) out.push(primary);
+      for (const t of inimigos) if (!out.includes(t)) out.push(t);
+      return out;
+    }
+    const max = Math.max(1, spec.max || 1);
+    if (primary && primary.alive) out.push(primary);
+    for (const t of extras) {
+      if (out.length >= max) break;
+      if (t && t.alive && t !== p && inimigos.includes(t) && !out.includes(t)) out.push(t);
+    }
+    return out;
+  }
+
+  // Escolhe, para a IA, os alvos extras (cone/explosão) — a área escolhe sozinha.
+  // Preferência: alvos com menor % de vida restante.
+  _extrasDeIa(battle, p, spec, primary) {
+    if (!spec || spec.tipo === 'unico' || spec.tipo === 'area') return [];
+    return this._inimigos(battle, p)
+      .filter((t) => t !== primary)
+      .sort((a, b) => a.hp / a.hpMax - b.hp / b.hpMax)
+      .slice(0, Math.max(0, (spec.max || 1) - 1));
+  }
+
+  // Golpe de área/cone/explosão saiu pela culatra: atinge aliados (dano reduzido).
+  _fogoAmigoMulti(battle, p, spec, kind, nome, danoBase, elemento) {
+    battle.log.push(
+      makeLog(`⚠️ ${p.charName} erra a mira de ${nome} (d20 baixo) e o golpe sai pela culatra!`, 'miss'),
+    );
+    const aliados = this._aliadosDe(battle, p);
+    if (!aliados.length) {
+      battle.log.push(makeLog('💨 O golpe se perde sem atingir ninguém.', 'info'));
+      return;
+    }
+    const alvos =
+      spec.tipo === 'area' ? aliados : [aliados[Math.floor(Math.random() * aliados.length)]];
+    const elem = elemento || 'fisico';
+    for (const t of alvos) {
+      const total = Math.max(1, Math.round(danoBase * MULTI_FOGO_AMIGO_MULT * this._elemMult(elem, t)));
+      battle.log.push(makeLog(`💥 ${p.charName} atinge o aliado ${t.charName} por engano: ${total} de dano.`, 'damage'));
+      this._applyDamage(t, total, battle, p, kind);
+    }
+  }
+
+  _resolveAttack(battle, p, target, weapon, extras = []) {
     const weaponName = weapon ? weapon.nome : 'as mãos';
+    const spec = alvoNormalizado(weapon || {});
+    const alvos = this._alvosDoGolpe(battle, p, spec, target, extras);
+    const principal = alvos[0];
+    if (!principal) {
+      battle.log.push(makeLog(`🎯 ${p.charName} não encontrou alvos para atacar.`, 'miss'));
+      return;
+    }
     // Alcance vertical: golpe corpo a corpo não alcança quem está no ar.
     const alcance = this._alcanceVerticalDoGolpe(p, null, weapon);
-    if (foraDoAlcanceVertical(alcance, target)) {
+    if (foraDoAlcanceVertical(alcance, principal)) {
       battle.log.push(
-        makeLog(`🕊️ ${weaponName} não alcança ${target.charName} na altitude ${target.altitude} (${p.charName} chega até a altitude ${alcance}).`, 'miss'),
+        makeLog(`🕊️ ${weaponName} não alcança ${principal.charName} na altitude ${principal.altitude} (${p.charName} chega até a altitude ${alcance}).`, 'miss'),
       );
       return;
     }
-    const res = this._rollToHit(p, target, 'physical');
-    if (res.roll === 1) {
-      battle.log.push(makeLog(`❌ ${p.charName} falha ao atacar ${target.charName} com ${weaponName}! (d20 = 1)`, 'miss'));
-      return;
-    }
-    if (!res.hit) {
-      battle.log.push(makeLog(`💨 ${p.charName} erra o ataque em ${target.charName}. (d20 = ${res.roll}, precisava de ${res.chance})`, 'miss'));
-      return;
-    }
-    this._marcarAcerto(p);
+    const mira = this._rollToHit(p, principal, 'physical');
     const dmg = physicalDamage(
       this._withDrunk(p),
       weapon,
       this._physMult(p) * this._especializacaoMult(p, weapon) * (p.buffPhysical || 1),
     );
-    let total = res.crit ? dmg.total * 2 : dmg.total;
+    const danoBase = dmg.total;
+    // Falha crítica (d20 = 1): golpe multi-alvo pode sair pela culatra.
+    if (mira.roll === 1) {
+      if (spec.tipo !== 'unico' && desviouParaAliado(mira.roll)) {
+        this._fogoAmigoMulti(battle, p, spec, 'physical', weaponName, danoBase, weapon?.elemento);
+        return;
+      }
+      battle.log.push(makeLog(`❌ ${p.charName} falha ao atacar ${principal.charName} com ${weaponName}! (d20 = 1)`, 'miss'));
+      return;
+    }
+    if (!mira.hit) {
+      battle.log.push(makeLog(`💨 ${p.charName} erra o ataque em ${principal.charName}. (d20 = ${mira.roll}, precisava de ${mira.chance})`, 'miss'));
+      return;
+    }
+    this._marcarAcerto(p);
     const atkElem = weapon?.elemento || 'fisico';
-    const elemM = this._elemMult(atkElem, target);
-    total = Math.round(total * elemM);
-    const elemTag = elemM > 1 ? ` ⚡${atkElem} fragiliza!` : elemM < 1 ? ` 🛡${atkElem} resistido!` : '';
-    battle.log.push(
-      makeLog(
-        `${res.crit ? '✨ CRÍTICO! ' : ''}⚔️ ${p.charName} ataca ${target.charName} com ${weaponName}: ${total} de dano.${elemTag}`,
-        'attack',
-      ),
-    );
-    this._chargeEspecial(battle, p, res.crit ? 15 : 8);
-    const dealt = this._applyDamage(target, total, battle, p, 'physical');
-    if (dealt > 0) this._lifesteal(battle, p, dealt);
-    if (!target.alive && !target.horda) p.kills += 1;
     const ataqueStatus = efeitosDe(p).ataqueStatus;
-    if (ataqueStatus && target.alive) this._applyStatus(battle, target, ataqueStatus, p);
+    alvos.forEach((t, i) => {
+      if (!t.alive) return;
+      if (foraDoAlcanceVertical(alcance, t)) {
+        battle.log.push(makeLog(`🕊️ ${weaponName} não alcança ${t.charName} na altitude ${t.altitude}.`, 'miss'));
+        return;
+      }
+      const res = i === 0 ? mira : this._rollToHit(p, t, 'physical');
+      if (i > 0 && (res.roll === 1 || !res.hit)) {
+        battle.log.push(makeLog(`💨 ${p.charName} erra o ataque em ${t.charName}. (d20 = ${res.roll})`, 'miss'));
+        return;
+      }
+      const elemM = this._elemMult(atkElem, t);
+      const multSec = i > 0 ? spec.splash : 1;
+      const total = Math.round(danoBase * (res.crit ? 2 : 1) * multSec * elemM);
+      const elemTag = elemM > 1 ? ` ⚡${atkElem} fragiliza!` : elemM < 1 ? ` 🛡${atkElem} resistido!` : '';
+      battle.log.push(
+        makeLog(
+          `${res.crit ? '✨ CRÍTICO! ' : ''}⚔️ ${p.charName} ataca ${t.charName} com ${weaponName}: ${total} de dano.${elemTag}`,
+          'attack',
+        ),
+      );
+      this._chargeEspecial(battle, p, res.crit ? 15 : 8);
+      const dealt = this._applyDamage(t, total, battle, p, 'physical');
+      if (dealt > 0) this._lifesteal(battle, p, dealt);
+      if (!t.alive && !t.horda) p.kills += 1;
+      if (ataqueStatus && t.alive) this._applyStatus(battle, t, ataqueStatus, p);
+    });
+  }
+
+  // Núcleo dos golpes de dano (magia/físico de habilidade e golpe MEGA),
+  // possivelmente em vários alvos. Preserva o texto de log de alvo único.
+  _resolverGolpeDeDano(battle, p, target, skill, extras = [], { mega = false } = {}) {
+    const nome = skill.nome;
+    const kind = skill.tipo === 'fisico' ? 'physical' : 'magic';
+    const spec = alvoNormalizado(skill);
+    const alcance = this._alcanceVerticalDoGolpe(p, skill, melhorArma(p.equipment));
+    const alvos = this._alvosDoGolpe(battle, p, spec, target, extras);
+    const principal = alvos[0];
+    if (!principal) {
+      battle.log.push(makeLog(`🎯 ${nome} não encontrou alvos.`, 'miss'));
+      return;
+    }
+    if (foraDoAlcanceVertical(alcance, principal)) {
+      battle.log.push(
+        makeLog(`🕊️ ${nome} não alcança ${principal.charName} na altitude ${principal.altitude} (alcance vertical ${alcance}).`, 'miss'),
+      );
+      return;
+    }
+    const mira = this._rollToHit(p, principal, kind, { poder: skill.poder, status: skill.status });
+    // Dano base (independe do alvo: usa apenas os atributos do atacante).
+    let danoBase;
+    if (skill.tipo === 'fisico') {
+      const mult = this._physMult(p) * (p.buffPhysical || 1);
+      danoBase = danoFisicoGolpe(this._finalAttrs(p).forca, skill.poder, mult, mega ? DANO_COEF_MEGA : undefined);
+    } else {
+      danoBase = magicDamage(p, { poder: skill.poder }, this._magMult(p) * (p.buffMagic || 1)).total;
+    }
+    // Falha crítica (d20 = 1): golpe multi-alvo pode sair pela culatra.
+    if (mira.roll === 1) {
+      if (spec.tipo !== 'unico' && desviouParaAliado(mira.roll)) {
+        this._fogoAmigoMulti(battle, p, spec, kind, nome, danoBase, skill.elemento);
+        return;
+      }
+      battle.log.push(makeLog(`❌ ${p.charName} falha ao ${mega ? 'desferir' : 'usar'} ${nome}! (d20 = 1)`, 'miss'));
+      return;
+    }
+    if (!mira.hit) {
+      battle.log.push(makeLog(`💨 ${p.charName} erra ${nome} em ${principal.charName}. (d20 = ${mira.roll}, precisava de ${mira.chance}${mira.dificuldade ? `, dificuldade +${mira.dificuldade}` : ''})`, 'miss'));
+      return;
+    }
+    this._marcarAcerto(p);
+    const elem = skill.elemento || 'fisico';
+    alvos.forEach((t, i) => {
+      if (!t.alive) return;
+      if (foraDoAlcanceVertical(alcance, t)) {
+        battle.log.push(makeLog(`🕊️ ${nome} não alcança ${t.charName} na altitude ${t.altitude}.`, 'miss'));
+        return;
+      }
+      const res = i === 0 ? mira : this._rollToHit(p, t, kind, { poder: skill.poder, status: skill.status });
+      if (i > 0 && (res.roll === 1 || !res.hit)) {
+        battle.log.push(makeLog(`💨 ${p.charName} erra ${nome} em ${t.charName}. (d20 = ${res.roll}${res.dificuldade ? `, dificuldade +${res.dificuldade}` : ''})`, 'miss'));
+        return;
+      }
+      const em = this._elemMult(elem, t);
+      const multSec = i > 0 ? spec.splash : 1;
+      const total = Math.round(danoBase * (res.crit ? 2 : 1) * multSec * em);
+      const tag = em > 1 ? ` ⚡${elem} fragiliza!` : em < 1 ? ` 🛡${elem} resistido!` : '';
+      const dif = res.dificuldade ? ` dificuldade +${res.dificuldade}.` : '';
+      battle.log.push(
+        makeLog(
+          `${res.crit ? '✨ CRÍTICO! ' : ''}${mega ? '💫' : '✨'} ${p.charName} ${mega ? 'desfere' : 'usa'} ${nome} em ${t.charName}: ${total} de dano (${skill.poder}%)${mega ? '!' : '.'}${dif}${tag}`,
+          'attack',
+        ),
+      );
+      if (!mega) this._chargeEspecial(battle, p, res.crit ? 15 : 8);
+      const dealt = this._applyDamage(t, total, battle, p, kind);
+      if (dealt > 0) this._lifesteal(battle, p, dealt);
+      if (!t.alive && !t.horda) p.kills += 1;
+      if (skill.status && t.alive) this._applyStatus(battle, t, skill.status, p);
+    });
+    if (!mega) this._setCooldown(p, skill);
   }
 
   _setCooldown(p, skill) {
@@ -1039,7 +1195,7 @@ export class BattleManager {
     p.cooldowns[skill.id] = skill.cooldown;
   }
 
-  _resolveSkill(battle, p, target, skill) {
+  _resolveSkill(battle, p, target, skill, extras = []) {
     const cost = skill.custo || 0;
     if (p.mp < cost) {
       battle.log.push(makeLog(`❌ ${p.charName} não tem MP suficiente para ${skill.nome}.`, 'miss'));
@@ -1099,53 +1255,11 @@ export class BattleManager {
       return;
     }
 
-    const kind = skill.tipo === 'fisico' ? 'physical' : 'magic';
-    // Alcance vertical da magia: algumas magias não alcançam voadores.
-    const alcance = this._alcanceVerticalDoGolpe(p, skill, melhorArma(p.equipment));
-    if (foraDoAlcanceVertical(alcance, target)) {
-      battle.log.push(
-        makeLog(`🕊️ ${skill.nome} não alcança ${target.charName} na altitude ${target.altitude} (alcance vertical ${alcance}).`, 'miss'),
-      );
-      return;
-    }
-    const res = this._rollToHit(p, target, kind, { poder: skill.poder, status: skill.status });
-    if (res.roll === 1) {
-      battle.log.push(makeLog(`❌ ${p.charName} falha ao usar ${skill.nome}! (d20 = 1)`, 'miss'));
-      return;
-    }
-    if (!res.hit) {
-      battle.log.push(makeLog(`💨 ${p.charName} erra ${skill.nome} em ${target.charName}. (d20 = ${res.roll}, precisava de ${res.chance}${res.dificuldade ? `, dificuldade +${res.dificuldade}` : ''})`, 'miss'));
-      return;
-    }
-    this._marcarAcerto(p);
-    let dmg;
-    if (skill.tipo === 'fisico') {
-      const mult = this._physMult(p) * (p.buffPhysical || 1);
-      dmg = { rolls: [], total: danoFisicoGolpe(this._finalAttrs(p).forca, skill.poder, mult) };
-    } else {
-      dmg = magicDamage(p, { poder: skill.poder }, this._magMult(p) * (p.buffMagic || 1));
-    }
-    const total0 = res.crit ? dmg.total * 2 : dmg.total;
-    const skElem = skill.elemento || 'fisico';
-    const skElemM = this._elemMult(skElem, target);
-    const total = Math.round(total0 * skElemM);
-    const skElemTag = skElemM > 1 ? ` ⚡${skElem} fragiliza!` : skElemM < 1 ? ` 🛡${skElem} resistido!` : '';
-    battle.log.push(
-      makeLog(
-        `${res.crit ? '✨ CRÍTICO! ' : ''}✨ ${p.charName} usa ${skill.nome} em ${target.charName}: ${total} de dano (${skill.poder}%).${res.dificuldade ? ` dificuldade +${res.dificuldade}.` : ''}${skElemTag}`,
-        'attack',
-      ),
-    );
-    this._chargeEspecial(battle, p, res.crit ? 15 : 8);
-    const dealt = this._applyDamage(target, total, battle, p, kind);
-    if (dealt > 0) this._lifesteal(battle, p, dealt);
-    if (!target.alive && !target.horda) p.kills += 1;
-    this._setCooldown(p, skill);
-    if (skill.status) this._applyStatus(battle, target, skill.status, p);
+    this._resolverGolpeDeDano(battle, p, target, skill, extras, { mega: false });
   }
 
   // Golpe ultimate (durante o Modo Ultimate) e Golpe Especial (gasta 100% da barra).
-  _resolveMegaSkill(battle, p, target, skill) {
+  _resolveMegaSkill(battle, p, target, skill, extras = []) {
     if (skill.tipo === 'cura') {
       // Cura mega: mesma fórmula com coeficiente 2,2 (DANO_COEF_MEGA).
       const healing = curaMagica(this._finalAttrs(p).inteligencia, skill.poder, 1, DANO_COEF_MEGA);
@@ -1185,45 +1299,7 @@ export class BattleManager {
       return;
     }
 
-    const kind = skill.tipo === 'fisico' ? 'physical' : 'magic';
-    const alcance = this._alcanceVerticalDoGolpe(p, skill, melhorArma(p.equipment));
-    if (foraDoAlcanceVertical(alcance, target)) {
-      battle.log.push(
-        makeLog(`🕊️ ${skill.nome} não alcança ${target.charName} na altitude ${target.altitude} (alcance vertical ${alcance}).`, 'miss'),
-      );
-      return;
-    }
-    const res = this._rollToHit(p, target, kind, { poder: skill.poder, status: skill.status });
-    if (res.roll === 1) {
-      battle.log.push(makeLog(`❌ ${p.charName} falha ao desferir ${skill.nome}! (d20 = 1)`, 'miss'));
-      return;
-    }
-    if (!res.hit) {
-      battle.log.push(makeLog(`💨 ${p.charName} erra ${skill.nome} em ${target.charName}. (d20 = ${res.roll}, precisava de ${res.chance}${res.dificuldade ? `, dificuldade +${res.dificuldade}` : ''})`, 'miss'));
-      return;
-    }
-    this._marcarAcerto(p);
-    let dmg;
-    if (skill.tipo === 'fisico') {
-      const mult = this._physMult(p) * (p.buffPhysical || 1);
-      dmg = { rolls: [], total: danoFisicoGolpe(this._finalAttrs(p).forca, skill.poder, mult, DANO_COEF_MEGA) };
-    } else {
-      dmg = magicDamage(p, { poder: skill.poder }, this._magMult(p) * (p.buffMagic || 1));
-    }
-    const total0m = res.crit ? dmg.total * 2 : dmg.total;
-    const meElem = skill.elemento || 'fisico';
-    const meElemM = this._elemMult(meElem, target);
-    const total = Math.round(total0m * meElemM);
-    const meElemTag = meElemM > 1 ? ` ⚡${meElem} fragiliza!` : meElemM < 1 ? ` 🛡${meElem} resistido!` : '';
-    battle.log.push(
-      makeLog(
-        `${res.crit ? '✨ CRÍTICO! ' : ''}💫 ${p.charName} desfere ${skill.nome} em ${target.charName}: ${total} de dano (${skill.poder}%)!${res.dificuldade ? ` dificuldade +${res.dificuldade}.` : ''}${meElemTag}`,
-        'attack',
-      ),
-    );
-    const dealt = this._applyDamage(target, total, battle, p, kind);
-    if (dealt > 0) this._lifesteal(battle, p, dealt);
-    if (!target.alive && !target.horda) p.kills += 1;
+    this._resolverGolpeDeDano(battle, p, target, skill, extras, { mega: true });
   }
 
   _resolveItem(battle, p, item) {
@@ -1316,9 +1392,19 @@ export class BattleManager {
       return battle;
     }
 
-    const target = battle.participants.find(
+    let target = battle.participants.find(
       (q) => q.characterId === action.targetId || q.uid === action.targetId,
     ) || null;
+    // Multi-alvo: `action.targetIds` traz a lista completa (o 1º é o principal).
+    const idsExtras = Array.isArray(action.targetIds) ? action.targetIds : [];
+    if (!target && idsExtras.length) {
+      target = battle.participants.find(
+        (q) => q.characterId === idsExtras[0] || q.uid === idsExtras[0],
+      ) || null;
+    }
+    const alvosExtras = idsExtras
+      .map((id) => battle.participants.find((q) => q.characterId === id || q.uid === id))
+      .filter((q) => q && q.alive && q !== target && q !== p);
 
     // Toda ação do turno vale como participação na divisão do XP.
     p.contribuicao = p.contribuicao || { dano: 0, cura: 0, acertos: 0, acoes: 0, suporte: 0 };
@@ -1333,7 +1419,7 @@ export class BattleManager {
       case 'attack': {
         if (!target || !target.alive) throw new Error('Escolha um alvo vivo.');
         const weapon = melhorArma(p.equipment);
-        this._resolveAttack(battle, p, target, weapon);
+        this._resolveAttack(battle, p, target, weapon, alvosExtras);
         break;
       }
       case 'attackUtility': {
@@ -1356,12 +1442,14 @@ export class BattleManager {
       }
       case 'magic': {
         const skills = skillsOf(p);
-        const skill = skills.find((s) => s.id === action.spellId || s.nome === action.spellId);
+        let skill = skills.find((s) => s.id === action.spellId || s.nome === action.spellId);
+        // Fallback: MP/ids do catálogo (monstros e magias vindas de SPELLS).
+        if (!skill && SPELLS[action.spellId]) skill = skillFromSpell(SPELLS[action.spellId]);
         if (!skill) throw new Error('Golpe/magia desconhecido.');
         if ((skill.tipo === 'fisico' || skill.tipo === 'magia') && (!target || !target.alive)) {
           throw new Error('Escolha um alvo vivo.');
         }
-        this._resolveSkill(battle, p, target, skill);
+        this._resolveSkill(battle, p, target, skill, alvosExtras);
         break;
       }
       case 'defend': {
@@ -1416,7 +1504,7 @@ export class BattleManager {
         if ((ult.tipo === 'fisico' || ult.tipo === 'magia') && (!target || !target.alive)) {
           throw new Error('Escolha um alvo vivo.');
         }
-        this._resolveMegaSkill(battle, p, target, ult);
+        this._resolveMegaSkill(battle, p, target, ult, alvosExtras);
         p.ultimateSkillUsed = true;
         break;
       }
@@ -1431,7 +1519,7 @@ export class BattleManager {
         if ((esp.tipo === 'fisico' || esp.tipo === 'magia') && (!target || !target.alive)) {
           throw new Error('Escolha um alvo vivo.');
         }
-        this._resolveMegaSkill(battle, p, target, esp);
+        this._resolveMegaSkill(battle, p, target, esp, alvosExtras);
         p.especialBar = 0;
         break;
       }
@@ -1507,17 +1595,29 @@ export class BattleManager {
       return;
     }
     if (p.spells?.length && p.mp > 0) {
-      const usable = (p.spells || []).filter((sid) => {
-        const sk = SPELLS[sid];
-        return sk && (sk.custo || 0) <= p.mp;
-      });
-      if (usable.length) {
-        this._resolveSkill(p, target, usable[0], battle);
+      const usaveis = (p.spells || [])
+        .map((sid) => SPELLS[sid])
+        .filter((sk) => sk && (sk.custo || 0) <= p.mp);
+      if (usaveis.length) {
+        // Prefere um golpe de dano; entre eles, prioriza multi-alvo se houver
+        // mais de um herói vivo (a área/cone o golpe se espalha sozinho).
+        const ataques = usaveis.filter((sk) => sk.tipo === 'ataque');
+        const multiAlvo = ataques.find((sk) => sk.alvo);
+        const escolhido = (heroes.length > 1 && multiAlvo) || ataques[0] || usaveis[0];
+        const espec = alvoNormalizado(escolhido);
+        this._resolveSkill(
+          battle,
+          p,
+          target,
+          skillFromSpell(escolhido),
+          this._extrasDeIa(battle, p, espec, target),
+        );
         return;
       }
     }
     const weapon = melhorArma(p.equipment);
-    this._resolveAttack(battle, p, target, weapon);
+    const especArma = alvoNormalizado(weapon || {});
+    this._resolveAttack(battle, p, target, weapon, this._extrasDeIa(battle, p, especArma, target));
   }
 
   // XP: o grupo recebe um total e cada jogador recebe uma parte

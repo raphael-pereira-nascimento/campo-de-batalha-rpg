@@ -401,3 +401,80 @@ export function dificuldadeDoGolpe({ poder = DIFICULDADE_PODER_REF, status = nul
   const dStatus = magnitudeDeStatus(status) * DIFICULDADE_STATUS_COEF;
   return Math.max(0, Math.min(DIFICULDADE_MAX, Math.round(dPoder + dStatus)));
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   8. ATAQUES MULTI-ALVO — PROVISÓRIO
+   Alguns golpes, magias, armas e golpes MEGA podem atingir mais de um inimigo.
+   O "modo de alvo" (`alvo`) define como:
+   - 'unico'    → um único alvo (padrão).
+   - 'area'     → atinge TODOS os inimigos vivos automaticamente.
+   - 'cone'     → projéteis em leque: o jogador escolhe até `max` inimigos.
+   - 'explosao' → alvo principal cheio + vizinhos escolhidos com dano reduzido
+                  (multiplicador `splash`, padrão 50%).
+   Golpes de área/cone/explosão podem "sair pela culatra": se a rolagem de mira
+   for uma FALHA CRÍTICA (d20 <= limiar, padrão 1), há chance de o golpe desviar
+   e acertar um aliado. Como o sistema é "rolar-menor" (rolagem baixa = boa mira),
+   só a pior rolagem possível (1) espalha o golpe nos amigos. Tudo ajustável aqui.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export const MULTI_ALVO_PADRAO = 3; // nº máx. de alvos em cone/explosão
+export const MULTI_SPLASH_PADRAO = 0.5; // dano dos alvos secundários na explosão
+export const MULTI_DESVIO_LIMIAR = 1; // falha crítica (d20 <= 1) pode desviar o golpe
+export const MULTI_DESVIO_CHANCE = 0.5; // chance de o desvio acertar aliados
+export const MULTI_FOGO_AMIGO_MULT = 0.5; // dano do golpe desviado nos aliados
+
+export const ALVO_TIPOS = {
+  unico: 'Alvo único',
+  area: 'Área (todos os inimigos)',
+  cone: 'Cone (vários inimigos)',
+  explosao: 'Explosão (alvo + vizinhos)',
+};
+
+// Rótulos curtos para tags/chips na interface.
+export const ALVO_LABEL = {
+  unico: 'Único',
+  area: 'Área',
+  cone: 'Cone',
+  explosao: 'Explosão',
+};
+
+/**
+ * Normaliza o modo de alvo de um golpe/arma. Aceita:
+ *   { alvo: 'area'|'cone'|'explosao', alvos: N, splash: 0.5 }
+ * Compatibilidade: golpes antigos só tinham `todos` (antes valia só para cura);
+ * num golpe ofensivo, `todos: true` passa a significar 'area'.
+ * Retorna { tipo, max, splash }.
+ */
+export function alvoNormalizado(golpe = {}) {
+  const g = golpe || {};
+  let tipo = g.alvo;
+  if (!ALVO_TIPOS[tipo]) {
+    const ofensivo = g.tipo === 'ataque' || g.tipo === 'fisico' || g.tipo === 'magia';
+    tipo = g.todos && ofensivo ? 'area' : 'unico';
+  }
+  const alvos = Math.max(2, Math.min(10, Number(g.alvos) || MULTI_ALVO_PADRAO));
+  const max = tipo === 'unico' ? 1 : tipo === 'area' ? 99 : alvos;
+  const splash =
+    tipo === 'explosao'
+      ? Number(g.splash) > 0
+        ? Math.min(1, Number(g.splash))
+        : MULTI_SPLASH_PADRAO
+      : 1;
+  return { tipo, max, splash };
+}
+
+/**
+ * O golpe de área/cone/explosão desviou para aliados?
+ * Só quando a rolagem de mira é uma FALHA CRÍTICA (d20 <= limiar, padrão 1) E a
+ * rolagem de desvio (0..1) fica abaixo da chance. Como o acerto é "rolar-menor",
+ * rolagens baixas normais são boas miras — apenas o 1 espalha o golpe.
+ * `r` é injetável para testes determinísticos.
+ */
+export function desviouParaAliado(
+  d20,
+  r = Math.random(),
+  limiar = MULTI_DESVIO_LIMIAR,
+  chance = MULTI_DESVIO_CHANCE,
+) {
+  if (!(Number(d20) <= limiar)) return false;
+  return Number(r) < chance;
+}

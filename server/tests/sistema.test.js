@@ -31,6 +31,14 @@ import {
   magnitudeDeStatus,
   dificuldadeDoGolpe,
   DIFICULDADE_MAX,
+  MULTI_ALVO_PADRAO,
+  MULTI_SPLASH_PADRAO,
+  MULTI_DESVIO_LIMIAR,
+  MULTI_DESVIO_CHANCE,
+  ALVO_TIPOS,
+  ALVO_LABEL,
+  alvoNormalizado,
+  desviouParaAliado,
 } from '../src/game/sistema.js';
 
 describe('Mana — fórmula confirmada ((INT Final) × 10)', () => {
@@ -301,5 +309,77 @@ describe('XP — divisão por participação', () => {
     expect(poolDeXp({ monstrosDerrotados: [100], eclipseMult: 1.5 })).toBe(Math.round((150 + 100) * 1.5));
     expect(poolDeXp({ monstrosDerrotados: [], chefeDerrotado: true })).toBeGreaterThan(150);
     expect(poolDeXp({ monstrosDerrotados: [] })).toBe(150);
+  });
+});
+
+describe('Multi-alvo — normalização do alvo (área/cone/explosão)', () => {
+  it('padrão é alvo único', () => {
+    const s = alvoNormalizado();
+    expect(s.tipo).toBe('unico');
+    expect(s.max).toBe(1);
+    expect(s.splash).toBe(1);
+  });
+
+  it('área atinge todos (max alto) e não tem splash', () => {
+    const s = alvoNormalizado({ alvo: 'area' });
+    expect(s.tipo).toBe('area');
+    expect(s.max).toBeGreaterThan(10);
+    expect(s.splash).toBe(1);
+  });
+
+  it('cone respeita o nº de alvos (padrão 3, faixa 2..10)', () => {
+    expect(alvoNormalizado({ alvo: 'cone' }).max).toBe(MULTI_ALVO_PADRAO);
+    expect(alvoNormalizado({ alvo: 'cone', alvos: 5 }).max).toBe(5);
+    expect(alvoNormalizado({ alvo: 'cone', alvos: 1 }).max).toBe(2);
+    expect(alvoNormalizado({ alvo: 'cone', alvos: 99 }).max).toBe(10);
+  });
+
+  it('explosão usa o multiplicador de splash (padrão 50%)', () => {
+    expect(alvoNormalizado({ alvo: 'explosao' }).splash).toBe(MULTI_SPLASH_PADRAO);
+    expect(alvoNormalizado({ alvo: 'explosao', splash: 0.25 }).splash).toBe(0.25);
+    // valores inválidos caem no padrão / teto
+    expect(alvoNormalizado({ alvo: 'explosao', splash: 0 }).splash).toBe(MULTI_SPLASH_PADRAO);
+    expect(alvoNormalizado({ alvo: 'explosao', splash: 3 }).splash).toBe(1);
+  });
+
+  it('compatibilidade: `todos` num golpe ofensivo passa a significar área', () => {
+    expect(alvoNormalizado({ todos: true, tipo: 'magia' }).tipo).toBe('area');
+    expect(alvoNormalizado({ todos: true, tipo: 'fisico' }).tipo).toBe('area');
+    expect(alvoNormalizado({ todos: true, tipo: 'ataque' }).tipo).toBe('area');
+  });
+
+  it('`todos` na cura NÃO vira área de dano', () => {
+    expect(alvoNormalizado({ todos: true, tipo: 'cura' }).tipo).toBe('unico');
+  });
+
+  it('alvo explícito tem prioridade sobre `todos`', () => {
+    expect(alvoNormalizado({ alvo: 'cone', todos: true, tipo: 'magia' }).tipo).toBe('cone');
+  });
+
+  it('expõe rótulos para a interface', () => {
+    for (const k of ['unico', 'area', 'cone', 'explosao']) {
+      expect(ALVO_TIPOS[k]).toBeTruthy();
+      expect(ALVO_LABEL[k]).toBeTruthy();
+    }
+  });
+});
+
+describe('Multi-alvo — desvio para aliados (fogo amigo)', () => {
+  it('só dispara na falha crítica (d20 = 1), nunca em rolagens normais', () => {
+    expect(MULTI_DESVIO_LIMIAR).toBe(1);
+    expect(desviouParaAliado(2, 0.1)).toBe(false);
+    expect(desviouParaAliado(5, 0.1)).toBe(false);
+    expect(desviouParaAliado(20, 0.1)).toBe(false);
+  });
+
+  it('falha crítica + azar desvia para os aliados', () => {
+    expect(desviouParaAliado(1, 0.1)).toBe(true);
+    expect(desviouParaAliado(MULTI_DESVIO_LIMIAR, MULTI_DESVIO_CHANCE - 0.01)).toBe(true);
+  });
+
+  it('falha crítica mas sem "azar" não desvia', () => {
+    expect(desviouParaAliado(1, 0.9)).toBe(false);
+    // exatamente na chance: precisa ser estritamente menor
+    expect(desviouParaAliado(1, MULTI_DESVIO_CHANCE)).toBe(false);
   });
 });

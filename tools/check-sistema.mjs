@@ -3,7 +3,7 @@
 import { BattleManager } from '../server/src/game/battleManager.js';
 import { MONSTERS } from '../server/src/game/monsters.js';
 import { estadoEclipse } from '../server/src/game/eclipse.js';
-import { manaMaxFrom, manaRecuperada, distribuirXp, danoFisicoAtaque, danoFisicoGolpe, danoMagico, curaMagica, DANO_MULT, dificuldadeDoGolpe } from '../server/src/game/sistema.js';
+import { manaMaxFrom, manaRecuperada, distribuirXp, danoFisicoAtaque, danoFisicoGolpe, danoMagico, curaMagica, DANO_MULT, dificuldadeDoGolpe, alvoNormalizado, desviouParaAliado } from '../server/src/game/sistema.js';
 import { TAVERN_DRINKS } from '../server/src/game/data.js';
 import { montarEncontro, DUNGEONS } from '../server/src/game/dungeons.js';
 
@@ -27,6 +27,23 @@ log('comum 100%                =>', dificuldadeDoGolpe({ poder: 100 }), '(espera
 log('200%                      =>', dificuldadeDoGolpe({ poder: 200 }), '(esperado 2)');
 log('300%                      =>', dificuldadeDoGolpe({ poder: 300 }), '(esperado 4)');
 log('200% + sangramento (2/60) =>', dificuldadeDoGolpe({ poder: 200, status: { turnos: 2, dano: 60 } }), '(esperado 3)');
+
+log('\n── Multi-alvo (provisório — área/cone/explosão) ──');
+for (const caso of [
+  { rotulo: 'único', golpe: {} },
+  { rotulo: 'área', golpe: { alvo: 'area' } },
+  { rotulo: 'cone 3', golpe: { alvo: 'cone', alvos: 3 } },
+  { rotulo: 'explosão 50%', golpe: { alvo: 'explosao', alvos: 3, splash: 0.5 } },
+  { rotulo: 'todos+magia (compat)', golpe: { todos: true, tipo: 'magia' } },
+]) {
+  const s = alvoNormalizado(caso.golpe);
+  log(`${caso.rotulo.padEnd(20)} => tipo=${s.tipo} max=${s.max} splash=${s.splash}`);
+}
+log('fogo amigo d20=5         =>', desviouParaAliado(5, 0.1), '(esperado false)');
+log('fogo amigo d20=1, r=0.1  =>', desviouParaAliado(1, 0.1), '(esperado true)');
+log('fogo amigo d20=1, r=0.9  =>', desviouParaAliado(1, 0.9), '(esperado false)');
+log('Golem de Pedra (chefe) arma =>', JSON.stringify(MONSTERS.golem_pedra.arma), '(alvo area)');
+log('Gigante arma             =>', JSON.stringify(MONSTERS.gigante.arma), '(alvo cone 3)');
 
 log('\n── Taverna (bebidas) ──');
 log('bebidas no catálogo       =>', Object.keys(TAVERN_DRINKS).length, '(esperado >= 6)');
