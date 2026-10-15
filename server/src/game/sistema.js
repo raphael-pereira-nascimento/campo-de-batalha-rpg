@@ -326,6 +326,19 @@ export function melhorArma(equipment = {}) {
   return melhor;
 }
 
+/**
+ * Arma do ataque básico: a escolhida pelo jogador (por `id`, entre as equipadas)
+ * ou, sem escolha, a de maior dano base (`melhorArma`). Deixa o jogador disparar
+ * uma arma específica (ex.: bacamarte/nock gun com modo de alvo próprio).
+ */
+export function armaParaAtaque(equipment = {}, weaponId) {
+  if (weaponId) {
+    const escolhida = armasDeEquipamento(equipment).find((e) => e.arma && e.arma.id === weaponId);
+    if (escolhida) return escolhida.arma;
+  }
+  return melhorArma(equipment);
+}
+
 /** Categoria de um item de arma (onde ele se encaixa nos 3 slots do arsenal). */
 export function categoriaDeArma(arma) {
   if (!arma) return null;

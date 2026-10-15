@@ -930,3 +930,92 @@ describe('Bestiário — golpes multi-alvo', () => {
     expect(muralha.tipo).toBe('defesa');
   });
 });
+
+// ── Escolha da arma no ataque (weaponId / armaParaAtaque) ────────────────────
+describe('BattleManager — escolha da arma no ataque', () => {
+  // Armas do arsenal: espada (alvo único) e bacamarte (cone). A melhor é o
+  // bacamarte (dano 7 > 4), então o ataque sem escolha deve usá-lo.
+  const ESPADA = { id: 'espada_curta', nome: 'Espada Curta', categoria: 'perto', danoBase: 4, bonus: {}, penalidade: {} };
+  const BACAMARTE = { id: 'bacamarte', nome: 'Bacamarte', categoria: 'distancia', danoBase: 7, elemento: 'fogo', alvo: 'cone', alvos: 3, bonus: {}, penalidade: {} };
+
+  function setup() {
+    vi.spyOn(Math, 'random').mockReturnValue(0.2); // d20 = 5: acerta, sem crítico
+    const { manager } = makeManager();
+    const battle = manager.createBattle({
+      name: 'Armas',
+      mode: 'mestre',
+      host: 'p1',
+      hostName: 'M',
+      character: makeCharacter({
+        equipment: { armas: { perto: ESPADA, distancia: BACAMARTE }, arma: ESPADA },
+      }),
+    });
+    const hero = battle.participants.find((q) => !q.isMonster);
+    manager.addMonster({ battleId: battle.id, hostId: 'p1', monsterDef: { ...makeMonsterDef(), id: 'a', nome: 'Alvo A' } });
+    manager.addMonster({ battleId: battle.id, hostId: 'p1', monsterDef: { ...makeMonsterDef(), id: 'b', nome: 'Alvo B' } });
+    manager.startBattle({ battleId: battle.id, playerId: 'p1' });
+    const monstros = battle.participants.filter((q) => q.isMonster);
+    return { manager, battle, hero, monstros };
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  function ateTurnoDoHeroi(manager, battle, hero, monstros) {
+    let guard = 0;
+    while (battle.participants[battle.turnOrder[battle.currentTurnIndex]] !== hero && guard < 60) {
+      guard += 1;
+      const cur = battle.participants[battle.turnOrder[battle.currentTurnIndex]];
+      manager.handleAction({
+        battleId: battle.id,
+        characterId: cur.isMonster ? cur.uid : cur.characterId,
+        playerId: 'p1',
+        action: { type: 'attack', targetId: cur.isMonster ? hero.characterId : monstros[0].uid },
+      });
+    }
+  }
+
+  it('sem weaponId usa a melhor arma (bacamarte) e o cone atinge o extra', () => {
+    const { manager, battle, hero, monstros } = setup();
+    ateTurnoDoHeroi(manager, battle, hero, monstros);
+    const antes = monstros.map((m) => m.hp);
+    manager.handleAction({
+      battleId: battle.id,
+      characterId: hero.characterId,
+      playerId: hero.playerId,
+      action: { type: 'attack', targetId: monstros[0].uid, targetIds: [monstros[0].uid, monstros[1].uid] },
+    });
+    const log = battle.log.map((l) => l.text).join('\n');
+    expect(log).toContain('Bacamarte');
+    expect(monstros[0].hp).toBeLessThan(antes[0]);
+    expect(monstros[1].hp).toBeLessThan(antes[1]);
+  });
+
+  it('weaponId escolhe a arma: a espada (alvo único) não atinge o extra', () => {
+    const { manager, battle, hero, monstros } = setup();
+    ateTurnoDoHeroi(manager, battle, hero, monstros);
+    const antes = monstros.map((m) => m.hp);
+    manager.handleAction({
+      battleId: battle.id,
+      characterId: hero.characterId,
+      playerId: hero.playerId,
+      action: { type: 'attack', weaponId: 'espada_curta', targetId: monstros[0].uid, targetIds: [monstros[0].uid, monstros[1].uid] },
+    });
+    const log = battle.log.map((l) => l.text).join('\n');
+    expect(log).toContain('Espada Curta');
+    expect(monstros[0].hp).toBeLessThan(antes[0]);
+    expect(monstros[1].hp).toBe(antes[1]);
+  });
+
+  it('weaponId desconhecido cai na melhor arma (bacamarte)', () => {
+    const { manager, battle, hero, monstros } = setup();
+    ateTurnoDoHeroi(manager, battle, hero, monstros);
+    manager.handleAction({
+      battleId: battle.id,
+      characterId: hero.characterId,
+      playerId: hero.playerId,
+      action: { type: 'attack', weaponId: 'arma_inexistente', targetId: monstros[0].uid },
+    });
+    const log = battle.log.map((l) => l.text).join('\n');
+    expect(log).toContain('Bacamarte');
+  });
+});

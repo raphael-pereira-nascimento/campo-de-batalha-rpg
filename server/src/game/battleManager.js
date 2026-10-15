@@ -15,6 +15,7 @@ import {
   MAX_PLAYERS_PER_BATTLE,
   armasDeEquipamento,
   melhorArma,
+  armaParaAtaque,
   skillFromSpell,
 } from './data.js';
 import {
@@ -1419,7 +1420,7 @@ export class BattleManager {
     switch (action.type) {
       case 'attack': {
         if (!target || !target.alive) throw new Error('Escolha um alvo vivo.');
-        const weapon = melhorArma(p.equipment);
+        const weapon = armaParaAtaque(p.equipment, action.weaponId);
         this._resolveAttack(battle, p, target, weapon, alvosExtras);
         break;
       }

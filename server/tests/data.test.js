@@ -10,6 +10,7 @@ import {
   EQUIPMENT,
   armasDeEquipamento,
   melhorArma,
+  armaParaAtaque,
 } from '../src/game/data.js';
 import { gemIsRaw } from '../src/game/gems.js';
 import { DANO_MULT } from '../src/game/sistema.js';
@@ -263,5 +264,37 @@ describe('arsenal — até 3 armas (perto/distancia/utilitaria)', () => {
     };
     const stats = deriveStats(classes, 1, attrs, equipment);
     expect(stats.dano).toBe((5 + 3 + 9) * 10);
+  });
+});
+
+describe('armas de fogo novas + escolha da arma no ataque', () => {
+  it('Pistola de Latão, Pistola da Marinha e Nock Gun existem à distância', () => {
+    for (const id of ['pistola_de_latao', 'pistola_da_marinha', 'nock_gun']) {
+      const w = EQUIPMENT.armas[id];
+      expect(w, id).toBeTruthy();
+      expect(w.tipo).toBe('arma_fogo');
+      expect(w.categoria).toBe('distancia');
+      expect(w.danoBase).toBeGreaterThan(0);
+      expect(w.recarga).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('a Nock Gun dispara em cone (saraivada) e o Bacamarte também', () => {
+    expect(EQUIPMENT.armas.nock_gun.alvo).toBe('cone');
+    expect(EQUIPMENT.armas.nock_gun.alvos).toBeGreaterThanOrEqual(2);
+    expect(EQUIPMENT.armas.bacamarte.alvo).toBe('cone');
+  });
+
+  it('armaParaAtaque escolhe a arma pelo id e cai na melhor por padrão', () => {
+    const equipment = {
+      armas: {
+        perto: { id: 'espada_curta', danoBase: 4 },
+        distancia: { id: 'bacamarte', danoBase: 7, alvo: 'cone' },
+      },
+    };
+    expect(armaParaAtaque(equipment, 'espada_curta').id).toBe('espada_curta');
+    expect(armaParaAtaque(equipment, 'inexistente').id).toBe('bacamarte');
+    expect(armaParaAtaque(equipment).id).toBe('bacamarte');
+    expect(armaParaAtaque({})).toBeNull();
   });
 });

@@ -32,11 +32,11 @@ $c2 = [regex]::Replace($c, '(?s)function clamp\(v, min, max\) \{\r?\n  return Ma
 if ($c2 -eq $c) { throw 'clamp local não encontrado no battleManager.js do cliente.' }
 $c = $c2
 
-# A arma do ataque básico sai do próprio equipamento (melhorArma), sem lookup
-# no catálogo — então o antigo fallback de monstro deixou de existir.
-$arma = 'const weapon = melhorArma(p.equipment);'
+# A arma do ataque básico sai do próprio equipamento (armaParaAtaque/melhorArma),
+# sem lookup no catálogo — então o antigo fallback de monstro deixou de existir.
+$arma = 'armaParaAtaque(p.equipment'
 $n = ([regex]::Matches($c, [regex]::Escape($arma))).Count
-if ($n -lt 1) { throw 'Resolução de arma (melhorArma) não encontrada no battleManager.js do cliente.' }
+if ($n -lt 1) { throw 'Resolução de arma do ataque (armaParaAtaque) não encontrada no battleManager.js do cliente.' }
 
 [System.IO.File]::WriteAllText($p, $c, $utf8)
-Write-Host "Sincronizado: $($identicos -join ', ') e battleManager.js ($n resoluções de arma via melhorArma)."
+Write-Host "Sincronizado: $($identicos -join ', ') e battleManager.js ($n usos de armaParaAtaque)."

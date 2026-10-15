@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, getSocket, emitAck, isOffline, applyOfflineRewards } from '../api.js';
 import StatBar from '../components/StatBar.jsx';
 import { playLogKind, play, isMuted, toggleMute } from '../utils/sfx.js';
-import { VOO, ALTITUDES, dificuldadeDoGolpe, alvoNormalizado, ALVO_LABEL } from '../game/sistema.js';
+import { VOO, ALTITUDES, dificuldadeDoGolpe, alvoNormalizado, ALVO_LABEL, ARMA_CATEGORIA_INFO } from '../game/sistema.js';
 import { melhorArma, armasDeEquipamento, skillFromSpell } from '../game/data.js';
 
 const CLASS_ICONS = { guerreiro: '🛡️', mago: '🔮', arqueiro: '🏹', clerigo: '✝️', assassino: '🗡️', paladino: '⚔️' };
@@ -15,6 +15,7 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
   const [error, setError] = useState('');
   const [targetId, setTargetId] = useState('');
   const [extraIds, setExtraIds] = useState([]);
+  const [armaSelId, setArmaSelId] = useState('');
   const [spellId, setSpellId] = useState('');
   const [itemId, setItemId] = useState('');
   const [actionType, setActionType] = useState('attack');
@@ -154,6 +155,13 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
 
   // Armas do arsenal do personagem ativo (para o ataque básico e a utilitária).
   const armaMelhor = active ? melhorArma(active.equipment) : null;
+  // Armas de ataque selecionáveis (corpo a corpo + à distância; utilitária tem botão próprio).
+  const armasAtaque = active
+    ? armasDeEquipamento(active.equipment).filter((e) => e.slot !== 'utilitaria' && e.arma)
+    : [];
+  // Arma que o ataque vai disparar: a escolhida pelo jogador ou, por padrão, a melhor.
+  const armaSel =
+    armasAtaque.find((e) => e.arma.id && e.arma.id === armaSelId)?.arma || armaMelhor;
   const armaUtil = active
     ? (armasDeEquipamento(active.equipment).find((e) => e.slot === 'utilitaria') || {}).arma || null
     : null;
@@ -231,8 +239,8 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
   };
 
   const doAttack = () => {
-    const ids = idsDeAlvo(alvoNormalizado(armaMelhor || {}));
-    act({ type: 'attack', targetId: ids[0] || null, targetIds: ids });
+    const ids = idsDeAlvo(alvoNormalizado(armaSel || {}));
+    act({ type: 'attack', weaponId: armaSel?.id || null, targetId: ids[0] || null, targetIds: ids });
   };
   const doUtility = () => act({ type: 'attackUtility', targetId: targetId || aliveTargets[0]?.characterId });
   const doDefend = () => act({ type: 'defend' });
@@ -355,7 +363,7 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
   })();
   const skillSel = skillData.find((s) => s.id === spellId) || null;
   const specSel = alvoNormalizado(skillSel || {});
-  const specArma = alvoNormalizado(armaMelhor || {});
+  const specArma = alvoNormalizado(armaSel || {});
   const megaSpec = (skill) => alvoNormalizado(skill || {});
   const extraTargets = (spec) => {
     const primary = targetId || (aliveTargets[0] && aliveTargets[0].characterId) || null;
@@ -576,9 +584,31 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
               {actionType === 'attack' && (
                 <div className="action-body">
                   <TargetSelect targets={aliveTargets} value={targetId} onChange={setTargetId} />
-                  {active && armaMelhor && (
+                  {active && armasAtaque.length > 1 && (
+                    <label className="field">
+                      <span>⚔️ Arma para atacar</span>
+                      <select
+                        value={armaSel?.id || ''}
+                        onChange={(e) => {
+                          setArmaSelId(e.target.value);
+                          setExtraIds([]);
+                        }}
+                      >
+                        {armasAtaque.map(({ slot, arma }) => {
+                          const sp = alvoNormalizado(arma);
+                          return (
+                            <option key={arma.id || arma.nome} value={arma.id || ''}>
+                              {ARMA_CATEGORIA_INFO[slot]?.icon || '⚔️'} {arma.nome} (dano {arma.danoBase})
+                              {sp.tipo !== 'unico' ? ` · ◎${ALVO_LABEL[sp.tipo]}` : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </label>
+                  )}
+                  {active && armasAtaque.length <= 1 && armaSel && (
                     <p className="muted small">
-                      ⚔️ Arma ativa: <strong>{armaMelhor.nome}</strong> (dano {armaMelhor.danoBase})
+                      ⚔️ Arma ativa: <strong>{armaSel.nome}</strong> (dano {armaSel.danoBase})
                       {specArma.tipo !== 'unico' && (
                         <>
                           {' '}· <span className="tag">◎ {ALVO_LABEL[specArma.tipo]}</span>

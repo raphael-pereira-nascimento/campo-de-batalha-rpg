@@ -1010,18 +1010,15 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player 
           maleficio: src.maleficio || '',
         }
       : {
+          // Copia a definição COMPLETA do catálogo (alvo/alvos/splash, elemento,
+          // recarga etc.) — senão armas de fogo perdem o multi-alvo ao equipar.
+          ...src,
           id: src.id,
-          nome: src.nome,
           categoria,
-          danoBase: src.danoBase,
           bonus: src.bonus || {},
           penalidade: src.penalidade || {},
-          maleficio: src.maleficio || '',
-          socketSlots: src.socketSlots,
-          alcance: src.alcance,
-          usosMax: src.usosMax,
-          efeito: src.efeito,
         };
+    delete def._categoria;
     setEquipment((eq) => ({ ...eq, armas: { ...(eq.armas || {}), [categoria]: def } }));
     setArmaPicks((p) => ({ ...p, [categoria]: '' }));
   };

@@ -19,6 +19,7 @@ import {
   danoMagico,
   armasDeEquipamento,
   melhorArma,
+  armaParaAtaque,
   categoriaDeArma,
   ARMAS_SLOTS,
   ARMA_CATEGORIA_INFO,
@@ -36,6 +37,7 @@ export {
   ALTITUDES,
   armasDeEquipamento,
   melhorArma,
+  armaParaAtaque,
   categoriaDeArma,
   ARMAS_SLOTS,
   ARMA_CATEGORIA_INFO,
@@ -199,6 +201,10 @@ export const EQUIPMENT = {
     cajado_de_fogo: { nome: 'Cajado de Fogo', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 4, bonus: { inteligencia: 2 }, socketSlots: 2, alcance: 'longo', recarga: 1, descricao: 'Cajado arcano que dispara projéteis de fogo incandescentes.' },
     arco_composto: { nome: 'Arco Composto', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 7, bonus: { destreza: 2 }, socketSlots: 2, alcance: 'longo', recarga: 0, descricao: 'Arco reforçado com lâmina — multiclasse de precisão.' },
     canhao_de_mao: { nome: 'Canhão de Mão', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 10, bonus: { forca: 1 }, socketSlots: 2, alcance: 'medio', recarga: 3, alvo: 'explosao', alvos: 3, splash: 0.5, descricao: 'Disparo explosivo: atinge o alvo principal e os vizinhos com estilhaços.' },
+    // Valores PROVISÓRIOS: ajuste dano/recarga/modo de alvo deste bloco conforme o balanceamento.
+    pistola_de_latao: { nome: 'Pistola de Latão', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 6, bonus: { destreza: 2 }, socketSlots: 1, alcance: 'longo', recarga: 1, descricao: 'Cano de latão polido — precisa e rápida de recarregar.' },
+    pistola_da_marinha: { nome: 'Pistola da Marinha', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 7, bonus: { forca: 1, destreza: 1 }, socketSlots: 2, alcance: 'medio', recarga: 1, descricao: 'Feita para o sal e a pólvora: robusta e certeira de perto.' },
+    nock_gun: { nome: 'Nock Gun', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 8, bonus: { forca: 2 }, socketSlots: 2, alcance: 'medio', recarga: 3, alvo: 'cone', alvos: 4, descricao: 'Sete canos disparados de uma vez: uma saraivada devastadora contra o grupo (recarga longa).' },
 
     // ── Utilitárias (🧰) — possuem limites de uso por batalha ──
     // Valores de dano/usos/efeito são PROVISÓRIOS: ajuste tudo neste bloco.
