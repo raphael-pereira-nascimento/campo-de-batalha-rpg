@@ -52,7 +52,7 @@ export default function Characters({ player, characters, gameData, customClasses
           <button className="ghost" onClick={onOpenRules}>📖 Regras</button>
           <button className="ghost" onClick={onOpenGemForge}>🔮 Forja de Gemas</button>
           <button className="ghost" onClick={onOpenToolShop}>🛠️ Loja de Ferramentas</button>
-          <button className="ghost" onClick={onOpenTavern}>🍺 Taverna</button>
+          <button className="ghost" onClick={onOpenTavern}>🍺 O Último Copo</button>
           <button className="ghost" onClick={onOpenRegistry}>
             📜 Registro do Mundo
           </button>

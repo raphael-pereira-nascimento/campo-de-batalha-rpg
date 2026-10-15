@@ -257,7 +257,7 @@ export const ATTRIBUTE_NAMES = {
   reflexos: 'Reflexos',
 };
 
-// ── Taverna: bebidas (consumíveis usáveis em combate) ──
+// ── Taverna "O Último Copo": bebidas (consumíveis usáveis em combate) ──
 // PROVISÓRIO. `preco` em cobre (ℛ). Efeitos lidos pelo _resolveItem do combate:
 //   cura          → HP instantâneo
 //   mana          → MP instantâneo
@@ -266,46 +266,183 @@ export const ATTRIBUTE_NAMES = {
 //   buffMagico    → soma no multiplicador de dano mágico por buffTurns
 //   removeStatus  → id (ou lista) de status removido de si
 //   drunk/drunkTurns → embriaguez: +1 Força, −1 Destreza e Reflexos nas rolagens
+// `categoria` agrupa o menu da taverna e `destaque` marca a sugestão do taverneiro.
+export const TAVERN_CATEGORIES = [
+  { id: 'barril', nome: 'Do Barril', icon: '🍺', blurb: 'Cervejas, cidras e fermentados — o pão líquido do aventureiro.' },
+  { id: 'adega', nome: 'Da Adega', icon: '🍷', blurb: 'Vinhos e espumantes guardados em barris de carvalho élfico.' },
+  { id: 'destilados', nome: 'Destilados', icon: '🥃', blurb: 'Para quem precisa de coragem — ou de esquecer o dragão.' },
+  { id: 'quentes', nome: 'Quentes & Calmantes', icon: '🍵', blurb: 'Infusões e caldos servidos fumegando no balcão.' },
+  { id: 'barman', nome: 'Poções do Taverneiro', icon: '⚗️', blurb: 'Misturas secretas que ninguém sabe bem o que levam.' },
+  { id: 'sobrio', nome: 'Sem Álcool', icon: '🥤', blurb: 'Refrescos para quem ainda tem um dragão para enfrentar hoje.' },
+];
+
 export const TAVERN_DRINKS = {
+  // ── Do Barril ──────────────────────────────────────────────
   cerveja_rustica: {
+    categoria: 'barril',
     nome: 'Cerveja Rústica', tipo: 'bebida', preco: 25, emoji: '🍺',
     cura: 60, drunk: true, drunkTurns: 4,
-    desc: 'Restaura 60 de HP, mas deixa bêbado (4 turnos): +1 Força, −1 Destreza e Reflexos.',
+    desc: 'Caneca de barro, espuma grossa. Restaura 60 de HP, mas deixa bêbado (4 turnos): +1 Força, −1 Destreza e Reflexos.',
   },
-  vinho_elfico: {
-    nome: 'Vinho Élfico', tipo: 'bebida', preco: 60, emoji: '🍷',
-    cura: 40, mana: 20,
-    desc: 'Restaura 40 de HP e 20 de MP. Leve e revigorante.',
+  chope_do_ultimo_copo: {
+    categoria: 'barril',
+    nome: 'Chope do Último Copo', tipo: 'bebida', preco: 35, emoji: '🍺',
+    cura: 90, drunk: true, drunkTurns: 3,
+    desc: 'A casa serve na caneca lascada. Restaura 90 de HP e levanta o ânimo — e um pouco a voz (bêbado por 3 turnos).',
+  },
+  cidra_picante: {
+    categoria: 'barril',
+    nome: 'Cidra Picante', tipo: 'bebida', preco: 65, emoji: '🍏',
+    cura: 70, buffFisico: 0.1, buffTurns: 3, drunk: true, drunkTurns: 3,
+    desc: 'Maçã fermentada com pimenta-do-reino. Cura 70 de HP e esquenta o sangue: +10% de dano físico por 3 turnos (embriaga).',
+  },
+  cerveja_negra_anao: {
+    categoria: 'barril',
+    nome: 'Cerveja Negra Anã', tipo: 'bebida', preco: 70, emoji: '🍻',
+    cura: 180, drunk: true, drunkTurns: 4,
+    desc: 'Escura como a mina, encorpada como o martelo. Restaura 180 de HP — e derruba qualquer elfo de uma caneca só (bêbado 4 turnos).',
   },
   kvas_de_mel: {
+    categoria: 'barril',
     nome: 'Kvas de Mel', tipo: 'bebida', preco: 110, emoji: '🍯',
     cura: 300,
-    desc: 'Bebida anã espessa: restaura 300 de HP.',
+    desc: 'Bebida anã espessa, adoçada com mel de caverna: restaura 300 de HP. Sem ressaca — os anões juram.',
   },
   hidromel_brutal: {
+    categoria: 'barril',
     nome: 'Hidromel Brutal', tipo: 'bebida', preco: 80, emoji: '🫗',
     buffFisico: 0.2, buffTurns: 3,
-    desc: 'Fúria líquida: +20% de dano físico por 3 turnos.',
+    desc: 'Fúria líquida destilada de mel de abelha gigante: +20% de dano físico por 3 turnos.',
   },
-  absinto_arcano: {
-    nome: 'Absinto Arcano', tipo: 'bebida', preco: 90, emoji: '🧪',
-    buffMagico: 0.2, buffTurns: 3,
-    desc: 'Arde de magia: +20% de dano mágico por 3 turnos.',
+
+  // ── Da Adega ───────────────────────────────────────────────
+  vinho_elfico: {
+    categoria: 'adega',
+    nome: 'Vinho Élfico', tipo: 'bebida', preco: 60, emoji: '🍷',
+    cura: 40, mana: 20,
+    desc: 'Servido em taça fina, colhido sob a lua. Restaura 40 de HP e 20 de MP: leve e revigorante.',
   },
+  vinho_das_virtudes: {
+    categoria: 'adega',
+    nome: 'Vinho das Virtudes', tipo: 'bebida', preco: 85, emoji: '🍷',
+    cura: 30, mana: 45,
+    desc: 'Engarrafado por monges vinicultores. Pouco para o corpo, muito para a mente: 30 de HP e 45 de MP.',
+  },
+  vinho_de_sangue: {
+    categoria: 'adega',
+    nome: 'Vinho de Sangue', tipo: 'bebida', preco: 130, emoji: '🍷',
+    cura: 120, buffFisico: 0.15, buffTurns: 3, drunk: true, drunkTurns: 3,
+    desc: 'Tinto, encorpado e um tanto inquietante. Cura 120 de HP e +15% de dano físico por 3 turnos (embriaga).',
+  },
+  espumante_elfico: {
+    categoria: 'adega',
+    nome: 'Espumante Élfico', tipo: 'bebida', preco: 120, emoji: '🥂',
+    mana: 60, buffMagico: 0.1, buffTurns: 3,
+    desc: 'As bolhas cantam de verdade. Restaura 60 de MP e +10% de dano mágico por 3 turnos.',
+  },
+
+  // ── Destilados ─────────────────────────────────────────────
   aguardente_anao: {
+    categoria: 'destilados',
     nome: 'Aguardente Anã', tipo: 'bebida', preco: 100, emoji: '🥃',
     buffFisico: 0.15, buffTurns: 3, drunk: true, drunkTurns: 3,
-    desc: 'Poderosa: +15% de dano físico por 3 turnos, mas embriaga (3 turnos).',
+    desc: 'Passada em barril de pedra e servida a fogo. +15% de dano físico por 3 turnos, mas embriaga (3 turnos).',
   },
+  absinto_arcano: {
+    categoria: 'destilados',
+    nome: 'Absinto Arcano', tipo: 'bebida', preco: 90, emoji: '🧪',
+    buffMagico: 0.2, buffTurns: 3,
+    desc: 'Verde, fumegante e proibido em três reinos. +20% de dano mágico por 3 turnos.',
+  },
+  grogue_do_marujo: {
+    categoria: 'destilados',
+    nome: 'Grogue do Marujo', tipo: 'bebida', preco: 55, emoji: '🍶',
+    cura: 150, drunk: true, drunkTurns: 5,
+    desc: 'Servido em caneca de estanho com um torrão de açúcar. Cura 150 de HP e deixa o mundo balançando (bêbado 5 turnos).',
+  },
+  rum_do_corsario: {
+    categoria: 'destilados',
+    nome: 'Rum do Corsário', tipo: 'bebida', preco: 110, emoji: '🥃',
+    buffFisico: 0.25, buffTurns: 3, drunk: true, drunkTurns: 4,
+    desc: 'Contrabandeado das Ilhas Partidas. +25% de dano físico por 3 turnos; quem bebe vê dois inimigos — ótimo, se acertar os dois (embriaga).',
+  },
+  uisque_do_pistoleiro: {
+    categoria: 'destilados',
+    nome: 'Uísque do Pistoleiro', tipo: 'bebida', preco: 115, emoji: '🍸',
+    cura: 60, buffFisico: 0.2, buffTurns: 2, drunk: true, drunkTurns: 3,
+    desc: 'Servido com uma bala dentro em vez de gelo. Cura 60 de HP e afia a mira por poucos segundos: +20% de dano físico por 2 turnos (embriaga).',
+  },
+
+  // ── Quentes & Calmantes ────────────────────────────────────
   cha_restaurador: {
+    categoria: 'quentes',
     nome: 'Chá Restaurador', tipo: 'bebida', preco: 70, emoji: '🍵',
     removeStatus: ['veneno', 'sangramento', 'queimadura'],
-    desc: 'Antídoto quente: limpa Veneno, Sangramento e Queimadura.',
+    desc: 'Antídoto quente com folhas amargas. Limpa Veneno, Sangramento e Queimadura.',
   },
+  cafe_do_vigia: {
+    categoria: 'quentes',
+    nome: 'Café do Vigia', tipo: 'bebida', preco: 60, emoji: '☕',
+    mana: 30, removeStatus: ['lentidao', 'cegueira'],
+    desc: 'Grosso, preto e amargo como o turno da madrugada. Restaura 30 de MP e espanta o sono: limpa Lentidão e Cegueira.',
+  },
+  cha_de_erva_cinza: {
+    categoria: 'quentes',
+    nome: 'Chá de Erva-Cinza', tipo: 'bebida', preco: 75, emoji: '🍵',
+    removeStatus: ['veneno', 'fraqueza'],
+    desc: 'Colhida nos pântanos ao amanhecer. Purga Veneno e devolve as forças, limpando Fraqueza.',
+  },
+  caldo_revigorante: {
+    categoria: 'quentes',
+    nome: 'Caldo Revigorante', tipo: 'bebida', preco: 95, emoji: '🍲',
+    status: { tipo: 'regeneracao', turnos: 5, dano: 80 },
+    desc: 'Caldo servido na tigela de barro. Regenera 80 de HP por turno durante 5 turnos.',
+  },
+  leite_quente_com_mel: {
+    categoria: 'quentes',
+    nome: 'Leite Quente com Mel', tipo: 'bebida', preco: 45, emoji: '🥛',
+    cura: 80, removeStatus: ['congelamento', 'lentidao'],
+    desc: 'O que a taverneira serve a quem voltou tremendo do gelo. Cura 80 de HP e limpa Congelamento e Lentidão.',
+  },
+
+  // ── Poções do Taverneiro ───────────────────────────────────
   elixir_vigor: {
+    categoria: 'barman',
     nome: 'Elixir do Vigor', tipo: 'bebida', preco: 120, emoji: '🌿',
     status: { tipo: 'regeneracao', turnos: 4, dano: 120 },
-    desc: 'Regenera 120 de HP por turno durante 4 turnos.',
+    desc: 'Infusão verde preparada atrás do balcão. Regenera 120 de HP por turno durante 4 turnos.',
+  },
+  agua_lunar: {
+    categoria: 'barman',
+    nome: 'Água Lunar', tipo: 'bebida', preco: 140, emoji: '🌙',
+    mana: 80, status: { tipo: 'regeneracao', turnos: 3, dano: 60 },
+    desc: 'Destilada de orvalho à luz da lua cheia. Restaura 80 de MP e regenera 60 de HP por turno durante 3 turnos.',
+  },
+  sangue_de_dragao: {
+    categoria: 'barman',
+    nome: 'Sangue de Dragão', tipo: 'bebida', preco: 220, emoji: '🩸',
+    buffFisico: 0.4, buffTurns: 2, drunk: true, drunkTurns: 4,
+    desc: 'Uma dose que custa o salário de um cavaleiro. +40% de dano físico por 2 turnos — depois você vai querer deitar (bêbado 4 turnos).',
+  },
+  dose_do_taverneiro: {
+    categoria: 'barman', destaque: true,
+    nome: 'Dose do Taverneiro', tipo: 'bebida', preco: 260, emoji: '🍹',
+    cura: 200, mana: 40, buffFisico: 0.2, buffMagico: 0.2, buffTurns: 3, drunk: true, drunkTurns: 3,
+    desc: 'A mistura secreta da casa, servida em copo que ninguém ousa lavar. Cura 200 de HP, 40 de MP e +20% de dano físico e mágico por 3 turnos (embriaga).',
+  },
+
+  // ── Sem Álcool ─────────────────────────────────────────────
+  agua_da_fonte: {
+    categoria: 'sobrio',
+    nome: 'Água da Fonte', tipo: 'bebida', preco: 10, emoji: '💧',
+    cura: 40,
+    desc: 'Gelada, direto do poço dos fundos. Restaura 40 de HP e não atrapalha a mira.',
+  },
+  suco_do_bosque: {
+    categoria: 'sobrio',
+    nome: 'Suco do Bosque', tipo: 'bebida', preco: 30, emoji: '🧃',
+    cura: 50, mana: 15,
+    desc: 'Frutas esmagadas na hora. Restaura 50 de HP e 15 de MP — sóbrio e pronto para o próximo turno.',
   },
 };
 

@@ -7,6 +7,7 @@ import {
   gemsAttrs,
   POTIONS,
   TAVERN_DRINKS,
+  TAVERN_CATEGORIES,
   EQUIPMENT,
   armasDeEquipamento,
   melhorArma,
@@ -159,6 +160,38 @@ describe('TAVERN_DRINKS — bebidas da taverna (usáveis em batalha)', () => {
     for (const b of Object.values(TAVERN_DRINKS)) {
       if (b.drunk) expect(b.drunkTurns).toBeGreaterThan(0);
     }
+  });
+
+  it('o menu tem seções (TAVERN_CATEGORIES) válidas e únicas', () => {
+    expect(Array.isArray(TAVERN_CATEGORIES)).toBe(true);
+    expect(TAVERN_CATEGORIES.length).toBeGreaterThanOrEqual(4);
+    const ids = TAVERN_CATEGORIES.map((c) => c.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const c of TAVERN_CATEGORIES) {
+      expect(typeof c.nome).toBe('string');
+      expect(c.nome.length).toBeGreaterThan(0);
+      expect(typeof c.icon).toBe('string');
+    }
+  });
+
+  it('toda bebida pertence a uma seção do menu', () => {
+    const ids = new Set(TAVERN_CATEGORIES.map((c) => c.id));
+    for (const b of Object.values(TAVERN_DRINKS)) {
+      expect(ids.has(b.categoria), `${b.nome} (${b.categoria})`).toBe(true);
+    }
+  });
+
+  it('cada seção do menu tem pelo menos uma bebida', () => {
+    for (const c of TAVERN_CATEGORIES) {
+      const tem = Object.values(TAVERN_DRINKS).some((b) => b.categoria === c.id);
+      expect(tem, `seção ${c.id} vazia`).toBe(true);
+    }
+  });
+
+  it('há uma sugestão do taverneiro (destaque) e o catálogo cresceu', () => {
+    const destaques = Object.values(TAVERN_DRINKS).filter((b) => b.destaque);
+    expect(destaques.length).toBe(1);
+    expect(Object.keys(TAVERN_DRINKS).length).toBeGreaterThanOrEqual(18);
   });
 });
 
