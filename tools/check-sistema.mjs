@@ -12,7 +12,7 @@ const log = (...a) => console.log(...a);
 log('── Mana ──');
 log('INT 10, +0 bônus  =>', manaMaxFrom(10, 10), '(esperado 100)');
 log('INT 10, +6 bônus  =>', manaMaxFrom(10, 16), '(esperado 160)');
-log('recuperação 5/10/15/20/30 =>', [5, 10, 15, 20, 30].map(manaRecuperada).join(', '), '(esperado 3,5,8,10,15)');
+log('recuperação 5/10/15/20/30 =>', [5, 10, 15, 20, 30].map((g) => manaRecuperada(g)).join(', '), '(esperado 3,5,8,10,15)');
 
 log('\n── Dano (provisório — escala ×10, igual vida/mana) ──');
 log('FOR 12 + arma 7           =>', danoFisicoAtaque(12, 7), '(esperado 190)');
