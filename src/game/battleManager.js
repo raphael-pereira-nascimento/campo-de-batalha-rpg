@@ -1358,7 +1358,7 @@ export class BattleManager {
   }
 
   _resolveItem(battle, p, item) {
-    if (item.tipo !== 'pocao' && item.tipo !== 'bebida') {
+    if (item.tipo !== 'pocao' && item.tipo !== 'bebida' && item.tipo !== 'comida') {
       battle.log.push(makeLog(`❌ ${item.nome} não pode ser usado em combate.`, 'miss'));
       return;
     }

@@ -143,7 +143,7 @@ app.get('/api/tavern', (_req, res) => {
 app.post('/api/tavern/buy', requireAuth, async (req, res) => {
   try {
     const { itemId, characterId } = req.body;
-    const item = TAVERN_DRINKS[itemId];
+    const item = TAVERN_DRINKS[itemId] || (await import('./game/data.js')).TAVERN_FOODS?.[itemId] || null;
     if (!item) throw new Error('Bebida inválida.');
     const { rows } = await query(
       'SELECT wallet_cents FROM players WHERE id = $1 FOR UPDATE',

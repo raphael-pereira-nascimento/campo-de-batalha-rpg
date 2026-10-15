@@ -277,408 +277,209 @@ export const TAVERN_CATEGORIES = [
 ];
 
 export const TAVERN_DRINKS = {
-  // ── Do Barril ──────────────────────────────────────────────
-  cerveja_rustica: {
-    categoria: 'barril',
-    nome: 'Cerveja Rústica', tipo: 'bebida', preco: 25, emoji: '🍺',
-    cura: 60, drunk: true, drunkTurns: 4,
-    desc: 'Caneca de barro, espuma grossa. Restaura 60 de HP, mas deixa bêbado (4 turnos): +1 Força, −1 Destreza e Reflexos.',
-  },
-  chope_do_ultimo_copo: {
-    categoria: 'barril',
-    nome: 'Chope do Último Copo', tipo: 'bebida', preco: 35, emoji: '🍺',
-    cura: 90, drunk: true, drunkTurns: 3,
-    desc: 'A casa serve na caneca lascada. Restaura 90 de HP e levanta o ânimo — e um pouco a voz (bêbado por 3 turnos).',
-  },
-  cidra_picante: {
-    categoria: 'barril',
-    nome: 'Cidra Picante', tipo: 'bebida', preco: 65, emoji: '🍏',
-    cura: 70, buffFisico: 0.1, buffTurns: 3, drunk: true, drunkTurns: 3,
-    desc: 'Maçã fermentada com pimenta-do-reino. Cura 70 de HP e esquenta o sangue: +10% de dano físico por 3 turnos (embriaga).',
-  },
-  cerveja_negra_anao: {
-    categoria: 'barril',
-    nome: 'Cerveja Negra Anã', tipo: 'bebida', preco: 70, emoji: '🍻',
-    cura: 180, drunk: true, drunkTurns: 4,
-    desc: 'Escura como a mina, encorpada como o martelo. Restaura 180 de HP — e derruba qualquer elfo de uma caneca só (bêbado 4 turnos).',
-  },
-  kvas_de_mel: {
-    categoria: 'barril',
-    nome: 'Kvas de Mel', tipo: 'bebida', preco: 110, emoji: '🍯',
-    cura: 300,
-    desc: 'Bebida anã espessa, adoçada com mel de caverna: restaura 300 de HP. Sem ressaca — os anões juram.',
-  },
-  hidromel_brutal: {
-    categoria: 'barril',
-    nome: 'Hidromel Brutal', tipo: 'bebida', preco: 80, emoji: '🫗',
-    buffFisico: 0.2, buffTurns: 3,
-    desc: 'Fúria líquida destilada de mel de abelha gigante: +20% de dano físico por 3 turnos.',
-  },
+  bebida_001: {"categoria":"barril","nome":"Bebida 1","tipo":"bebida","preco":10,"emoji":"🍺","desc":"Bebida da taverna com diversos efeitos.","cura":20,"mana":10,"buffFisico":0.05,"buffTurns":2,"buffMagico":0.05,"removeStatus":["veneno","fraqueza","lentidao"],"drunk":true,"drunkTurns":2},
+  bebida_002: {"categoria":"adega","nome":"Bebida 2","tipo":"bebida","preco":15,"emoji":"🍷","desc":"Bebida da taverna com diversos efeitos.","cura":25},
+  bebida_003: {"categoria":"destilados","nome":"Bebida 3","tipo":"bebida","preco":20,"emoji":"🥃","desc":"Bebida da taverna com diversos efeitos.","cura":30},
+  bebida_004: {"categoria":"quentes","nome":"Bebida 4","tipo":"bebida","preco":25,"emoji":"🍸","desc":"Bebida da taverna com diversos efeitos.","cura":35},
+  bebida_005: {"categoria":"barman","nome":"Bebida 5","tipo":"bebida","preco":30,"emoji":"🍹","desc":"Bebida da taverna com diversos efeitos.","cura":40},
+  bebida_006: {"categoria":"sobrio","nome":"Bebida 6","tipo":"bebida","preco":35,"emoji":"🍵","desc":"Bebida da taverna com diversos efeitos.","cura":45},
+  bebida_007: {"categoria":"barril","nome":"Bebida 7","tipo":"bebida","preco":40,"emoji":"☕","desc":"Bebida da taverna com diversos efeitos.","cura":50},
+  bebida_008: {"categoria":"adega","nome":"Bebida 8","tipo":"bebida","preco":45,"emoji":"🧃","desc":"Bebida da taverna com diversos efeitos.","cura":55},
+  bebida_009: {"categoria":"destilados","nome":"Bebida 9","tipo":"bebida","preco":50,"emoji":"🥤","desc":"Bebida da taverna com diversos efeitos.","cura":60},
+  bebida_010: {"categoria":"quentes","nome":"Bebida 10","tipo":"bebida","preco":55,"emoji":"💧","desc":"Bebida da taverna com diversos efeitos.","cura":65},
+  bebida_011: {"categoria":"barman","nome":"Bebida 11","tipo":"bebida","preco":60,"emoji":"🍶","desc":"Bebida da taverna com diversos efeitos.","cura":70,"drunk":true,"drunkTurns":4},
+  bebida_012: {"categoria":"sobrio","nome":"Bebida 12","tipo":"bebida","preco":65,"emoji":"🫗","desc":"Bebida da taverna com diversos efeitos.","cura":75},
+  bebida_013: {"categoria":"barril","nome":"Bebida 13","tipo":"bebida","preco":70,"emoji":"🥛","desc":"Bebida da taverna com diversos efeitos.","cura":80,"buffFisico":0.07,"buffTurns":2},
+  bebida_014: {"categoria":"adega","nome":"Bebida 14","tipo":"bebida","preco":75,"emoji":"🍻","desc":"Bebida da taverna com diversos efeitos.","cura":85},
+  bebida_015: {"categoria":"destilados","nome":"Bebida 15","tipo":"bebida","preco":80,"emoji":"🥂","desc":"Bebida da taverna com diversos efeitos.","cura":90,"buffMagico":0.09,"buffTurns":4},
+  bebida_016: {"categoria":"quentes","nome":"Bebida 16","tipo":"bebida","preco":85,"emoji":"🍺","desc":"Bebida da taverna com diversos efeitos.","cura":95,"mana":25},
+  bebida_017: {"categoria":"barman","nome":"Bebida 17","tipo":"bebida","preco":90,"emoji":"🍷","desc":"Bebida da taverna com diversos efeitos.","cura":100},
+  bebida_018: {"categoria":"sobrio","nome":"Bebida 18","tipo":"bebida","preco":95,"emoji":"🥃","desc":"Bebida da taverna com diversos efeitos.","cura":105},
+  bebida_019: {"categoria":"barril","nome":"Bebida 19","tipo":"bebida","preco":100,"emoji":"🍸","desc":"Bebida da taverna com diversos efeitos.","cura":110},
+  bebida_020: {"categoria":"adega","nome":"Bebida 20","tipo":"bebida","preco":105,"emoji":"🍹","desc":"Bebida da taverna com diversos efeitos.","cura":115},
+  bebida_021: {"categoria":"destilados","nome":"Bebida 21","tipo":"bebida","preco":110,"emoji":"🍵","desc":"Bebida da taverna com diversos efeitos.","cura":120,"removeStatus":["veneno"],"drunk":true,"drunkTurns":2},
+  bebida_022: {"categoria":"quentes","nome":"Bebida 22","tipo":"bebida","preco":115,"emoji":"☕","desc":"Bebida da taverna com diversos efeitos.","cura":125},
+  bebida_023: {"categoria":"barman","nome":"Bebida 23","tipo":"bebida","preco":120,"emoji":"🧃","desc":"Bebida da taverna com diversos efeitos.","cura":130},
+  bebida_024: {"categoria":"sobrio","nome":"Bebida 24","tipo":"bebida","preco":125,"emoji":"🥤","desc":"Bebida da taverna com diversos efeitos.","cura":135},
+  bebida_025: {"categoria":"barril","nome":"Bebida 25","tipo":"bebida","preco":130,"emoji":"💧","desc":"Bebida da taverna com diversos efeitos.","cura":140,"buffFisico":0.09,"buffTurns":2},
+  bebida_026: {"categoria":"adega","nome":"Bebida 26","tipo":"bebida","preco":10,"emoji":"🍶","desc":"Bebida da taverna com diversos efeitos.","cura":145},
+  bebida_027: {"categoria":"destilados","nome":"Bebida 27","tipo":"bebida","preco":15,"emoji":"🫗","desc":"Bebida da taverna com diversos efeitos.","cura":150},
+  bebida_028: {"categoria":"quentes","nome":"Bebida 28","tipo":"bebida","preco":20,"emoji":"🥛","desc":"Bebida da taverna com diversos efeitos.","cura":155},
+  bebida_029: {"categoria":"barman","nome":"Bebida 29","tipo":"bebida","preco":25,"emoji":"🍻","desc":"Bebida da taverna com diversos efeitos.","cura":160,"buffMagico":0.13,"buffTurns":3},
+  bebida_030: {"categoria":"sobrio","nome":"Bebida 30","tipo":"bebida","preco":30,"emoji":"🥂","desc":"Bebida da taverna com diversos efeitos.","cura":165},
+  bebida_031: {"categoria":"barril","nome":"Bebida 31","tipo":"bebida","preco":35,"emoji":"🍺","desc":"Bebida da taverna com diversos efeitos.","cura":170,"mana":20,"removeStatus":["fraqueza"],"drunk":true,"drunkTurns":4},
+  bebida_032: {"categoria":"adega","nome":"Bebida 32","tipo":"bebida","preco":40,"emoji":"🍷","desc":"Bebida da taverna com diversos efeitos.","cura":175},
+  bebida_033: {"categoria":"destilados","nome":"Bebida 33","tipo":"bebida","preco":45,"emoji":"🥃","desc":"Bebida da taverna com diversos efeitos.","cura":180},
+  bebida_034: {"categoria":"quentes","nome":"Bebida 34","tipo":"bebida","preco":50,"emoji":"🍸","desc":"Bebida da taverna com diversos efeitos.","cura":185},
+  bebida_035: {"categoria":"barman","nome":"Bebida 35","tipo":"bebida","preco":55,"emoji":"🍹","desc":"Bebida da taverna com diversos efeitos.","cura":190},
+  bebida_036: {"categoria":"sobrio","nome":"Bebida 36","tipo":"bebida","preco":60,"emoji":"🍵","desc":"Bebida da taverna com diversos efeitos.","cura":195},
+  bebida_037: {"categoria":"barril","nome":"Bebida 37","tipo":"bebida","preco":65,"emoji":"☕","desc":"Bebida da taverna com diversos efeitos.","cura":200,"buffFisico":0.11,"buffTurns":2},
+  bebida_038: {"categoria":"adega","nome":"Bebida 38","tipo":"bebida","preco":70,"emoji":"🧃","desc":"Bebida da taverna com diversos efeitos.","cura":205},
+  bebida_039: {"categoria":"destilados","nome":"Bebida 39","tipo":"bebida","preco":75,"emoji":"🥤","desc":"Bebida da taverna com diversos efeitos.","cura":210},
+  bebida_040: {"categoria":"quentes","nome":"Bebida 40","tipo":"bebida","preco":80,"emoji":"💧","desc":"Bebida da taverna com diversos efeitos.","cura":215},
+  bebida_041: {"categoria":"barman","nome":"Bebida 41","tipo":"bebida","preco":85,"emoji":"🍶","desc":"Bebida da taverna com diversos efeitos.","cura":20,"removeStatus":["veneno","lentidao"],"drunk":true,"drunkTurns":2},
+  bebida_042: {"categoria":"sobrio","nome":"Bebida 42","tipo":"bebida","preco":90,"emoji":"🫗","desc":"Bebida da taverna com diversos efeitos.","cura":25},
+  bebida_043: {"categoria":"barril","nome":"Bebida 43","tipo":"bebida","preco":95,"emoji":"🥛","desc":"Bebida da taverna com diversos efeitos.","cura":30,"buffMagico":0.07,"buffTurns":2},
+  bebida_044: {"categoria":"adega","nome":"Bebida 44","tipo":"bebida","preco":100,"emoji":"🍻","desc":"Bebida da taverna com diversos efeitos.","cura":35},
+  bebida_045: {"categoria":"destilados","nome":"Bebida 45","tipo":"bebida","preco":105,"emoji":"🥂","desc":"Bebida da taverna com diversos efeitos.","cura":40},
+  bebida_046: {"categoria":"quentes","nome":"Bebida 46","tipo":"bebida","preco":110,"emoji":"🍺","desc":"Bebida da taverna com diversos efeitos.","cura":45,"mana":15},
+  bebida_047: {"categoria":"barman","nome":"Bebida 47","tipo":"bebida","preco":115,"emoji":"🍷","desc":"Bebida da taverna com diversos efeitos.","cura":50},
+  bebida_048: {"categoria":"sobrio","nome":"Bebida 48","tipo":"bebida","preco":120,"emoji":"🥃","desc":"Bebida da taverna com diversos efeitos.","cura":55},
+  bebida_049: {"categoria":"barril","nome":"Bebida 49","tipo":"bebida","preco":125,"emoji":"🍸","desc":"Bebida da taverna com diversos efeitos.","cura":60,"buffFisico":0.13,"buffTurns":2},
+  bebida_050: {"categoria":"adega","nome":"Bebida 50","tipo":"bebida","preco":130,"emoji":"🍹","desc":"Bebida da taverna com diversos efeitos.","cura":65},
+  bebida_051: {"categoria":"destilados","nome":"Bebida 51","tipo":"bebida","preco":10,"emoji":"🍵","desc":"Bebida da taverna com diversos efeitos.","cura":70,"drunk":true,"drunkTurns":4},
+  bebida_052: {"categoria":"quentes","nome":"Bebida 52","tipo":"bebida","preco":15,"emoji":"☕","desc":"Bebida da taverna com diversos efeitos.","cura":75},
+  bebida_053: {"categoria":"barman","nome":"Bebida 53","tipo":"bebida","preco":20,"emoji":"🧃","desc":"Bebida da taverna com diversos efeitos.","cura":80},
+  bebida_054: {"categoria":"sobrio","nome":"Bebida 54","tipo":"bebida","preco":25,"emoji":"🥤","desc":"Bebida da taverna com diversos efeitos.","cura":85},
+  bebida_055: {"categoria":"barril","nome":"Bebida 55","tipo":"bebida","preco":30,"emoji":"💧","desc":"Bebida da taverna com diversos efeitos.","cura":90},
+  bebida_056: {"categoria":"adega","nome":"Bebida 56","tipo":"bebida","preco":35,"emoji":"🍶","desc":"Bebida da taverna com diversos efeitos.","cura":95},
+  bebida_057: {"categoria":"destilados","nome":"Bebida 57","tipo":"bebida","preco":40,"emoji":"🫗","desc":"Bebida da taverna com diversos efeitos.","cura":100,"buffMagico":0.11,"buffTurns":4},
+  bebida_058: {"categoria":"quentes","nome":"Bebida 58","tipo":"bebida","preco":45,"emoji":"🥛","desc":"Bebida da taverna com diversos efeitos.","cura":105},
+  bebida_059: {"categoria":"barman","nome":"Bebida 59","tipo":"bebida","preco":50,"emoji":"🍻","desc":"Bebida da taverna com diversos efeitos.","cura":110},
+  bebida_060: {"categoria":"sobrio","nome":"Bebida 60","tipo":"bebida","preco":55,"emoji":"🥂","desc":"Bebida da taverna com diversos efeitos.","cura":115},
+  bebida_061: {"categoria":"barril","nome":"Bebida 61","tipo":"bebida","preco":60,"emoji":"🍺","desc":"Bebida da taverna com diversos efeitos.","cura":120,"mana":10,"buffFisico":0.05,"buffTurns":2,"removeStatus":["veneno","fraqueza"],"drunk":true,"drunkTurns":2},
+  bebida_062: {"categoria":"adega","nome":"Bebida 62","tipo":"bebida","preco":65,"emoji":"🍷","desc":"Bebida da taverna com diversos efeitos.","cura":125},
+  bebida_063: {"categoria":"destilados","nome":"Bebida 63","tipo":"bebida","preco":70,"emoji":"🥃","desc":"Bebida da taverna com diversos efeitos.","cura":130},
+  bebida_064: {"categoria":"quentes","nome":"Bebida 64","tipo":"bebida","preco":75,"emoji":"🍸","desc":"Bebida da taverna com diversos efeitos.","cura":135},
+  bebida_065: {"categoria":"barman","nome":"Bebida 65","tipo":"bebida","preco":80,"emoji":"🍹","desc":"Bebida da taverna com diversos efeitos.","cura":140},
+  bebida_066: {"categoria":"sobrio","nome":"Bebida 66","tipo":"bebida","preco":85,"emoji":"🍵","desc":"Bebida da taverna com diversos efeitos.","cura":145},
+  bebida_067: {"categoria":"barril","nome":"Bebida 67","tipo":"bebida","preco":90,"emoji":"☕","desc":"Bebida da taverna com diversos efeitos.","cura":150},
+  bebida_068: {"categoria":"adega","nome":"Bebida 68","tipo":"bebida","preco":95,"emoji":"🧃","desc":"Bebida da taverna com diversos efeitos.","cura":155},
+  bebida_069: {"categoria":"destilados","nome":"Bebida 69","tipo":"bebida","preco":100,"emoji":"🥤","desc":"Bebida da taverna com diversos efeitos.","cura":160},
+  bebida_070: {"categoria":"quentes","nome":"Bebida 70","tipo":"bebida","preco":105,"emoji":"💧","desc":"Bebida da taverna com diversos efeitos.","cura":165},
+  bebida_071: {"categoria":"barman","nome":"Bebida 71","tipo":"bebida","preco":110,"emoji":"🍶","desc":"Bebida da taverna com diversos efeitos.","cura":170,"buffMagico":0.05,"buffTurns":3,"drunk":true,"drunkTurns":4},
+  bebida_072: {"categoria":"sobrio","nome":"Bebida 72","tipo":"bebida","preco":115,"emoji":"🫗","desc":"Bebida da taverna com diversos efeitos.","cura":175},
+  bebida_073: {"categoria":"barril","nome":"Bebida 73","tipo":"bebida","preco":120,"emoji":"🥛","desc":"Bebida da taverna com diversos efeitos.","cura":180,"buffFisico":0.07,"buffTurns":2},
+  bebida_074: {"categoria":"adega","nome":"Bebida 74","tipo":"bebida","preco":125,"emoji":"🍻","desc":"Bebida da taverna com diversos efeitos.","cura":185},
+  bebida_075: {"categoria":"destilados","nome":"Bebida 75","tipo":"bebida","preco":130,"emoji":"🥂","desc":"Bebida da taverna com diversos efeitos.","cura":190},
+  bebida_076: {"categoria":"quentes","nome":"Bebida 76","tipo":"bebida","preco":10,"emoji":"🍺","desc":"Bebida da taverna com diversos efeitos.","cura":195,"mana":25},
+  bebida_077: {"categoria":"barman","nome":"Bebida 77","tipo":"bebida","preco":15,"emoji":"🍷","desc":"Bebida da taverna com diversos efeitos.","cura":200},
+  bebida_078: {"categoria":"sobrio","nome":"Bebida 78","tipo":"bebida","preco":20,"emoji":"🥃","desc":"Bebida da taverna com diversos efeitos.","cura":205},
+  bebida_079: {"categoria":"barril","nome":"Bebida 79","tipo":"bebida","preco":25,"emoji":"🍸","desc":"Bebida da taverna com diversos efeitos.","cura":210},
+  bebida_080: {"categoria":"adega","nome":"Bebida 80","tipo":"bebida","preco":30,"emoji":"🍹","desc":"Bebida da taverna com diversos efeitos.","cura":215},
+  bebida_081: {"categoria":"destilados","nome":"Bebida 81","tipo":"bebida","preco":35,"emoji":"🍵","desc":"Bebida da taverna com diversos efeitos.","cura":20,"removeStatus":["veneno","lentidao"],"drunk":true,"drunkTurns":2},
+  bebida_082: {"categoria":"quentes","nome":"Bebida 82","tipo":"bebida","preco":40,"emoji":"☕","desc":"Bebida da taverna com diversos efeitos.","cura":25},
+  bebida_083: {"categoria":"barman","nome":"Bebida 83","tipo":"bebida","preco":45,"emoji":"🧃","desc":"Bebida da taverna com diversos efeitos.","cura":30},
+  bebida_084: {"categoria":"sobrio","nome":"Bebida 84","tipo":"bebida","preco":50,"emoji":"🥤","desc":"Bebida da taverna com diversos efeitos.","cura":35},
+  bebida_085: {"categoria":"barril","nome":"Bebida 85","tipo":"bebida","preco":55,"emoji":"💧","desc":"Bebida da taverna com diversos efeitos.","cura":40,"buffFisico":0.09,"buffTurns":2,"buffMagico":0.09},
+  bebida_086: {"categoria":"adega","nome":"Bebida 86","tipo":"bebida","preco":60,"emoji":"🍶","desc":"Bebida da taverna com diversos efeitos.","cura":45},
+  bebida_087: {"categoria":"destilados","nome":"Bebida 87","tipo":"bebida","preco":65,"emoji":"🫗","desc":"Bebida da taverna com diversos efeitos.","cura":50},
+  bebida_088: {"categoria":"quentes","nome":"Bebida 88","tipo":"bebida","preco":70,"emoji":"🥛","desc":"Bebida da taverna com diversos efeitos.","cura":55},
+  bebida_089: {"categoria":"barman","nome":"Bebida 89","tipo":"bebida","preco":75,"emoji":"🍻","desc":"Bebida da taverna com diversos efeitos.","cura":60},
+  bebida_090: {"categoria":"sobrio","nome":"Bebida 90","tipo":"bebida","preco":80,"emoji":"🥂","desc":"Bebida da taverna com diversos efeitos.","cura":65},
+  bebida_091: {"categoria":"barril","nome":"Bebida 91","tipo":"bebida","preco":85,"emoji":"🍺","desc":"Bebida da taverna com diversos efeitos.","cura":70,"mana":20,"removeStatus":["fraqueza"],"drunk":true,"drunkTurns":4},
+  bebida_092: {"categoria":"adega","nome":"Bebida 92","tipo":"bebida","preco":90,"emoji":"🍷","desc":"Bebida da taverna com diversos efeitos.","cura":75},
+  bebida_093: {"categoria":"destilados","nome":"Bebida 93","tipo":"bebida","preco":95,"emoji":"🥃","desc":"Bebida da taverna com diversos efeitos.","cura":80},
+  bebida_094: {"categoria":"quentes","nome":"Bebida 94","tipo":"bebida","preco":100,"emoji":"🍸","desc":"Bebida da taverna com diversos efeitos.","cura":85},
+  bebida_095: {"categoria":"barman","nome":"Bebida 95","tipo":"bebida","preco":105,"emoji":"🍹","desc":"Bebida da taverna com diversos efeitos.","cura":90},
+  bebida_096: {"categoria":"sobrio","nome":"Bebida 96","tipo":"bebida","preco":110,"emoji":"🍵","desc":"Bebida da taverna com diversos efeitos.","cura":95},
+  bebida_097: {"categoria":"barril","nome":"Bebida 97","tipo":"bebida","preco":115,"emoji":"☕","desc":"Bebida da taverna com diversos efeitos.","cura":100,"buffFisico":0.11,"buffTurns":2},
+  bebida_098: {"categoria":"adega","nome":"Bebida 98","tipo":"bebida","preco":120,"emoji":"🧃","desc":"Bebida da taverna com diversos efeitos.","cura":105},
+  bebida_099: {"categoria":"destilados","nome":"Bebida 99","tipo":"bebida","preco":125,"emoji":"🥤","desc":"Bebida da taverna com diversos efeitos.","cura":110,"buffMagico":0.13,"buffTurns":4},
+  bebida_100: {"categoria":"quentes","nome":"Bebida 100","tipo":"bebida","preco":130,"emoji":"💧","desc":"Bebida da taverna com diversos efeitos.","cura":115}
+};;
 
-  // ── Da Adega ───────────────────────────────────────────────
-  vinho_elfico: {
-    categoria: 'adega',
-    nome: 'Vinho Élfico', tipo: 'bebida', preco: 60, emoji: '🍷',
-    cura: 40, mana: 20,
-    desc: 'Servido em taça fina, colhido sob a lua. Restaura 40 de HP e 20 de MP: leve e revigorante.',
-  },
-  vinho_das_virtudes: {
-    categoria: 'adega',
-    nome: 'Vinho das Virtudes', tipo: 'bebida', preco: 85, emoji: '🍷',
-    cura: 30, mana: 45,
-    desc: 'Engarrafado por monges vinicultores. Pouco para o corpo, muito para a mente: 30 de HP e 45 de MP.',
-  },
-  vinho_de_sangue: {
-    categoria: 'adega',
-    nome: 'Vinho de Sangue', tipo: 'bebida', preco: 130, emoji: '🍷',
-    cura: 120, buffFisico: 0.15, buffTurns: 3, drunk: true, drunkTurns: 3,
-    desc: 'Tinto, encorpado e um tanto inquietante. Cura 120 de HP e +15% de dano físico por 3 turnos (embriaga).',
-  },
-  espumante_elfico: {
-    categoria: 'adega',
-    nome: 'Espumante Élfico', tipo: 'bebida', preco: 120, emoji: '🥂',
-    mana: 60, buffMagico: 0.1, buffTurns: 3,
-    desc: 'As bolhas cantam de verdade. Restaura 60 de MP e +10% de dano mágico por 3 turnos.',
-  },
-
-  // ── Destilados ─────────────────────────────────────────────
-  aguardente_anao: {
-    categoria: 'destilados',
-    nome: 'Aguardente Anã', tipo: 'bebida', preco: 100, emoji: '🥃',
-    buffFisico: 0.15, buffTurns: 3, drunk: true, drunkTurns: 3,
-    desc: 'Passada em barril de pedra e servida a fogo. +15% de dano físico por 3 turnos, mas embriaga (3 turnos).',
-  },
-  absinto_arcano: {
-    categoria: 'destilados',
-    nome: 'Absinto Arcano', tipo: 'bebida', preco: 90, emoji: '🧪',
-    buffMagico: 0.2, buffTurns: 3,
-    desc: 'Verde, fumegante e proibido em três reinos. +20% de dano mágico por 3 turnos.',
-  },
-  grogue_do_marujo: {
-    categoria: 'destilados',
-    nome: 'Grogue do Marujo', tipo: 'bebida', preco: 55, emoji: '🍶',
-    cura: 150, drunk: true, drunkTurns: 5,
-    desc: 'Servido em caneca de estanho com um torrão de açúcar. Cura 150 de HP e deixa o mundo balançando (bêbado 5 turnos).',
-  },
-  rum_do_corsario: {
-    categoria: 'destilados',
-    nome: 'Rum do Corsário', tipo: 'bebida', preco: 110, emoji: '🥃',
-    buffFisico: 0.25, buffTurns: 3, drunk: true, drunkTurns: 4,
-    desc: 'Contrabandeado das Ilhas Partidas. +25% de dano físico por 3 turnos; quem bebe vê dois inimigos — ótimo, se acertar os dois (embriaga).',
-  },
-  uisque_do_pistoleiro: {
-    categoria: 'destilados',
-    nome: 'Uísque do Pistoleiro', tipo: 'bebida', preco: 115, emoji: '🍸',
-    cura: 60, buffFisico: 0.2, buffTurns: 2, drunk: true, drunkTurns: 3,
-    desc: 'Servido com uma bala dentro em vez de gelo. Cura 60 de HP e afia a mira por poucos segundos: +20% de dano físico por 2 turnos (embriaga).',
-  },
-
-  // ── Quentes & Calmantes ────────────────────────────────────
-  cha_restaurador: {
-    categoria: 'quentes',
-    nome: 'Chá Restaurador', tipo: 'bebida', preco: 70, emoji: '🍵',
-    removeStatus: ['veneno', 'sangramento', 'queimadura'],
-    desc: 'Antídoto quente com folhas amargas. Limpa Veneno, Sangramento e Queimadura.',
-  },
-  cafe_do_vigia: {
-    categoria: 'quentes',
-    nome: 'Café do Vigia', tipo: 'bebida', preco: 60, emoji: '☕',
-    mana: 30, removeStatus: ['lentidao', 'cegueira'],
-    desc: 'Grosso, preto e amargo como o turno da madrugada. Restaura 30 de MP e espanta o sono: limpa Lentidão e Cegueira.',
-  },
-  cha_de_erva_cinza: {
-    categoria: 'quentes',
-    nome: 'Chá de Erva-Cinza', tipo: 'bebida', preco: 75, emoji: '🍵',
-    removeStatus: ['veneno', 'fraqueza'],
-    desc: 'Colhida nos pântanos ao amanhecer. Purga Veneno e devolve as forças, limpando Fraqueza.',
-  },
-  caldo_revigorante: {
-    categoria: 'quentes',
-    nome: 'Caldo Revigorante', tipo: 'bebida', preco: 95, emoji: '🍲',
-    status: { tipo: 'regeneracao', turnos: 5, dano: 80 },
-    desc: 'Caldo servido na tigela de barro. Regenera 80 de HP por turno durante 5 turnos.',
-  },
-  leite_quente_com_mel: {
-    categoria: 'quentes',
-    nome: 'Leite Quente com Mel', tipo: 'bebida', preco: 45, emoji: '🥛',
-    cura: 80, removeStatus: ['congelamento', 'lentidao'],
-    desc: 'O que a taverneira serve a quem voltou tremendo do gelo. Cura 80 de HP e limpa Congelamento e Lentidão.',
-  },
-
-  // ── Poções do Taverneiro ───────────────────────────────────
-  elixir_vigor: {
-    categoria: 'barman',
-    nome: 'Elixir do Vigor', tipo: 'bebida', preco: 120, emoji: '🌿',
-    status: { tipo: 'regeneracao', turnos: 4, dano: 120 },
-    desc: 'Infusão verde preparada atrás do balcão. Regenera 120 de HP por turno durante 4 turnos.',
-  },
-  agua_lunar: {
-    categoria: 'barman',
-    nome: 'Água Lunar', tipo: 'bebida', preco: 140, emoji: '🌙',
-    mana: 80, status: { tipo: 'regeneracao', turnos: 3, dano: 60 },
-    desc: 'Destilada de orvalho à luz da lua cheia. Restaura 80 de MP e regenera 60 de HP por turno durante 3 turnos.',
-  },
-  sangue_de_dragao: {
-    categoria: 'barman',
-    nome: 'Sangue de Dragão', tipo: 'bebida', preco: 220, emoji: '🩸',
-    buffFisico: 0.4, buffTurns: 2, drunk: true, drunkTurns: 4,
-    desc: 'Uma dose que custa o salário de um cavaleiro. +40% de dano físico por 2 turnos — depois você vai querer deitar (bêbado 4 turnos).',
-  },
-  dose_do_taverneiro: {
-    categoria: 'barman', destaque: true,
-    nome: 'Dose do Taverneiro', tipo: 'bebida', preco: 260, emoji: '🍹',
-    cura: 200, mana: 40, buffFisico: 0.2, buffMagico: 0.2, buffTurns: 3, drunk: true, drunkTurns: 3,
-    desc: 'A mistura secreta da casa, servida em copo que ninguém ousa lavar. Cura 200 de HP, 40 de MP e +20% de dano físico e mágico por 3 turnos (embriaga).',
-  },
-
-  // ── Sem Álcool ─────────────────────────────────────────────
-  agua_da_fonte: {
-    categoria: 'sobrio',
-    nome: 'Água da Fonte', tipo: 'bebida', preco: 10, emoji: '💧',
-    cura: 40,
-    desc: 'Gelada, direto do poço dos fundos. Restaura 40 de HP e não atrapalha a mira.',
-  },
-  suco_do_bosque: {
-    categoria: 'sobrio',
-    nome: 'Suco do Bosque', tipo: 'bebida', preco: 30, emoji: '🧃',
-    cura: 50, mana: 15,
-    desc: 'Frutas esmagadas na hora. Restaura 50 de HP e 15 de MP — sóbrio e pronto para o próximo turno.',
-  },
+// ── Taverna "O Último Copo": comidas (consumíveis usáveis em combate) ──
+// PROVISÓRIO. Mesma lógica de consumo de itens em batalha.
+export const TAVERN_FOODS = {
+  comida_001: {"categoria":"barril","nome":"Prato 1","tipo":"comida","preco":10,"emoji":"🍗","cura":30,"desc":"Refeição da taverna."},
+  comida_002: {"categoria":"adega","nome":"Prato 2","tipo":"comida","preco":15,"emoji":"🍖","cura":35,"desc":"Refeição da taverna."},
+  comida_003: {"categoria":"destilados","nome":"Prato 3","tipo":"comida","preco":20,"emoji":"🍔","cura":40,"desc":"Refeição da taverna."},
+  comida_004: {"categoria":"quentes","nome":"Prato 4","tipo":"comida","preco":25,"emoji":"🍕","cura":45,"desc":"Refeição da taverna."},
+  comida_005: {"categoria":"barman","nome":"Prato 5","tipo":"comida","preco":30,"emoji":"🍲","cura":50,"desc":"Refeição da taverna."},
+  comida_006: {"categoria":"sobrio","nome":"Prato 6","tipo":"comida","preco":35,"emoji":"🥘","cura":55,"desc":"Refeição da taverna."},
+  comida_007: {"categoria":"barril","nome":"Prato 7","tipo":"comida","preco":40,"emoji":"🥣","cura":60,"desc":"Refeição da taverna."},
+  comida_008: {"categoria":"adega","nome":"Prato 8","tipo":"comida","preco":45,"emoji":"🍚","cura":65,"desc":"Refeição da taverna."},
+  comida_009: {"categoria":"destilados","nome":"Prato 9","tipo":"comida","preco":50,"emoji":"🥗","cura":70,"desc":"Refeição da taverna."},
+  comida_010: {"categoria":"quentes","nome":"Prato 10","tipo":"comida","preco":55,"emoji":"🍳","cura":75,"desc":"Refeição da taverna."},
+  comida_011: {"categoria":"barman","nome":"Prato 11","tipo":"comida","preco":60,"emoji":"🥞","cura":80,"desc":"Refeição da taverna."},
+  comida_012: {"categoria":"sobrio","nome":"Prato 12","tipo":"comida","preco":65,"emoji":"🍪","cura":85,"desc":"Refeição da taverna."},
+  comida_013: {"categoria":"barril","nome":"Prato 13","tipo":"comida","preco":70,"emoji":"🍩","cura":90,"desc":"Refeição da taverna."},
+  comida_014: {"categoria":"adega","nome":"Prato 14","tipo":"comida","preco":75,"emoji":"🧁","cura":95,"desc":"Refeição da taverna."},
+  comida_015: {"categoria":"destilados","nome":"Prato 15","tipo":"comida","preco":80,"emoji":"🍞","cura":100,"desc":"Refeição da taverna."},
+  comida_016: {"categoria":"quentes","nome":"Prato 16","tipo":"comida","preco":85,"emoji":"🥐","cura":105,"desc":"Refeição da taverna."},
+  comida_017: {"categoria":"barman","nome":"Prato 17","tipo":"comida","preco":90,"emoji":"🍤","cura":110,"desc":"Refeição da taverna."},
+  comida_018: {"categoria":"sobrio","nome":"Prato 18","tipo":"comida","preco":95,"emoji":"🍝","cura":115,"desc":"Refeição da taverna."},
+  comida_019: {"categoria":"barril","nome":"Prato 19","tipo":"comida","preco":100,"emoji":"🥧","cura":120,"desc":"Refeição da taverna."},
+  comida_020: {"categoria":"adega","nome":"Prato 20","tipo":"comida","preco":105,"emoji":"🍛","cura":125,"desc":"Refeição da taverna."},
+  comida_021: {"categoria":"destilados","nome":"Prato 21","tipo":"comida","preco":10,"emoji":"🍗","cura":130,"desc":"Refeição da taverna."},
+  comida_022: {"categoria":"quentes","nome":"Prato 22","tipo":"comida","preco":15,"emoji":"🍖","cura":135,"desc":"Refeição da taverna."},
+  comida_023: {"categoria":"barman","nome":"Prato 23","tipo":"comida","preco":20,"emoji":"🍔","cura":140,"desc":"Refeição da taverna."},
+  comida_024: {"categoria":"sobrio","nome":"Prato 24","tipo":"comida","preco":25,"emoji":"🍕","cura":145,"desc":"Refeição da taverna."},
+  comida_025: {"categoria":"barril","nome":"Prato 25","tipo":"comida","preco":30,"emoji":"🍲","cura":150,"desc":"Refeição da taverna."},
+  comida_026: {"categoria":"adega","nome":"Prato 26","tipo":"comida","preco":35,"emoji":"🥘","cura":155,"desc":"Refeição da taverna."},
+  comida_027: {"categoria":"destilados","nome":"Prato 27","tipo":"comida","preco":40,"emoji":"🥣","cura":160,"desc":"Refeição da taverna."},
+  comida_028: {"categoria":"quentes","nome":"Prato 28","tipo":"comida","preco":45,"emoji":"🍚","cura":165,"desc":"Refeição da taverna."},
+  comida_029: {"categoria":"barman","nome":"Prato 29","tipo":"comida","preco":50,"emoji":"🥗","cura":170,"desc":"Refeição da taverna."},
+  comida_030: {"categoria":"sobrio","nome":"Prato 30","tipo":"comida","preco":55,"emoji":"🍳","cura":175,"desc":"Refeição da taverna."},
+  comida_031: {"categoria":"barril","nome":"Prato 31","tipo":"comida","preco":60,"emoji":"🥞","cura":30,"desc":"Refeição da taverna."},
+  comida_032: {"categoria":"adega","nome":"Prato 32","tipo":"comida","preco":65,"emoji":"🍪","cura":35,"desc":"Refeição da taverna."},
+  comida_033: {"categoria":"destilados","nome":"Prato 33","tipo":"comida","preco":70,"emoji":"🍩","cura":40,"desc":"Refeição da taverna."},
+  comida_034: {"categoria":"quentes","nome":"Prato 34","tipo":"comida","preco":75,"emoji":"🧁","cura":45,"desc":"Refeição da taverna."},
+  comida_035: {"categoria":"barman","nome":"Prato 35","tipo":"comida","preco":80,"emoji":"🍞","cura":50,"desc":"Refeição da taverna."},
+  comida_036: {"categoria":"sobrio","nome":"Prato 36","tipo":"comida","preco":85,"emoji":"🥐","cura":55,"desc":"Refeição da taverna."},
+  comida_037: {"categoria":"barril","nome":"Prato 37","tipo":"comida","preco":90,"emoji":"🍤","cura":60,"desc":"Refeição da taverna."},
+  comida_038: {"categoria":"adega","nome":"Prato 38","tipo":"comida","preco":95,"emoji":"🍝","cura":65,"desc":"Refeição da taverna."},
+  comida_039: {"categoria":"destilados","nome":"Prato 39","tipo":"comida","preco":100,"emoji":"🥧","cura":70,"desc":"Refeição da taverna."},
+  comida_040: {"categoria":"quentes","nome":"Prato 40","tipo":"comida","preco":105,"emoji":"🍛","cura":75,"desc":"Refeição da taverna."},
+  comida_041: {"categoria":"barman","nome":"Prato 41","tipo":"comida","preco":10,"emoji":"🍗","cura":80,"desc":"Refeição da taverna."},
+  comida_042: {"categoria":"sobrio","nome":"Prato 42","tipo":"comida","preco":15,"emoji":"🍖","cura":85,"desc":"Refeição da taverna."},
+  comida_043: {"categoria":"barril","nome":"Prato 43","tipo":"comida","preco":20,"emoji":"🍔","cura":90,"desc":"Refeição da taverna."},
+  comida_044: {"categoria":"adega","nome":"Prato 44","tipo":"comida","preco":25,"emoji":"🍕","cura":95,"desc":"Refeição da taverna."},
+  comida_045: {"categoria":"destilados","nome":"Prato 45","tipo":"comida","preco":30,"emoji":"🍲","cura":100,"desc":"Refeição da taverna."},
+  comida_046: {"categoria":"quentes","nome":"Prato 46","tipo":"comida","preco":35,"emoji":"🥘","cura":105,"desc":"Refeição da taverna."},
+  comida_047: {"categoria":"barman","nome":"Prato 47","tipo":"comida","preco":40,"emoji":"🥣","cura":110,"desc":"Refeição da taverna."},
+  comida_048: {"categoria":"sobrio","nome":"Prato 48","tipo":"comida","preco":45,"emoji":"🍚","cura":115,"desc":"Refeição da taverna."},
+  comida_049: {"categoria":"barril","nome":"Prato 49","tipo":"comida","preco":50,"emoji":"🥗","cura":120,"desc":"Refeição da taverna."},
+  comida_050: {"categoria":"adega","nome":"Prato 50","tipo":"comida","preco":55,"emoji":"🍳","cura":125,"desc":"Refeição da taverna."},
+  comida_051: {"categoria":"destilados","nome":"Prato 51","tipo":"comida","preco":60,"emoji":"🥞","cura":130,"desc":"Refeição da taverna."},
+  comida_052: {"categoria":"quentes","nome":"Prato 52","tipo":"comida","preco":65,"emoji":"🍪","cura":135,"desc":"Refeição da taverna."},
+  comida_053: {"categoria":"barman","nome":"Prato 53","tipo":"comida","preco":70,"emoji":"🍩","cura":140,"desc":"Refeição da taverna."},
+  comida_054: {"categoria":"sobrio","nome":"Prato 54","tipo":"comida","preco":75,"emoji":"🧁","cura":145,"desc":"Refeição da taverna."},
+  comida_055: {"categoria":"barril","nome":"Prato 55","tipo":"comida","preco":80,"emoji":"🍞","cura":150,"desc":"Refeição da taverna."},
+  comida_056: {"categoria":"adega","nome":"Prato 56","tipo":"comida","preco":85,"emoji":"🥐","cura":155,"desc":"Refeição da taverna."},
+  comida_057: {"categoria":"destilados","nome":"Prato 57","tipo":"comida","preco":90,"emoji":"🍤","cura":160,"desc":"Refeição da taverna."},
+  comida_058: {"categoria":"quentes","nome":"Prato 58","tipo":"comida","preco":95,"emoji":"🍝","cura":165,"desc":"Refeição da taverna."},
+  comida_059: {"categoria":"barman","nome":"Prato 59","tipo":"comida","preco":100,"emoji":"🥧","cura":170,"desc":"Refeição da taverna."},
+  comida_060: {"categoria":"sobrio","nome":"Prato 60","tipo":"comida","preco":105,"emoji":"🍛","cura":175,"desc":"Refeição da taverna."},
+  comida_061: {"categoria":"barril","nome":"Prato 61","tipo":"comida","preco":10,"emoji":"🍗","cura":30,"desc":"Refeição da taverna."},
+  comida_062: {"categoria":"adega","nome":"Prato 62","tipo":"comida","preco":15,"emoji":"🍖","cura":35,"desc":"Refeição da taverna."},
+  comida_063: {"categoria":"destilados","nome":"Prato 63","tipo":"comida","preco":20,"emoji":"🍔","cura":40,"desc":"Refeição da taverna."},
+  comida_064: {"categoria":"quentes","nome":"Prato 64","tipo":"comida","preco":25,"emoji":"🍕","cura":45,"desc":"Refeição da taverna."},
+  comida_065: {"categoria":"barman","nome":"Prato 65","tipo":"comida","preco":30,"emoji":"🍲","cura":50,"desc":"Refeição da taverna."},
+  comida_066: {"categoria":"sobrio","nome":"Prato 66","tipo":"comida","preco":35,"emoji":"🥘","cura":55,"desc":"Refeição da taverna."},
+  comida_067: {"categoria":"barril","nome":"Prato 67","tipo":"comida","preco":40,"emoji":"🥣","cura":60,"desc":"Refeição da taverna."},
+  comida_068: {"categoria":"adega","nome":"Prato 68","tipo":"comida","preco":45,"emoji":"🍚","cura":65,"desc":"Refeição da taverna."},
+  comida_069: {"categoria":"destilados","nome":"Prato 69","tipo":"comida","preco":50,"emoji":"🥗","cura":70,"desc":"Refeição da taverna."},
+  comida_070: {"categoria":"quentes","nome":"Prato 70","tipo":"comida","preco":55,"emoji":"🍳","cura":75,"desc":"Refeição da taverna."},
+  comida_071: {"categoria":"barman","nome":"Prato 71","tipo":"comida","preco":60,"emoji":"🥞","cura":80,"desc":"Refeição da taverna."},
+  comida_072: {"categoria":"sobrio","nome":"Prato 72","tipo":"comida","preco":65,"emoji":"🍪","cura":85,"desc":"Refeição da taverna."},
+  comida_073: {"categoria":"barril","nome":"Prato 73","tipo":"comida","preco":70,"emoji":"🍩","cura":90,"desc":"Refeição da taverna."},
+  comida_074: {"categoria":"adega","nome":"Prato 74","tipo":"comida","preco":75,"emoji":"🧁","cura":95,"desc":"Refeição da taverna."},
+  comida_075: {"categoria":"destilados","nome":"Prato 75","tipo":"comida","preco":80,"emoji":"🍞","cura":100,"desc":"Refeição da taverna."},
+  comida_076: {"categoria":"quentes","nome":"Prato 76","tipo":"comida","preco":85,"emoji":"🥐","cura":105,"desc":"Refeição da taverna."},
+  comida_077: {"categoria":"barman","nome":"Prato 77","tipo":"comida","preco":90,"emoji":"🍤","cura":110,"desc":"Refeição da taverna."},
+  comida_078: {"categoria":"sobrio","nome":"Prato 78","tipo":"comida","preco":95,"emoji":"🍝","cura":115,"desc":"Refeição da taverna."},
+  comida_079: {"categoria":"barril","nome":"Prato 79","tipo":"comida","preco":100,"emoji":"🥧","cura":120,"desc":"Refeição da taverna."},
+  comida_080: {"categoria":"adega","nome":"Prato 80","tipo":"comida","preco":105,"emoji":"🍛","cura":125,"desc":"Refeição da taverna."},
+  comida_081: {"categoria":"destilados","nome":"Prato 81","tipo":"comida","preco":10,"emoji":"🍗","cura":130,"desc":"Refeição da taverna."},
+  comida_082: {"categoria":"quentes","nome":"Prato 82","tipo":"comida","preco":15,"emoji":"🍖","cura":135,"desc":"Refeição da taverna."},
+  comida_083: {"categoria":"barman","nome":"Prato 83","tipo":"comida","preco":20,"emoji":"🍔","cura":140,"desc":"Refeição da taverna."},
+  comida_084: {"categoria":"sobrio","nome":"Prato 84","tipo":"comida","preco":25,"emoji":"🍕","cura":145,"desc":"Refeição da taverna."},
+  comida_085: {"categoria":"barril","nome":"Prato 85","tipo":"comida","preco":30,"emoji":"🍲","cura":150,"desc":"Refeição da taverna."},
+  comida_086: {"categoria":"adega","nome":"Prato 86","tipo":"comida","preco":35,"emoji":"🥘","cura":155,"desc":"Refeição da taverna."},
+  comida_087: {"categoria":"destilados","nome":"Prato 87","tipo":"comida","preco":40,"emoji":"🥣","cura":160,"desc":"Refeição da taverna."},
+  comida_088: {"categoria":"quentes","nome":"Prato 88","tipo":"comida","preco":45,"emoji":"🍚","cura":165,"desc":"Refeição da taverna."},
+  comida_089: {"categoria":"barman","nome":"Prato 89","tipo":"comida","preco":50,"emoji":"🥗","cura":170,"desc":"Refeição da taverna."},
+  comida_090: {"categoria":"sobrio","nome":"Prato 90","tipo":"comida","preco":55,"emoji":"🍳","cura":175,"desc":"Refeição da taverna."},
+  comida_091: {"categoria":"barril","nome":"Prato 91","tipo":"comida","preco":60,"emoji":"🥞","cura":30,"desc":"Refeição da taverna."},
+  comida_092: {"categoria":"adega","nome":"Prato 92","tipo":"comida","preco":65,"emoji":"🍪","cura":35,"desc":"Refeição da taverna."},
+  comida_093: {"categoria":"destilados","nome":"Prato 93","tipo":"comida","preco":70,"emoji":"🍩","cura":40,"desc":"Refeição da taverna."},
+  comida_094: {"categoria":"quentes","nome":"Prato 94","tipo":"comida","preco":75,"emoji":"🧁","cura":45,"desc":"Refeição da taverna."},
+  comida_095: {"categoria":"barman","nome":"Prato 95","tipo":"comida","preco":80,"emoji":"🍞","cura":50,"desc":"Refeição da taverna."},
+  comida_096: {"categoria":"sobrio","nome":"Prato 96","tipo":"comida","preco":85,"emoji":"🥐","cura":55,"desc":"Refeição da taverna."},
+  comida_097: {"categoria":"barril","nome":"Prato 97","tipo":"comida","preco":90,"emoji":"🍤","cura":60,"desc":"Refeição da taverna."},
+  comida_098: {"categoria":"adega","nome":"Prato 98","tipo":"comida","preco":95,"emoji":"🍝","cura":65,"desc":"Refeição da taverna."},
+  comida_099: {"categoria":"destilados","nome":"Prato 99","tipo":"comida","preco":100,"emoji":"🥧","cura":70,"desc":"Refeição da taverna."},
+  comida_100: {"categoria":"quentes","nome":"Prato 100","tipo":"comida","preco":105,"emoji":"🍛","cura":75,"desc":"Refeição da taverna."}
 };
-
-export const POINTS_TO_DISTRIBUTE = 30;
-export const MIN_ATTRIBUTE = 1;
-export const MAX_ATTRIBUTE = 10;
-export const MAX_ATTRIBUTE_WITH_BONUS = 12;
-export const MAX_PLAYERS_PER_BATTLE = 20;
-
-// Atributos efetivos = base + bônus de raças (com penalidade) + bônus de classes + equipamento
-//
-// Penalidade por raças múltiplas:
-//   1 raça  = bônus cheio (100%)
-//   2 raças = soma dos bônus x 0.70
-//   3 raças = soma dos bônus x 0.55
-// Passivas e efeitos raciais NÃO são reduzidos; apenas os bônus de atributo.
-
-export function raceBonusTotal(races) {
-  const bonus = {};
-  for (const race of races || []) {
-    for (const [key, value] of Object.entries(race.bonus || {})) {
-      if (key === 'escolha') {
-        const chosen = race.choice || 'forca';
-        bonus[chosen] = (bonus[chosen] || 0) + value;
-      } else {
-        bonus[key] = (bonus[key] || 0) + value;
-      }
-    }
-  }
-  const count = Array.isArray(races) ? races.length : 0;
-  const factor = count >= 3 ? 0.55 : count === 2 ? 0.7 : 1;
-  if (factor !== 1) {
-    for (const key of Object.keys(bonus)) bonus[key] = Math.round(bonus[key] * factor);
-  }
-  return bonus;
-}
-
-export function classBonusTotal(classes) {
-  const bonus = {};
-  for (const cls of classes || []) {
-    for (const [key, value] of Object.entries(cls.bonus || {})) {
-      bonus[key] = (bonus[key] || 0) + value;
-    }
-  }
-  return bonus;
-}
-
-export function applyRaceBonus(raceId, attributes) {
-  const race = RACES[raceId] || RACES.humano;
-  const res = { ...attributes };
-  for (const [key, value] of Object.entries(race.bonus)) {
-    if (key === 'escolha') {
-      const chosen = res._raceChoice || 'forca';
-      res[chosen] = (res[chosen] || 0) + value;
-      continue;
-    }
-    res[key] = (res[key] || 0) + value;
-  }
-  return res;
-}
-
-// Soma dos bônus de atributos das gemas socketadas (ignora gemas brutas).
-// Cada gema aplica efeitos conforme o slot do equipamento (arma/armadura/acessorio).
-export function gemsAttrs(equipment = {}, gems = GEMS) {
-  const acc = {};
-  for (const [slot, item] of Object.entries(equipment)) {
-    if (!item) continue;
-    for (const gemId of item.socketedGems || []) {
-      const gem = gems[gemId];
-      if (!gem) continue;
-      if (gem.estado === 'bruta') continue; // bruta não concede efeitos
-      const fx = gem.efeitos?.[slot];
-      if (!fx?.bonus) continue;
-      for (const [k, v] of Object.entries(fx.bonus)) {
-        if (k.startsWith('_')) continue;
-        acc[k] = (acc[k] || 0) + v;
-      }
-    }
-  }
-  return acc;
-}
-
-export function effectiveAttributes(attributes, equipment = {}, races = null, classes = null) {
-  const eff = { ...attributes };
-  if (Array.isArray(races)) {
-    for (const [k, v] of Object.entries(raceBonusTotal(races))) eff[k] = (eff[k] || 0) + v;
-  } else if (races) {
-    const rb = applyRaceBonus(races, {});
-    for (const [k, v] of Object.entries(rb)) eff[k] = (eff[k] || 0) + v;
-  }
-  for (const [k, v] of Object.entries(classBonusTotal(classes))) eff[k] = (eff[k] || 0) + v;
-  // Equipamento: armas equipadas (até 3) + armadura somam bônus/malefícios.
-  // A arma legada equipment.arma entra via armasDeEquipamento sem duplicar.
-  for (const item of armasDeEquipamento(equipment).map((e) => e.arma).concat([equipment.armadura]).filter(Boolean)) {
-    if (!item) continue;
-    if (item.bonus) {
-      for (const [k, v] of Object.entries(item.bonus)) eff[k] = (eff[k] || 0) + v;
-    }
-    if (item.penalidade) {
-      // Malefícios sempre reduzem o atributo (armaduras do catálogo guardam
-      // valores negativos; equipamentos customizados guardam valores positivos).
-      for (const [k, v] of Object.entries(item.penalidade)) eff[k] = (eff[k] || 0) - Math.abs(v);
-    }
-  }
-  // Bônus das gemas socketadas (buffs positivos / debuffs negativos)
-  for (const [k, v] of Object.entries(gemsAttrs(equipment, GEMS))) eff[k] = (eff[k] || 0) + v;
-  for (const key of Object.keys(eff)) {
-    if (key.startsWith('_')) continue;
-    eff[key] = Math.max(1, eff[key] || 1);
-  }
-  return eff;
-}
-
-// Fórmulas de vida, mana e dano (regras do criador — ver sistema.js):
-//   Vida = 500 + (Resistência Final × 10)
-//   Mana = (Inteligência Final × 10)
-//   Dano = (Força Final + danoBase da arma) × 10   [PROVISÓRIO]
-export function deriveStats(classes, level, attributes, equipment = {}, races = null) {
-  const eff = effectiveAttributes(attributes, equipment, races, classes);
-  const list = Array.isArray(classes) ? classes : classes ? [classes] : [];
-  const primary = list.find((c) => c.primary) || list[0] || null;
-  const hpPerLevel = primary?.hpPerLevel || 10;
-  // Nova regra: Vida = 500 + (Resistência Final × 10)
-  const hpMax = 500 + eff.resistencia * 10;
-  // Nova regra: Mana = (Inteligência Final) × 10
-  const mpMax = (Number(eff.inteligencia) || 0) * 10;
-
-  let defesa = 0;
-  for (const item of Object.values(equipment)) {
-    // Defesa na MESMA escala do dano (× DANO_MULT) — ver sistema.js.
-    if (item && item.defesa) defesa += item.defesa * DANO_MULT;
-  }
-
-  // Dano do ataque básico (exibição na ficha) — usa a MELHOR arma equipada
-  // (maior dano base), igual ao combate.
-  const dano = danoFisicoAtaque(eff.forca, danoBaseDaArma(melhorArma(equipment)));
-
-  return { hpMax, mpMax, defesa, dano, effectiveAttributes: eff };
-}
-
-// Ordem de iniciativa: Reflexos pesa mais (reação), Destreza e Resistência
-// também entram. Ver PESOS_ATRIBUTOS.iniciativa em sistema.js.
-export function speedOf(attributes, level) {
-  return iniciativaDe(attributes, level);
-}
-
-// Rolagem de d20 para acerto
-export function rollDice(sides, qty = 1, bonus = 0) {
-  let total = bonus;
-  const rolls = [];
-  for (let i = 0; i < qty; i++) {
-    const r = Math.floor(Math.random() * sides) + 1;
-    rolls.push(r);
-    total += r;
-  }
-  return { rolls, total };
-}
-
-export function rollAttack() {
-  const { rolls, total } = rollDice(20);
-  const isCrit = rolls[0] === 20;
-  const isFail = rolls[0] === 1;
-  return { rolls, total, isCrit, isFail };
-}
-
-// Dano físico: (FOR Final + danoBase da arma) × 10 — determinístico, igual
-// vida/mana. Atributo Final inclui raça/classe/equipamento/gemas.
-// Fórmula e escala em sistema.js (PROVISÓRIAS); crítico/elementos/buffs
-// continuam sendo aplicados por cima, pelo chamador (racialMult).
-export function physicalDamage(attacker, weapon, racialMult = 1) {
-  const eff = effectiveAttributes(
-    attacker.attributes,
-    attacker.equipment || {},
-    attacker.races || null,
-    attacker.classes || null,
-  );
-  return { rolls: [], total: danoFisicoAtaque(eff.forca, danoBaseDaArma(weapon), racialMult) };
-}
-
-// Dano mágico: (INT Final × 10) × poder% da magia — sem dados.
-// `spell.poder` é percentual (240 = 240%); mult = buffs do chamador.
-export function magicDamage(attacker, spell, mult = 1) {
-  const eff = effectiveAttributes(
-    attacker.attributes,
-    attacker.equipment || {},
-    attacker.races || null,
-    attacker.classes || null,
-  );
-  return { rolls: [], total: danoMagico(eff.inteligencia, spell?.poder ?? 100, mult) };
-}
-
-export function rollDamage(diceSides, diceQty, bonus) {
-  const { rolls, total } = rollDice(diceSides, diceQty, bonus);
-  return { rolls, total };
-}
-
-// Multiplicadores de vida/mana vindos de passivas (raças + habilidades extras).
-export function applyMaxMults(stats, efeitos = {}) {
-  return {
-    ...stats,
-    hpMax: Math.max(1, Math.round(stats.hpMax * (efeitos.hpMaxMult || 1))),
-    mpMax: Math.max(1, Math.round(stats.mpMax * (efeitos.manaMaxMult || 1))),
-  };
-}
-
-// Soma os efeitos mecânicos das passivas extras compradas com pontos excedentes.
-export function efeitosDeHabilidades(habilidades) {
-  const out = {};
-  for (const h of habilidades || []) {
-    if (h.tipo === 'passiva_extra' && h.efeito) {
-      for (const [k, v] of Object.entries(h.efeito)) out[k] = (out[k] || 0) + v;
-    }
-  }
-  return out;
-}
-
-// ── Helpers para o Arsenal / Compendium ─────────────────
-
-export const WEAPON_CATEGORIES = {
-  branca: { nome: 'Armas Brancas', icon: '⚔️', filter: (w) => w.tipo === 'arma' && ['corpo', 'medio'].includes(w.alcance || 'corpo') },
-  fogo:   { nome: 'Armas de Fogo', icon: '🔫', filter: (w) => w.tipo === 'arma_fogo' },
-  magica: { nome: 'Armas Mágicas', icon: '✨', filter: (w) => w.tipo === 'arma' && w.alcance === 'longo' && (w.bonus?.inteligencia || 0) >= 2 },
-};
-
-export function getWeaponsByCategory(categoryKey) {
-  const cat = WEAPON_CATEGORIES[categoryKey];
-  if (!cat) return [];
-  return Object.entries(EQUIPMENT.armas)
-    .filter(([, w]) => cat.filter(w))
-    .map(([id, w]) => ({ id, ...w }));
-}
-
-export function getAllWeapons() {
-  return Object.entries(EQUIPMENT.armas).map(([id, w]) => ({ id, ...w }));
-}
-
-export function getAllArmors() {
-  return Object.entries(EQUIPMENT.armaduras).map(([id, a]) => ({ id, ...a }));
-}
