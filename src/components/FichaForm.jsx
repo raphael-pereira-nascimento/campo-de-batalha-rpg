@@ -1114,7 +1114,7 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player 
                 <optgroup label="Catálogo">
                   {catalogo.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.nome} (dano {a.danoBase}{a.usosMax ? ` · ${a.usosMax} usos` : ''})
+                      {a.nome} (dano {a.danoBase}{a.usosMax ? ` · ${a.usosMax} usos` : ''}{a.recarga > 0 ? ` · recarga ${a.recarga}` : ''})
                     </option>
                   ))}
                 </optgroup>
@@ -1265,6 +1265,7 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player 
               <span className="tag">{info.nome}</span>
               <span className="tag">dano {arma.danoBase}</span>
               {arma.usosMax ? <span className="tag">{arma.usosMax} usos</span> : null}
+              {arma.recarga > 0 ? <span className="tag">recarga {arma.recarga}</span> : null}
               {arma.efeito ? <span className="tag">efeito: {arma.efeito.tipo}</span> : null}
               <span className="muted small">{bonusSummary(arma)}</span>
               <button
@@ -1413,6 +1414,7 @@ function Summary({ name, gender, races, classes, passiva, skills, ultimate, espe
         <p className="muted small" key={slot}>
           {ARMA_CATEGORIA_INFO[slot].icon} {arma.nome}
           {arma.usosMax ? ` (${arma.usosMax} usos)` : ''}
+          {arma.recarga > 0 ? ` (recarga ${arma.recarga})` : ''}
         </p>
       ))}
       {equipment.armadura && <p className="muted small">🛡️ {equipment.armadura.nome}</p>}
