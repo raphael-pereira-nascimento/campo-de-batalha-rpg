@@ -13,6 +13,7 @@ const WEAPON_ICONS = {
   pistola: '🔫', mosquete: '💣', bacamarte: '💥',
   rifle_de_caca: '🎯', besta_pesada: '🏹', espada_baioneta: '🗡️',
   cajado_de_fogo: '🔥', arco_composto: '🏹',
+  pistola_de_latao: '🔫', pistola_da_marinha: '🔫', nock_gun: '💣',
 };
 
 const ARMOR_ICONS = {
@@ -44,7 +45,7 @@ function WeaponCard({ id, weapon }) {
       <div className="weapon-stats">
         <span className="weapon-stat"><strong>Dano:</strong> {weapon.danoBase}</span>
         {weapon.recarga > 0 && (
-          <span className="weapon-stat"><strong>Recarga:</strong> {weapon.recarga}</span>
+          <span className="weapon-stat"><strong>Recarga:</strong> {weapon.recarga} turno{weapon.recarga === 1 ? '' : 's'}</span>
         )}
         {slots > 0 && (
           <span className="weapon-stat"><strong>Slots:</strong> {slots}</span>

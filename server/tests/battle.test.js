@@ -1019,3 +1019,102 @@ describe('BattleManager — escolha da arma no ataque', () => {
     expect(log).toContain('Bacamarte');
   });
 });
+
+// ── Recarga das armas de fogo ────────────────────────────────────────────────
+describe('BattleManager — recarga das armas de fogo', () => {
+  const MOSQUETE = { id: 'mosquete', nome: 'Mosquete', categoria: 'distancia', danoBase: 9, elemento: 'fogo', recarga: 2, bonus: {}, penalidade: {} };
+  const ESPADA = { id: 'espada_curta', nome: 'Espada Curta', categoria: 'perto', danoBase: 4, recarga: 0, bonus: {}, penalidade: {} };
+
+  function setup() {
+    vi.spyOn(Math, 'random').mockReturnValue(0.2); // d20 = 5: acerta, sem crítico
+    const { manager } = makeManager();
+    const battle = manager.createBattle({
+      name: 'Recarga',
+      mode: 'mestre',
+      host: 'p1',
+      hostName: 'M',
+      character: makeCharacter({
+        equipment: { armas: { perto: ESPADA, distancia: MOSQUETE }, arma: MOSQUETE },
+      }),
+    });
+    const hero = battle.participants.find((q) => !q.isMonster);
+    manager.addMonster({ battleId: battle.id, hostId: 'p1', monsterDef: { ...makeMonsterDef(), id: 'a', nome: 'Alvo A' } });
+    manager.startBattle({ battleId: battle.id, playerId: 'p1' });
+    const monstro = battle.participants.find((q) => q.isMonster);
+    return { manager, battle, hero, monstro };
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  function ateTurnoDoHeroi(manager, battle, hero, monstro) {
+    let guard = 0;
+    while (battle.participants[battle.turnOrder[battle.currentTurnIndex]] !== hero && guard < 60) {
+      guard += 1;
+      const cur = battle.participants[battle.turnOrder[battle.currentTurnIndex]];
+      manager.handleAction({
+        battleId: battle.id,
+        characterId: cur.isMonster ? cur.uid : cur.characterId,
+        playerId: 'p1',
+        action: { type: 'attack', targetId: cur.isMonster ? hero.characterId : monstro.uid },
+      });
+    }
+  }
+
+  function atacar(manager, battle, hero, monstro, weaponId) {
+    manager.handleAction({
+      battleId: battle.id,
+      characterId: hero.characterId,
+      playerId: 'p1',
+      action: { type: 'attack', weaponId, targetId: monstro.uid },
+    });
+  }
+
+  it('o disparo coloca a arma em recarga e o tiro seguinte é bloqueado', () => {
+    const { manager, battle, hero, monstro } = setup();
+    ateTurnoDoHeroi(manager, battle, hero, monstro);
+    atacar(manager, battle, hero, monstro, 'mosquete');
+    // recarga 2 → grava 3 ao disparar e o fim do turno consome 1.
+    expect(hero.wpnRecarga.mosquete).toBe(2);
+
+    ateTurnoDoHeroi(manager, battle, hero, monstro);
+    const hpAntes = monstro.hp;
+    atacar(manager, battle, hero, monstro, 'mosquete');
+    const log = battle.log.map((l) => l.text).join('\n');
+    expect(log).toContain('Mosquete está em recarga');
+    expect(monstro.hp).toBe(hpAntes);
+  });
+
+  it('depois de cumprir a recarga, a arma volta a disparar', () => {
+    const { manager, battle, hero, monstro } = setup();
+    ateTurnoDoHeroi(manager, battle, hero, monstro);
+    atacar(manager, battle, hero, monstro, 'mosquete'); // turno 1: dispara
+    ateTurnoDoHeroi(manager, battle, hero, monstro);
+    atacar(manager, battle, hero, monstro, 'mosquete'); // turno 2: bloqueado (recarga 2)
+    ateTurnoDoHeroi(manager, battle, hero, monstro);
+    atacar(manager, battle, hero, monstro, 'mosquete'); // turno 3: bloqueado
+    expect(hero.wpnRecarga.mosquete).toBe(0);
+
+    ateTurnoDoHeroi(manager, battle, hero, monstro);
+    const hpAntes = monstro.hp;
+    atacar(manager, battle, hero, monstro, 'mosquete'); // turno 4: pronta de novo
+    expect(monstro.hp).toBeLessThan(hpAntes);
+  });
+
+  it('arma sem recarga (corpo a corpo) nunca entra em recarga', () => {
+    const { manager, battle, hero, monstro } = setup();
+    ateTurnoDoHeroi(manager, battle, hero, monstro);
+    atacar(manager, battle, hero, monstro, 'espada_curta');
+    expect((hero.wpnRecarga || {}).espada_curta || 0).toBe(0);
+  });
+
+  it('trocar de arma contorna a recarga: a espada continua disponível', () => {
+    const { manager, battle, hero, monstro } = setup();
+    ateTurnoDoHeroi(manager, battle, hero, monstro);
+    atacar(manager, battle, hero, monstro, 'mosquete');
+    ateTurnoDoHeroi(manager, battle, hero, monstro);
+    const hpAntes = monstro.hp;
+    atacar(manager, battle, hero, monstro, 'espada_curta');
+    expect(monstro.hp).toBeLessThan(hpAntes);
+    expect(hero.wpnRecarga.mosquete).toBeGreaterThan(0);
+  });
+});

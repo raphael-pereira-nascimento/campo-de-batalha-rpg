@@ -297,4 +297,22 @@ describe('armas de fogo novas + escolha da arma no ataque', () => {
     expect(armaParaAtaque(equipment).id).toBe('bacamarte');
     expect(armaParaAtaque({})).toBeNull();
   });
+
+  it('a recarga escala com o peso da arma: pistolas 1, bacamarte/mosquete/rifle 2, Nock Gun/Canhão 3', () => {
+    expect(EQUIPMENT.armas.pistola.recarga).toBe(1);
+    expect(EQUIPMENT.armas.pistola_de_latao.recarga).toBe(1);
+    expect(EQUIPMENT.armas.pistola_da_marinha.recarga).toBe(1);
+    expect(EQUIPMENT.armas.bacamarte.recarga).toBe(2);
+    expect(EQUIPMENT.armas.mosquete.recarga).toBe(2);
+    expect(EQUIPMENT.armas.rifle_de_caca.recarga).toBe(2);
+    expect(EQUIPMENT.armas.besta_pesada.recarga).toBe(2);
+    expect(EQUIPMENT.armas.nock_gun.recarga).toBe(3);
+    expect(EQUIPMENT.armas.canhao_de_mao.recarga).toBe(3);
+  });
+
+  it('armas que não recarregam (corpo a corpo/arcos) têm recarga 0', () => {
+    expect(EQUIPMENT.armas.espada_baioneta.recarga).toBe(0);
+    expect(EQUIPMENT.armas.arco_composto.recarga).toBe(0);
+    expect(EQUIPMENT.armas.arco_longo.recarga).toBe(0);
+  });
 });

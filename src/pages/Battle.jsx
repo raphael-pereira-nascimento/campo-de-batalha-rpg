@@ -168,6 +168,11 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
   const utilUsos = armaUtil
     ? (active.wpnUsos && active.wpnUsos[armaUtil.id]) ?? armaUtil.usosMax ?? 1
     : 0;
+  // Recarga da arma de ataque: turnos restantes até poder atirar de novo.
+  const recargaArma =
+    active && armaSel && armaSel.id
+      ? (active.wpnRecarga && active.wpnRecarga[armaSel.id]) || 0
+      : 0;
 
   const heroes = useMemo(() => participants.filter((p) => !p.isMonster), [participants]);
   const enemies = useMemo(() => participants.filter((p) => p.isMonster), [participants]);
@@ -596,10 +601,12 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                       >
                         {armasAtaque.map(({ slot, arma }) => {
                           const sp = alvoNormalizado(arma);
+                          const rec = (active.wpnRecarga && active.wpnRecarga[arma.id]) || 0;
                           return (
                             <option key={arma.id || arma.nome} value={arma.id || ''}>
                               {ARMA_CATEGORIA_INFO[slot]?.icon || '⚔️'} {arma.nome} (dano {arma.danoBase})
                               {sp.tipo !== 'unico' ? ` · ◎${ALVO_LABEL[sp.tipo]}` : ''}
+                              {rec > 0 ? ` · ⏳${rec}` : ''}
                             </option>
                           );
                         })}
@@ -614,6 +621,13 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                           {' '}· <span className="tag">◎ {ALVO_LABEL[specArma.tipo]}</span>
                         </>
                       )}
+                      {recargaArma > 0 && <> · <span className="tag">⏳ recarga {recargaArma}</span></>}
+                    </p>
+                  )}
+                  {active && recargaArma > 0 && (
+                    <p className="muted small">
+                      ⏳ <strong>{armaSel?.nome}</strong> em recarga — {recargaArma} turno{recargaArma === 1 ? '' : 's'} até poder atirar.
+                      {armasAtaque.length > 1 ? ' Escolha outra arma ou use outra ação.' : ' Use outra ação neste turno.'}
                     </p>
                   )}
                   <ExtrasDeAlvo
@@ -622,8 +636,11 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                     value={extraIds}
                     onChange={toggleExtra}
                   />
-                  <button onClick={doAttack} disabled={busy || !aliveTargets.length}>
-                    {specArma.tipo === 'area' ? 'Atacar (todos)' : 'Atacar'}
+                  <button
+                    onClick={doAttack}
+                    disabled={busy || !aliveTargets.length || recargaArma > 0}
+                  >
+                    {recargaArma > 0 ? `⏳ Recarregando (${recargaArma})` : specArma.tipo === 'area' ? 'Atacar (todos)' : 'Atacar'}
                   </button>
                   {active && armaUtil && (
                     <button

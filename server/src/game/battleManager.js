@@ -294,6 +294,8 @@ export class BattleManager {
       ultimateModeMult: 0,
       ultimateSkillUsed: false,
       cooldowns: {},
+      // ── Recarga das armas de fogo (id da arma → turnos de espera) ──
+      wpnRecarga: {},
       // ── Arsenal: usos restantes das armas utilitárias nesta batalha ──
       wpnUsos: (() => {
         const usos = {};
@@ -1050,6 +1052,13 @@ export class BattleManager {
 
   _resolveAttack(battle, p, target, weapon, extras = []) {
     const weaponName = weapon ? weapon.nome : 'as mãos';
+    // Recarga: a arma de fogo só volta a atirar depois de cumprir a espera.
+    if (this._armasRecarregaveis(weapon) && this._recargaRestante(p, weapon) > 0) {
+      battle.log.push(
+        makeLog(`⏳ ${weaponName} está em recarga (${this._recargaRestante(p, weapon)} turno(s)).`, 'miss'),
+      );
+      return;
+    }
     const spec = alvoNormalizado(weapon || {});
     const alvos = this._alvosDoGolpe(battle, p, spec, target, extras);
     const principal = alvos[0];
@@ -1066,6 +1075,8 @@ export class BattleManager {
       return;
     }
     const mira = this._rollToHit(p, principal, 'physical');
+    // O tiro saiu: a arma entra em recarga mesmo se errar (ou sair pela culatra).
+    this._recarregarArma(p, weapon);
     const dmg = physicalDamage(
       this._withDrunk(p),
       weapon,
@@ -1195,6 +1206,34 @@ export class BattleManager {
     if (!skill.cooldown) return;
     p.cooldowns = p.cooldowns || {};
     p.cooldowns[skill.id] = skill.cooldown;
+  }
+
+  // ── Recarga de armas de fogo ─────────────────────────────────────────────
+  // Armas com `recarga > 0` (armas de fogo; utilitárias ficam de fora porque já
+  // têm limite de usos por batalha) ficam indisponíveis por `recarga` turnos do
+  // próprio dono após cada disparo. O contador diminui no fim do turno do dono
+  // (`_advanceTurn`), então gravamos `recarga + 1`: o primeiro turno depois do
+  // disparo já consome 1, e "recarga: 1" = exatamente 1 turno de espera.
+  _armasRecarregaveis(weapon) {
+    return !!(weapon && weapon.id && weapon.recarga > 0 && weapon.categoria !== 'utilitaria');
+  }
+
+  _recargaRestante(p, weapon) {
+    if (!weapon || !weapon.id || !p.wpnRecarga) return 0;
+    return p.wpnRecarga[weapon.id] || 0;
+  }
+
+  _recarregarArma(p, weapon) {
+    if (!this._armasRecarregaveis(weapon)) return;
+    p.wpnRecarga = p.wpnRecarga || {};
+    p.wpnRecarga[weapon.id] = weapon.recarga + 1;
+  }
+
+  _consumirRecarga(p) {
+    if (!p || !p.wpnRecarga) return;
+    for (const key of Object.keys(p.wpnRecarga)) {
+      if (p.wpnRecarga[key] > 0) p.wpnRecarga[key] -= 1;
+    }
   }
 
   _resolveSkill(battle, p, target, skill, extras = []) {
@@ -1571,6 +1610,8 @@ export class BattleManager {
   }
 
   _advanceTurn(battle) {
+    // Fim do turno de quem acabou de agir: avança a recarga das armas de fogo.
+    this._consumirRecarga(this._current(battle));
     const aliveCount = battle.participants.filter((q) => q.alive).length;
     if (aliveCount <= 1) return;
     battle.turno = (battle.turno || 0) + 1;
