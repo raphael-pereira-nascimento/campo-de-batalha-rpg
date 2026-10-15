@@ -22,7 +22,7 @@ import {
   socketGem,
   unsocketGem,
 } from './services/characters.js';
-import { CLASSES, SPELLS, EQUIPMENT, POTIONS, STATUS_DEFS, TAVERN_DRINKS } from './game/data.js';
+import { CLASSES, SPELLS, EQUIPMENT, POTIONS, STATUS_DEFS, TAVERN_DRINKS, TAVERN_FOODS } from './game/data.js';
 import { RACES } from './game/races.js';
 import { MONSTERS } from './game/monsters.js';
 import { DUNGEONS } from './game/dungeons.js';
@@ -135,16 +135,18 @@ app.post('/api/shop/buy', requireAuth, async (req, res) => {
   }
 });
 
-// ── Taverna: bebidas (consumíveis de batalha) ──
-app.get('/api/tavern', (_req, res) => {
-  res.json({ ok: true, items: TAVERN_DRINKS });
+// ── Taverna: bebidas e comidas (consumíveis de batalha) ──
+app.get('/api/tavern', async (_req, res) => {
+  const { TAVERN_FOODS } = await import('./game/data.js');
+  res.json({ ok: true, items: Object.assign({}, TAVERN_DRINKS, TAVERN_FOODS) });
 });
 
 app.post('/api/tavern/buy', requireAuth, async (req, res) => {
   try {
     const { itemId, characterId } = req.body;
-    const item = TAVERN_DRINKS[itemId] || (await import('./game/data.js')).TAVERN_FOODS?.[itemId] || null;
-    if (!item) throw new Error('Bebida inválida.');
+    const { TAVERN_FOODS } = await import('./game/data.js');
+    const item = TAVERN_DRINKS[itemId] || TAVERN_FOODS[itemId] || null;
+    if (!item) throw new Error('Item inválido.');
     const { rows } = await query(
       'SELECT wallet_cents FROM players WHERE id = $1 FOR UPDATE',
       [req.player.id],

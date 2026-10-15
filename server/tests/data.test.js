@@ -7,6 +7,7 @@ import {
   gemsAttrs,
   POTIONS,
   TAVERN_DRINKS,
+  TAVERN_FOODS,
   TAVERN_CATEGORIES,
   EQUIPMENT,
   armasDeEquipamento,
@@ -174,16 +175,17 @@ describe('TAVERN_DRINKS — bebidas da taverna (usáveis em batalha)', () => {
     }
   });
 
-  it('toda bebida pertence a uma seção do menu', () => {
+  it('toda bebida e comida pertence a uma seção do menu', () => {
     const ids = new Set(TAVERN_CATEGORIES.map((c) => c.id));
-    for (const b of Object.values(TAVERN_DRINKS)) {
+    for (const b of [...Object.values(TAVERN_DRINKS), ...Object.values(TAVERN_FOODS)]) {
       expect(ids.has(b.categoria), `${b.nome} (${b.categoria})`).toBe(true);
     }
   });
 
-  it('cada seção do menu tem pelo menos uma bebida', () => {
+  it('cada seção do menu tem pelo menos um item', () => {
+    const todos = [...Object.values(TAVERN_DRINKS), ...Object.values(TAVERN_FOODS)];
     for (const c of TAVERN_CATEGORIES) {
-      const tem = Object.values(TAVERN_DRINKS).some((b) => b.categoria === c.id);
+      const tem = todos.some((b) => b.categoria === c.id);
       expect(tem, `seção ${c.id} vazia`).toBe(true);
     }
   });
@@ -191,7 +193,35 @@ describe('TAVERN_DRINKS — bebidas da taverna (usáveis em batalha)', () => {
   it('há uma sugestão do taverneiro (destaque) e o catálogo cresceu', () => {
     const destaques = Object.values(TAVERN_DRINKS).filter((b) => b.destaque);
     expect(destaques.length).toBe(1);
-    expect(Object.keys(TAVERN_DRINKS).length).toBeGreaterThanOrEqual(18);
+    expect(Object.keys(TAVERN_DRINKS).length).toBeGreaterThanOrEqual(100);
+  });
+});
+
+describe('TAVERN_FOODS — comidas da taverna (usáveis em batalha)', () => {
+  it('catálogo tem comidas com preço em cobre e tipo "comida"', () => {
+    const ids = Object.keys(TAVERN_FOODS);
+    expect(ids.length).toBeGreaterThanOrEqual(100);
+    for (const id of ids) {
+      const c = TAVERN_FOODS[id];
+      expect(c.tipo).toBe('comida');
+      expect(typeof c.preco).toBe('number');
+      expect(c.preco).toBeGreaterThan(0);
+      expect(typeof c.desc).toBe('string');
+      expect(c.desc.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('as comidas cobrem efeitos variados (cura, mana, buffs e regeneração)', () => {
+    const v = Object.values(TAVERN_FOODS);
+    expect(v.some((c) => c.cura > 0)).toBe(true);
+    expect(v.some((c) => c.mana > 0)).toBe(true);
+    expect(v.some((c) => c.buffFisico || c.buffMagico)).toBe(true);
+    expect(v.some((c) => c.status && c.status.tipo === 'regeneracao')).toBe(true);
+  });
+
+  it('comidas e bebidas juntas somam um cardápio grande', () => {
+    const total = Object.keys(TAVERN_DRINKS).length + Object.keys(TAVERN_FOODS).length;
+    expect(total).toBeGreaterThanOrEqual(200);
   });
 });
 

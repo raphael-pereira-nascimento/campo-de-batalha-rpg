@@ -40,6 +40,7 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
   const [charId, setCharId] = useState(characters[0]?.id || '');
   const [toast, setToast] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [filtro, setFiltro] = useState('tudo');
 
   const alerta = (msg, tipo) => {
     setToast({ msg, tipo });
@@ -63,12 +64,18 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
 
   const lista = useMemo(() => Object.entries(items || {}).map(([id, b]) => ({ id, ...b })), [items]);
 
-  const destaque = useMemo(() => lista.find((b) => b.destaque) || null, [lista]);
+  // Filtro rápido: tudo, só bebidas ou só comidas.
+  const listaFiltrada = useMemo(
+    () => (filtro === 'tudo' ? lista : lista.filter((b) => (b.tipo || 'bebida') === filtro)),
+    [lista, filtro],
+  );
+
+  const destaque = useMemo(() => listaFiltrada.find((b) => b.destaque) || null, [listaFiltrada]);
 
   // Agrupa o menu pelas seções da taverna (o destaque sai da grade normal).
   const grupos = useMemo(() => {
     const porCat = {};
-    for (const b of lista) {
+    for (const b of listaFiltrada) {
       if (b.destaque) continue;
       const id = b.categoria || 'outros';
       (porCat[id] = porCat[id] || []).push(b);
@@ -76,13 +83,13 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
     const cats = TAVERN_CATEGORIES
       .map((c) => ({ ...c, itens: porCat[c.id] || [] }))
       .filter((g) => g.itens.length > 0);
-    if (porCat.outros) cats.push({ id: 'outros', nome: 'Outras Bebidas', icon: '🍶', blurb: 'O que sobrou no balcão.', itens: porCat.outros });
+    if (porCat.outros) cats.push({ id: 'outros', nome: 'Outros Itens', icon: '🍶', blurb: 'O que sobrou no balcão.', itens: porCat.outros });
     return cats;
-  }, [lista]);
+  }, [listaFiltrada]);
 
   const comprar = async (bebida) => {
     if (!charId) {
-      alerta('❌ Escolha um personagem para guardar a bebida.', 'erro');
+      alerta('❌ Escolha um personagem para guardar o item.', 'erro');
       return;
     }
     if (carteira < bebida.preco) {
@@ -96,7 +103,7 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
       setCarteira(nova);
       if (onWalletChange) onWalletChange(nova);
       if (onRefresh) await onRefresh();
-      alerta(`✅ ${bebida.emoji || '🍺'} ${bebida.nome} guardada na mochila!`, 'sucesso');
+      alerta(`✅ ${bebida.emoji || '🍺'} ${bebida.nome} guardado na mochila!`, 'sucesso');
     } catch (e) {
       alerta(`❌ ${e.message}`, 'erro');
     } finally {
@@ -111,8 +118,9 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
     return (
       <div className={`tavern-card${destacada ? ' is-featured' : ''}`} key={b.id}>
         <div className="tavern-card-head">
-          <span className="tavern-card-icon">{b.emoji || '🍺'}</span>
+          <span className="tavern-card-icon">{b.emoji || (b.tipo === 'comida' ? '🍽️' : '🍺')}</span>
           <strong>{b.nome}</strong>
+          <span className="tavern-kind">{b.tipo === 'comida' ? '🍽️ Comida' : '🍺 Bebida'}</span>
         </div>
         <p className="tavern-card-desc">{b.desc}</p>
         <div className="tavern-card-tags">
@@ -143,7 +151,7 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
       <header className="topbar">
         <div>
           <h1>🍺 O Último Copo</h1>
-          <span className="player-name">Taverna · Bebidas de todo o tipo para a batalha</span>
+          <span className="player-name">Taverna · Bebidas e comidas para a próxima batalha</span>
         </div>
         <div className="topbar-actions">
           <span className="wallet-chip" title="Sua carteira">💰 {formatCoins(carteira)}</span>
@@ -158,7 +166,7 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
             <strong>Bem-vindo ao Último Copo</strong>
             <p>
               O taverneiro enxuga uma caneca e acena: — Sente-se, forasteiro. Temos o que cura,
-              o que fortalece e o que se arrepende amanhã.
+              o que fortalece, o que enche a barriga e o que se arrepende amanhã.
             </p>
           </div>
         </div>
@@ -174,14 +182,20 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
             </select>
           </label>
           <p className="muted small">
-            As bebidas compradas vão para o inventário do personagem e podem ser usadas na aba{' '}
+            O que você comprar vai para o inventário do personagem e pode ser usado na aba{' '}
             <strong>Item</strong> durante a batalha. <em>Pendure o casaco e escolha o que vai te acompanhar na próxima batalha.</em>
           </p>
         </div>
 
+        <div className="tavern-filters">
+          <button className={`ghost${filtro === 'tudo' ? ' is-active' : ''}`} onClick={() => setFiltro('tudo')}>Tudo</button>
+          <button className={`ghost${filtro === 'bebida' ? ' is-active' : ''}`} onClick={() => setFiltro('bebida')}>🍺 Bebidas</button>
+          <button className={`ghost${filtro === 'comida' ? ' is-active' : ''}`} onClick={() => setFiltro('comida')}>🍽️ Comidas</button>
+        </div>
+
         {items === null ? (
           <p className="muted">Abrindo o balcão…</p>
-        ) : lista.length === 0 ? (
+        ) : listaFiltrada.length === 0 ? (
           <p className="muted">A taverna está vazia hoje.</p>
         ) : (
           <>
@@ -215,6 +229,7 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
           Jogador: {player?.name || 'Jogador'}
           {isOffline() ? ' · modo offline (salvo no navegador)' : ''}
           {' '}· 📜 Bebeu demais? O efeito de embriaguez passa em alguns turnos de combate.
+          {' '}Comida regenera e sustenta — mas não embriaga.
         </p>
       </div>
 

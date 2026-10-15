@@ -1406,7 +1406,7 @@ export class BattleManager {
       p.drunkTurns = Math.max(p.drunkTurns || 0, item.drunkTurns || 3);
       consumiu.push('fica bêbado');
     }
-    const icone = item.tipo === 'bebida' ? (item.emoji || '🍺') : '🧪';
+    const icone = item.tipo === 'bebida' ? (item.emoji || '🍺') : item.tipo === 'comida' ? (item.emoji || '🍽️') : '🧪';
     const detalhe = consumiu.length ? `: ${consumiu.join(', ')}.` : '.';
     battle.log.push(makeLog(`${icone} ${p.charName} usa ${item.nome}${detalhe}`, 'heal'));
   }

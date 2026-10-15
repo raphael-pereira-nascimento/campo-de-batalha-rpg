@@ -3202,6 +3202,28 @@ button.danger {
   flex: 0 0 auto;
 }
 .tavern-card-head strong { font-size: 15px; }
+.tavern-kind {
+  margin-left: auto;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.tavern-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+.tavern-filters .ghost.is-active {
+  background: var(--panel-2);
+  border-color: #ffd9a0;
+  color: #ffd9a0;
+}
 .tavern-card-desc {
   margin: 0;
   font-size: 13px;

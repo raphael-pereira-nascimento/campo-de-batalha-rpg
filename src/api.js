@@ -4,7 +4,7 @@ import { isOffline, setServerStatus, saveOfflinePlayer, getOfflinePlayer, getOff
 import { offlineBattle } from './offline/battle.js';
 import { MONSTERS } from './game/monsters.js';
 import { gemIsRaw } from './game/gems.js';
-import { EQUIPMENT, POTIONS, deriveStats, applyMaxMults, efeitosDeHabilidades, TAVERN_DRINKS } from './game/data.js';
+import { EQUIPMENT, POTIONS, deriveStats, applyMaxMults, efeitosDeHabilidades, TAVERN_DRINKS, TAVERN_FOODS } from './game/data.js';
 import { DUNGEONS } from './game/dungeons.js';
 import {
   estadoMundo,
@@ -47,7 +47,7 @@ export function initConnection() {
     .then((ok) => (ok ? true : ping(20000)))
     .then((ok) => {
       setServerStatus(ok ? 'up' : 'down');
-      console.info(`[conexao] servidor ${ok ? 'online' : 'indispon√≠vel ‚Äî modo local ativado'}`);
+      console.info(`[conexao] servidor ${ok ? 'online' : 'indispon√≠vel ‚?" modo local ativado'}`);
       return ok;
     });
 }
@@ -74,7 +74,7 @@ function potionItem(id) {
   return { id, nome: p.nome, tipo: 'pocao', cura: p.cura || null, mana: p.mana || null };
 }
 
-/* ‚îÄ‚îÄ‚îÄ Mock Socket for offline mode ‚îÄ‚îÄ‚îÄ */
+/* ‚"?‚"?‚"? Mock Socket for offline mode ‚"?‚"?‚"? */
 class MockSocket {
   constructor() {
     this._handlers = {};
@@ -186,7 +186,7 @@ class MockSocket {
       return;
     }
 
-    // ‚îÄ‚îÄ Calend√°rio do mundo / Eclipse (mock) ‚îÄ‚îÄ
+    // ‚"?‚"? Calend√°rio do mundo / Eclipse (mock) ‚"?‚"?
     if (event === 'getCalendario') {
       if (ack) ack({ ok: true, calendario: estadoMundo() });
       return;
@@ -247,7 +247,7 @@ export function applyOfflineRewards(charId, xpGained, wins = 0) {
   localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
 }
 
-/* ‚îÄ‚îÄ‚îÄ Socket (online or mock) ‚îÄ‚îÄ‚îÄ */
+/* ‚"?‚"?‚"? Socket (online or mock) ‚"?‚"?‚"? */
 export function getSocket() {
   if (isOffline()) {
     return mockSocket;
@@ -277,7 +277,7 @@ async function request(url, options = {}) {
       ...options,
     });
   } catch {
-    throw new Error('Servidor indispon√≠vel. Recarregue a p√°gina ‚Äî se persistir, o modo local ser√° usado no pr√≥ximo acesso.');
+    throw new Error('Servidor indispon√≠vel. Recarregue a p√°gina ‚?" se persistir, o modo local ser√° usado no pr√≥ximo acesso.');
   }
   const json = await res.json().catch(() => ({ ok: false, error: 'Resposta inv√°lida' }));
   if (!res.ok || json.ok === false) {
@@ -294,7 +294,7 @@ function auth(url, options = {}) {
   });
 }
 
-/* ‚îÄ‚îÄ‚îÄ API (online or offline) ‚îÄ‚îÄ‚îÄ */
+/* ‚"?‚"?‚"? API (online or offline) ‚"?‚"?‚"? */
 export const api = {
   createPlayer: (name, password) => {
     if (isOffline()) {
@@ -401,7 +401,7 @@ export const api = {
     return request('/api/gamedata');
   },
 
-  // ‚îÄ‚îÄ Calend√°rio do mundo / Eclipse ‚îÄ‚îÄ
+  // ‚"?‚"? Calend√°rio do mundo / Eclipse ‚"?‚"?
   calendario: () => {
     if (isOffline()) return Promise.resolve(estadoMundo());
     return request('/api/calendario');
@@ -428,7 +428,7 @@ export const api = {
     return auth('/api/calendario/tipo', { method: 'POST', body: JSON.stringify({ tipo }) });
   },
 
-  // ‚îÄ‚îÄ Dungeons ‚îÄ‚îÄ
+  // ‚"?‚"? Dungeons ‚"?‚"?
   getDungeons: () => {
     if (isOffline()) {
       return Promise.resolve({ ok: true, dungeons: DUNGEONS, calendario: estadoMundo() });
@@ -442,7 +442,7 @@ export const api = {
   getSharedCharacter: (id) => {
     return request(`/api/share/characters/${id}`);
   },
-  // ‚îÄ‚îÄ Ranking/Wallet ‚îÄ‚îÄ
+  // ‚"?‚"? Ranking/Wallet ‚"?‚"?
   getRanking: () => {
     if (isOffline()) {
       const chars = getOfflineCharacters().map((c) => ({
@@ -473,13 +473,13 @@ export const api = {
   },
   getTavern: () => {
     if (isOffline()) {
-      return Promise.resolve({ ok: true, items: TAVERN_DRINKS });
+      return Promise.resolve({ ok: true, items: Object.assign({}, TAVERN_DRINKS, TAVERN_FOODS) });
     }
     return auth('/api/tavern');
   },
   buyDrink: (itemId, characterId) => {
     if (isOffline()) {
-      const drink = TAVERN_DRINKS[itemId];
+      const drink = TAVERN_DRINKS[itemId] || TAVERN_FOODS[itemId];
       if (!drink) return Promise.reject(new Error('Bebida inv√°lida.'));
       const wallet = getOfflineWallet();
       if (wallet < drink.preco) return Promise.reject(new Error('Ouro insuficiente.'));
@@ -579,7 +579,7 @@ export const api = {
     return auth(`/api/custom-skills/${id}`, { method: 'DELETE' });
   },
 
-  // ‚îÄ‚îÄ Gemas ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ
+  // ‚"?‚"? Gemas ‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?‚"?
 
   getCharacterGems: (characterId) => {
     if (isOffline()) {
@@ -601,7 +601,7 @@ export const api = {
       const gems = getOfflineGems(characterId);
       const gemIdx = gems.indexOf(gemId);
       if (gemIdx === -1) return Promise.reject(new Error('Gema n√£o encontrada.'));
-      if (gemIsRaw(gemId)) return Promise.reject(new Error('‚ö†Ô∏è Requer polimento antes de usar'));
+      if (gemIsRaw(gemId)) return Promise.reject(new Error('‚s†Ô∏? Requer polimento antes de usar'));
       removeOfflineGem(characterId, gemId);
       socketedGems[slotIndex] = gemId;
       c.equipment[equipSlot] = { ...item, socketedGems };
@@ -658,3 +658,10 @@ export function emitAck(event, payload) {
 }
 
 export { isOffline };
+
+
+
+
+
+
+
