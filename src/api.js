@@ -380,6 +380,38 @@ export const api = {
     }
     return auth(`/api/characters/${id}/level-up`, { method: 'POST' });
   },
+  // Ajuste manual de nível do Mestre (livre, 1..30). Reflete no servidor.
+  setCharacterLevel: (id, level) => {
+    if (isOffline()) {
+      const chars = getOfflineCharacters();
+      const c = chars.find((ch) => ch.id === id);
+      if (!c) return Promise.reject(new Error('Personagem não encontrado.'));
+      const atual = c.level || 1;
+      const alvo = Math.max(1, Math.min(30, Math.floor(Number(level) || atual)));
+      if (alvo === atual) return Promise.reject(new Error(`O nível já é ${atual}.`));
+      const diff = alvo - atual;
+      const attributes = { ...(c.attributes || {}) };
+      const primary = (c.classes || []).find((cl) => cl.primary) || (c.classes || [])[0] || {};
+      const upAttr = primary.levelUp || 'forca';
+      attributes[upAttr] = diff > 0
+        ? Math.min((attributes[upAttr] || 0) + diff, 14)
+        : Math.max((attributes[upAttr] || 0) + diff, 1);
+      const stats = applyMaxMults(
+        deriveStats(c.classes || [], alvo, attributes, c.equipment || {}, c.races || []),
+        efeitosDaFicha(c),
+      );
+      c.level = alvo;
+      if (diff < 0) c.xp = 0;
+      c.attributes = attributes;
+      c.hp_max = stats.hpMax;
+      c.mp_max = stats.mpMax;
+      c.hp_current = Math.min(c.hp_current ?? stats.hpMax, stats.hpMax);
+      c.mp_current = Math.min(c.mp_current ?? stats.mpMax, stats.mpMax);
+      localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
+      return Promise.resolve({ ok: true, character: c, diff });
+    }
+    return auth(`/api/characters/${id}/level`, { method: 'POST', body: JSON.stringify({ level }) });
+  },
   equipItem: (id, slot, itemId) => {
     if (isOffline()) {
       const chars = getOfflineCharacters();

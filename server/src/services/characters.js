@@ -614,6 +614,65 @@ export async function levelUpCharacter(characterId, playerId) {
   return getCharacter(characterId);
 }
 
+// ── Ajuste manual de nível do Mestre (PROVISÓRIO) ───────────────────────
+// Sobe ou desce livremente (1..30): cada nível soma/d subtrai 1 no atributo
+// da classe primária. Ao descer, o XP zera para não gerar nível grátis.
+export const NIVEL_MANUAL_MIN = 1;
+export const NIVEL_MANUAL_MAX = 30;
+
+export function definirNivelManual(char, novoNivel) {
+  const atual = char.level || 1;
+  const alvo = Math.max(
+    NIVEL_MANUAL_MIN,
+    Math.min(NIVEL_MANUAL_MAX, Math.floor(Number(novoNivel) || atual)),
+  );
+  if (alvo === atual) return { ok: false, error: `O nível já é ${atual}.` };
+  const diff = alvo - atual;
+  const attributes = { ...(char.attributes || {}) };
+  const primary = (char.classes || []).find((c) => c.primary) || (char.classes || [])[0] || {};
+  const upAttr = primary.levelUp || 'forca';
+  attributes[upAttr] = diff > 0
+    ? Math.min((attributes[upAttr] || 0) + diff, MAX_ATTRIBUTE_WITH_BONUS)
+    : Math.max((attributes[upAttr] || 0) + diff, 1);
+  const stats = applyMaxMults(
+    deriveStats(char.classes || [], alvo, attributes, char.equipment || {}, char.races || []),
+    efeitosDaFicha(char.races, char.habilidades),
+  );
+  return {
+    ok: true,
+    diff,
+    character: {
+      ...char,
+      level: alvo,
+      xp: diff < 0 ? 0 : char.xp || 0,
+      attributes,
+      hp_max: stats.hpMax,
+      mp_max: stats.mpMax,
+      hp_current: Math.min(char.hp_current ?? stats.hpMax, stats.hpMax),
+      mp_current: Math.min(char.mp_current ?? stats.mpMax, stats.mpMax),
+    },
+  };
+}
+
+export async function setCharacterLevel(characterId, playerId, novoNivel) {
+  const char = await getCharacter(characterId);
+  if (!char) throw new Error('Personagem não encontrado.');
+  if (playerId && char.player_id && char.player_id !== playerId) {
+    throw new Error('Este personagem não é seu.');
+  }
+  const r = definirNivelManual(char, novoNivel);
+  if (!r.ok) throw new Error(r.error);
+  const c = r.character;
+  await query(
+    `UPDATE characters
+     SET xp = $1, level = $2, hp_max = $3, mp_max = $4, hp_current = $5, mp_current = $6,
+         attributes = $7
+     WHERE id = $8`,
+    [c.xp, c.level, c.hp_max, c.mp_max, c.hp_current, c.mp_current, JSON.stringify(c.attributes), characterId],
+  );
+  return getCharacter(characterId);
+}
+
 export async function getWallet(playerId) {
   const { rows } = await query('SELECT wallet_cents, name FROM players WHERE id = $1', [playerId]);
   if (!rows.length) throw new Error('Jogador não encontrado.');

@@ -7,6 +7,7 @@ import {
   buildCharacterData,
   validateAttributes,
   aplicarLevelUpManual,
+  definirNivelManual,
 } from '../src/services/characters.js';
 
 const ATTRS = { forca: 8, inteligencia: 4, resistencia: 8, destreza: 5, reflexos: 5 }; // soma 30
@@ -244,5 +245,44 @@ describe('aplicarLevelUpManual — subir de nível gastando XP', () => {
     const r = aplicarLevelUpManual({ ...ficha(), xp: 199 });
     expect(r.ok).toBe(false);
     expect(r.error).toContain('200');
+  });
+});
+
+describe('definirNivelManual — ajuste livre do Mestre (1..30)', () => {
+  const ficha = () => ({
+    id: 'c1',
+    level: 5,
+    xp: 120,
+    attributes: { forca: 8, inteligencia: 4, resistencia: 8, destreza: 5, reflexos: 5 },
+    classes: [{ id: 'guerreiro', primary: true, levelUp: 'forca' }],
+    equipment: {},
+    races: [],
+    habilidades: [],
+    hp_current: 600,
+    mp_current: 40,
+  });
+
+  it('sobe vários níveis somando no atributo primário', () => {
+    const r = definirNivelManual(ficha(), 8);
+    expect(r.ok).toBe(true);
+    expect(r.diff).toBe(3);
+    expect(r.character.level).toBe(8);
+    expect(r.character.attributes.forca).toBe(11);
+    expect(r.character.xp).toBe(120);
+  });
+
+  it('desce níveis, reduz o atributo e zera o XP', () => {
+    const r = definirNivelManual(ficha(), 3);
+    expect(r.ok).toBe(true);
+    expect(r.diff).toBe(-2);
+    expect(r.character.level).toBe(3);
+    expect(r.character.attributes.forca).toBe(6);
+    expect(r.character.xp).toBe(0);
+  });
+
+  it('trava nos limites 1 e 30 e recusa nível igual', () => {
+    expect(definirNivelManual(ficha(), 99).character.level).toBe(30);
+    expect(definirNivelManual(ficha(), -5).character.level).toBe(1);
+    expect(definirNivelManual(ficha(), 5).ok).toBe(false);
   });
 });

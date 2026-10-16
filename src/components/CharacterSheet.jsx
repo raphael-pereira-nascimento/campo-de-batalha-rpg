@@ -81,6 +81,18 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
     }
   };
 
+  const ajustarNivel = async (delta) => {
+    setBusy('nivel');
+    try {
+      await api.setCharacterLevel(character.id, (character.level || 1) + delta);
+      onChanged();
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const handleSocket = async (equipSlot, slotIndex, gemId) => {
     setBusy('socket');
     try {
@@ -180,6 +192,22 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
             <span className="tag" key={r.id}>{r.nome}</span>
           ))}
           <span className="tag">Nv. {character.level}</span>
+          <button
+            className="ghost small"
+            onClick={() => ajustarNivel(-1)}
+            disabled={busy === 'nivel' || (character.level || 1) <= 1}
+            title="Ajuste do Mestre: desce 1 nível (XP zera)"
+          >
+            −
+          </button>
+          <button
+            className="ghost small"
+            onClick={() => ajustarNivel(1)}
+            disabled={busy === 'nivel' || (character.level || 1) >= 30}
+            title="Ajuste do Mestre: sobe 1 nível sem gastar XP"
+          >
+            {busy === 'nivel' ? '...' : '+'}
+          </button>
           <span className="tag">XP {character.xp}/{character.level * 100}</span>
           <button
             className="ghost small"
@@ -187,7 +215,7 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
             disabled={busy === 'levelup' || (character.xp || 0) < (character.level || 1) * 100}
             title={`Subir para o Nv. ${(character.level || 1) + 1} por ${(character.level || 1) * 100} de XP (+1 no atributo da classe primária)`}
           >
-            {busy === 'levelup' ? 'Subindo...' : '⬆️ Subir de nível'}
+            {busy === 'levelup' ? 'Subindo...' : '⬆️ Subir com XP'}
           </button>
         </div>
       </div>

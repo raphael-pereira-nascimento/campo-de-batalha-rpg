@@ -15,6 +15,7 @@ import {
   listCharacters,
   getCharacter,
   levelUpCharacter,
+  setCharacterLevel,
   equipItem,
   getWallet,
   formatCoins,
@@ -237,6 +238,15 @@ app.post('/api/characters/:id/equip', requireAuth, async (req, res) => {
 app.post('/api/characters/:id/level-up', requireAuth, async (req, res) => {
   try {
     const character = await levelUpCharacter(req.params.id, req.player.id);
+    res.json({ ok: true, character });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/characters/:id/level', requireAuth, async (req, res) => {
+  try {
+    const character = await setCharacterLevel(req.params.id, req.player.id, req.body?.level);
     res.json({ ok: true, character });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
