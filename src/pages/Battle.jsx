@@ -22,6 +22,10 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
   const [busy, setBusy] = useState(false);
   const [monsterPick, setMonsterPick] = useState('');
   const [chefeDinamico, setChefeDinamico] = useState(false);
+  const [stTarget, setStTarget] = useState('');
+  const [stTipo, setStTipo] = useState('veneno');
+  const [stTurnos, setStTurnos] = useState(3);
+  const [stDano, setStDano] = useState(30);
   const [customMonsters, setCustomMonsters] = useState([]);
   const [timelineOffset, setTimelineOffset] = useState(0);
   const [floats, setFloats] = useState([]);
@@ -324,6 +328,52 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
     }
   };
 
+  // Controles do Mestre (§4): aplicar/remover status em qualquer combatente.
+  const escolherStatus = (tipo) => {
+    setStTipo(tipo);
+    const def = gameData.statuses?.[tipo];
+    if (def) {
+      setStTurnos(def.duracaoPadrao || 1);
+      setStDano(def.danoPadrao || 0);
+    }
+  };
+
+  const stAlvo = participants.find(
+    (q) => String(q.characterId || q.uid) === String(stTarget),
+  ) || null;
+
+  const aplicarStatus = async () => {
+    if (!stTarget || !stTipo) return;
+    setBusy(true);
+    setError('');
+    try {
+      const result = await emitAck('aplicarStatus', {
+        battleId,
+        participantId: stTarget,
+        status: { tipo: stTipo, turnos: Math.max(1, Number(stTurnos) || 1), dano: Math.max(0, Number(stDano) || 0) },
+      });
+      if (result.battle) setBattle(result.battle);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removerStatus = async () => {
+    if (!stTarget || !stTipo) return;
+    setBusy(true);
+    setError('');
+    try {
+      const result = await emitAck('removerStatus', { battleId, participantId: stTarget, statusId: stTipo });
+      if (result.battle) setBattle(result.battle);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const leave = async () => {
     try {
       await emitAck('leaveBattle', { battleId, characterId: myChars[0]?.characterId });
@@ -503,6 +553,59 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                   </span>
                 ))}
               </div>
+            </div>
+          )}
+
+          {battle.mode === 'mestre' && isHost && battle.status === 'in_progress' && (
+            <div className="master-panel">
+              <h4>🎲 Administrar status</h4>
+              <div className="join-controls">
+                <label>
+                  Combatente
+                  <select value={stTarget} onChange={(e) => setStTarget(e.target.value)}>
+                    <option value="">Escolha...</option>
+                    {participants.filter((q) => q.alive).map((q) => (
+                      <option key={q.characterId || q.uid} value={q.characterId || q.uid}>
+                        {q.charName}{q.isMonster ? ' 👾' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Status
+                  <select value={stTipo} onChange={(e) => escolherStatus(e.target.value)}>
+                    {Object.values(gameData.statuses || {}).map((s) => (
+                      <option key={s.id} value={s.id} title={s.desc}>
+                        {s.icon} {s.nome}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Duração (turnos)
+                  <input type="number" min={1} max={10} value={stTurnos} onChange={(e) => setStTurnos(e.target.value)} style={{ width: 64 }} />
+                </label>
+                {['dot', 'hot'].includes(gameData.statuses?.[stTipo]?.tipo) && (
+                  <label>
+                    Intensidade (dano/cura por turno)
+                    <input type="number" min={0} max={500} value={stDano} onChange={(e) => setStDano(e.target.value)} style={{ width: 80 }} />
+                  </label>
+                )}
+                <button onClick={aplicarStatus} disabled={busy || !stTarget || !stTipo}>
+                  Aplicar
+                </button>
+                <button className="ghost" onClick={removerStatus} disabled={busy || !stTarget || !stTipo}>
+                  Remover
+                </button>
+              </div>
+              {stAlvo && (
+                <p className="muted small">
+                  {stAlvo.charName} — imune a: {((stAlvo.monsterDef?.efeitos?.imune) || []).join(', ') || 'nada'};
+                  fraquezas: {(stAlvo.fraquezas || []).join(', ') || '—'};
+                  resistências: {(stAlvo.resistencias || []).join(', ') || '—'};
+                  ativos: {((stAlvo.statuses || []).map((s) => `${s.id} (${s.turnos}t)`).join(', ')) || 'nenhum'}.
+                </p>
+              )}
             </div>
           )}
 

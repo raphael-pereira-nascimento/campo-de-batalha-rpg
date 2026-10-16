@@ -179,6 +179,28 @@ export function setupSockets(httpServer) {
       }
     });
 
+    socket.on('aplicarStatus', ({ battleId, participantId, status }, ack) => {
+      try {
+        assertAuthed();
+        const battle = manager.aplicarStatusMestre({ battleId, hostId: me(), participantId, status });
+        publishBattle(io, manager, battle);
+        ack({ ok: true, battleId: battle.id });
+      } catch (err) {
+        ack({ ok: false, error: err.message });
+      }
+    });
+
+    socket.on('removerStatus', ({ battleId, participantId, statusId }, ack) => {
+      try {
+        assertAuthed();
+        const battle = manager.removerStatusMestre({ battleId, hostId: me(), participantId, statusId });
+        publishBattle(io, manager, battle);
+        ack({ ok: true, battleId: battle.id });
+      } catch (err) {
+        ack({ ok: false, error: err.message });
+      }
+    });
+
     socket.on('removeMonster', ({ battleId, participantId }, ack) => {
       try {
         const battle = manager.removeMonster({ battleId, hostId: me(), participantId });

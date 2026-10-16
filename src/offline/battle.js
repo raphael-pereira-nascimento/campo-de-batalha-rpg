@@ -99,6 +99,32 @@ class OfflineBattle {
     });
   }
 
+  aplicarStatus(participantId, status) {
+    if (!this.battleId) return;
+    const battle = this.manager.getBattle(this.battleId);
+    if (!battle) return;
+    this.manager.aplicarStatusMestre({
+      battleId: this.battleId,
+      hostId: battle.host,
+      participantId,
+      status,
+    });
+    this._emit('battleUpdate', { ...this.manager.getBattle(this.battleId) });
+  }
+
+  removerStatus(participantId, statusId) {
+    if (!this.battleId) return;
+    const battle = this.manager.getBattle(this.battleId);
+    if (!battle) return;
+    this.manager.removerStatusMestre({
+      battleId: this.battleId,
+      hostId: battle.host,
+      participantId,
+      statusId,
+    });
+    this._emit('battleUpdate', { ...this.manager.getBattle(this.battleId) });
+  }
+
   toggleDrunk(participantId) {
     if (!this.battleId) return;
     const battle = this.manager.getBattle(this.battleId);

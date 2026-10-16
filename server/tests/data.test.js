@@ -13,6 +13,7 @@ import {
   armasDeEquipamento,
   melhorArma,
   armaParaAtaque,
+  STATUS_DEFS,
 } from '../src/game/data.js';
 import { gemIsRaw } from '../src/game/gems.js';
 import { DANO_MULT } from '../src/game/sistema.js';
@@ -377,5 +378,30 @@ describe('armas de fogo novas + escolha da arma no ataque', () => {
     expect(EQUIPMENT.armas.espada_baioneta.recarga).toBe(0);
     expect(EQUIPMENT.armas.arco_composto.recarga).toBe(0);
     expect(EQUIPMENT.armas.arco_longo.recarga).toBe(0);
+  });
+});
+
+describe('STATUS_DEFS — catálogo central de status', () => {
+  it('os 8 status têm os campos do catálogo', () => {
+    const ids = ['queimadura', 'sangramento', 'veneno', 'regeneracao', 'lentidao', 'cegueira', 'fraqueza', 'congelamento'];
+    expect(Object.keys(STATUS_DEFS).sort()).toEqual(ids.sort());
+    for (const id of ids) {
+      const s = STATUS_DEFS[id];
+      expect(s.nome, id).toBeTruthy();
+      expect(s.icon, id).toBeTruthy();
+      expect(s.desc, id).toBeTruthy();
+      expect(s.duracaoPadrao, id).toBeGreaterThan(0);
+      expect(s.acumulo, id).toBe('renova');
+      expect(Array.isArray(s.remocao) && s.remocao.length > 0, id).toBe(true);
+    }
+  });
+
+  it('durações e intensidades padrão vêm do uso real nos golpes', () => {
+    expect(STATUS_DEFS.queimadura.duracaoPadrao).toBe(3);
+    expect(STATUS_DEFS.queimadura.danoPadrao).toBe(50);
+    expect(STATUS_DEFS.lentidao.modificadores).toContain('-10%');
+    expect(STATUS_DEFS.cegueira.modificadores).toContain('-25%');
+    expect(STATUS_DEFS.fraqueza.modificadores).toContain('0.8');
+    expect(STATUS_DEFS.congelamento.tipo).toBe('cc');
   });
 });

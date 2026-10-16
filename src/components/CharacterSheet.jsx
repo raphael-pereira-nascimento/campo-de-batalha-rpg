@@ -17,7 +17,7 @@ const CLASS_ICONS = {
 
 const SKILL_TYPE_ICONS = { fisico: '⚔️', magia: '✨', cura: '💚', buff: '🔮', defesa: '🛡️' };
 
-export default function CharacterSheet({ character, gameData, onChanged }) {
+export default function CharacterSheet({ character, gameData, onChanged, statuses }) {
   const [busy, setBusy] = useState(null);
   const [customEquipment, setCustomEquipment] = useState([]);
   const [characterGems, setCharacterGems] = useState([]);
@@ -39,6 +39,8 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
       .catch(() => {});
   }, [character.id]);
 
+  // Status da batalha atual (via prop; a ficha fora de batalha não guarda status).
+  const listaStatus = statuses ?? character.statuses ?? [];
   const cls = character.classes?.[0] ? gameData.classes[character.classes[0].archetype] : gameData.classes[character.class];
   const races = character.races || [];
   const classes = character.classes || [];
@@ -263,9 +265,30 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
         {voa && <span> · 🕊️ Voo natural (manter no ar custa foco; voo mágico custa {VOO.manaPorTurno} MP/turno)</span>}
       </p>
 
+      {listaStatus.length > 0 && (
+        <div className="sheet-section">
+          <h4>✨ Status Ativos</h4>
+          <div className="spell-list">
+            {listaStatus.map((s) => {
+              const def = gameData.statuses?.[s.id] || {};
+              const dotHot = def.tipo === 'dot' || def.tipo === 'hot';
+              return (
+                <div className="spell-chip" key={s.id} title={def.desc || s.nome}>
+                  <span>{def.icon || '✦'} {def.nome || s.nome}</span>
+                  <small>
+                    {dotHot ? `${s.dano || 0}/turno · ` : ''}{s.turnos}t restante(s)
+                    {def.modificadores ? ` · ${def.modificadores}` : ''}
+                  </small>
+                </div>
+              );
+            })}
+          </div>
+          <p className="muted small">Modificadores temporários da batalha atual — não alteram os atributos da ficha.</p>
+        </div>
+      )}
+
       <div className="attr-grid">
-        {ATTRIBUTES.map((k) => (
-          <div className="attr-chip" key={k}>
+        {ATTRIBUTES.map((k) => (          <div className="attr-chip" key={k}>
             <span>{ATTRIBUTE_NAMES[k]}</span>
             <strong>{character.attributes[k]}</strong>
           </div>

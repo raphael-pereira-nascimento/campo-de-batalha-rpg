@@ -931,6 +931,52 @@ export class BattleManager {
     );
   }
 
+  // Controles do Mestre (§4): aplicar/remover status manualmente em qualquer
+  // combatente. Reusa _applyStatus (imunidade, chance e acúmulo idênticos aos
+  // dos golpes) — um único caminho de aplicação, sem processamento duplicado.
+  _alvoDoMestre(battle, hostId, participantId) {
+    if (!battle) throw new Error('Batalha não encontrada.');
+    if (battle.mode !== 'mestre') throw new Error('Só o mestre pode administrar status.');
+    if (battle.host !== hostId) throw new Error('Apenas o mestre pode administrar status.');
+    if (battle.status !== 'in_progress' && battle.status !== 'lobby') throw new Error('Batalha encerrada.');
+    const target = battle.participants.find(
+      (q) => q.characterId === participantId || q.uid === participantId,
+    );
+    if (!target) throw new Error('Combatente não encontrado.');
+    return target;
+  }
+
+  aplicarStatusMestre({ battleId, hostId, participantId, status }) {
+    const battle = this.battles.get(battleId);
+    const target = this._alvoDoMestre(battle, hostId, participantId);
+    if (!status || !STATUS_DEFS[status.tipo]) throw new Error('Status desconhecido.');
+    this._applyStatus(
+      battle,
+      target,
+      { tipo: status.tipo, turnos: status.turnos, dano: status.dano, chance: status.chance },
+      { charName: '🎲 Mestre' },
+    );
+    this.emit(battle);
+    return battle;
+  }
+
+  removerStatusMestre({ battleId, hostId, participantId, statusId }) {
+    const battle = this.battles.get(battleId);
+    const target = this._alvoDoMestre(battle, hostId, participantId);
+    const def = STATUS_DEFS[statusId];
+    const antes = (target.statuses || []).length;
+    target.statuses = (target.statuses || []).filter((s) => s.id !== statusId);
+    const removidos = antes - target.statuses.length;
+    battle.log.push(makeLog(
+      removidos > 0
+        ? `🎲 Mestre remove ${(def?.nome || statusId).toLowerCase()} de ${target.charName}.`
+        : `🎲 ${target.charName} não estava sob ${(def?.nome || statusId).toLowerCase()}.`,
+      'mestre',
+    ));
+    this.emit(battle);
+    return battle;
+  }
+
   // Processa os status no início do turno: dano/cura por turno e expiração.
   _processStatuses(battle, p) {
     if (!p.statuses || p.statuses.length === 0) return;

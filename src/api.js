@@ -142,6 +142,28 @@ class MockSocket {
       return;
     }
 
+    if (event === 'aplicarStatus') {
+      try {
+        offlineBattle.aplicarStatus(payload.participantId, payload.status);
+        const state = offlineBattle.getState();
+        if (ack) ack({ ok: true, battle: state });
+      } catch (e) {
+        if (ack) ack({ ok: false, error: e.message });
+      }
+      return;
+    }
+
+    if (event === 'removerStatus') {
+      try {
+        offlineBattle.removerStatus(payload.participantId, payload.statusId);
+        const state = offlineBattle.getState();
+        if (ack) ack({ ok: true, battle: state });
+      } catch (e) {
+        if (ack) ack({ ok: false, error: e.message });
+      }
+      return;
+    }
+
     if (event === 'startBattle') {
       (async () => {
         try {

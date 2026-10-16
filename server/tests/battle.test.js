@@ -1119,3 +1119,78 @@ describe('BattleManager — recarga das armas de fogo', () => {
     expect(hero.wpnRecarga.mosquete).toBeGreaterThan(0);
   });
 });
+
+describe('BattleManager — Mestre administra status', () => {
+  function setupMestre() {
+    const { manager } = makeManager();
+    const battle = manager.createBattle({
+      name: 'Mesa',
+      mode: 'mestre',
+      host: 'p1',
+      hostName: 'M',
+      character: makeCharacter(),
+    });
+    manager.addMonster({
+      battleId: battle.id,
+      hostId: 'p1',
+      monsterDef: MONSTERS.zumbi_bruto,
+    });
+    manager.startBattle({ battleId: battle.id, playerId: 'p1' });
+    const hero = battle.participants.find((q) => !q.isMonster);
+    const monstro = battle.participants.find((q) => q.isMonster);
+    return { manager, battle, hero, monstro };
+  }
+
+  it('aplica com duração/intensidade e reaplicar renova sem duplicar', () => {
+    const { manager, battle, hero } = setupMestre();
+    manager.aplicarStatusMestre({
+      battleId: battle.id, hostId: 'p1', participantId: hero.characterId,
+      status: { tipo: 'veneno', turnos: 2, dano: 30 },
+    });
+    expect(hero.statuses).toHaveLength(1);
+    expect(hero.statuses[0]).toMatchObject({ id: 'veneno', turnos: 2, dano: 30 });
+    manager.aplicarStatusMestre({
+      battleId: battle.id, hostId: 'p1', participantId: hero.characterId,
+      status: { tipo: 'veneno', turnos: 5, dano: 40 },
+    });
+    expect(hero.statuses).toHaveLength(1);
+    expect(hero.statuses[0]).toMatchObject({ turnos: 5, dano: 40 });
+    expect(battle.log.some((l) => l.text.includes('Mestre'))).toBe(true);
+  });
+
+  it('imunidade do alvo barra a aplicação (zumbi bruto × veneno)', () => {
+    const { manager, battle, monstro } = setupMestre();
+    manager.aplicarStatusMestre({
+      battleId: battle.id, hostId: 'p1', participantId: monstro.uid,
+      status: { tipo: 'veneno', turnos: 3, dano: 30 },
+    });
+    expect(monstro.statuses).toHaveLength(0);
+    expect(battle.log.some((l) => l.text.includes('não é afetado'))).toBe(true);
+  });
+
+  it('só o mestre administra; remover funciona e expiração limpa', () => {
+    const { manager, battle, hero } = setupMestre();
+    expect(() => manager.aplicarStatusMestre({
+      battleId: battle.id, hostId: 'p2', participantId: hero.characterId,
+      status: { tipo: 'veneno', turnos: 2 },
+    })).toThrow('Apenas o mestre');
+    manager.aplicarStatusMestre({
+      battleId: battle.id, hostId: 'p1', participantId: hero.characterId,
+      status: { tipo: 'lentidao', turnos: 3 },
+    });
+    expect(hero.statuses).toHaveLength(1);
+    manager.removerStatusMestre({
+      battleId: battle.id, hostId: 'p1', participantId: hero.characterId, statusId: 'lentidao',
+    });
+    expect(hero.statuses).toHaveLength(0);
+    expect(battle.log.some((l) => l.text.includes('Mestre remove lentidão'))).toBe(true);
+    // Expiração no tick: 1 turno some após processar.
+    manager.aplicarStatusMestre({
+      battleId: battle.id, hostId: 'p1', participantId: hero.characterId,
+      status: { tipo: 'lentidao', turnos: 1 },
+    });
+    manager._processStatuses(battle, hero);
+    expect(hero.statuses).toHaveLength(0);
+    expect(battle.log.some((l) => l.text.includes('acabou'))).toBe(true);
+  });
+});

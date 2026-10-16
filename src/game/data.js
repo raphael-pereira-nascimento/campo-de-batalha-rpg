@@ -272,15 +272,22 @@ export const EQUIPMENT = {
 
 // Efeitos de status aplicados em batalha.
 // tipo: dot = dano por turno | hot = cura por turno | debuff = penalidade passiva | cc = controle (pula turnos)
+// Campos do catálogo (nenhum valor inventado — todos vêm do uso nos golpes/bebidas ou do motor):
+//   duracaoPadrao: turnos mais frequentes nos golpes que aplicam (fraqueza nunca é aplicada
+//     por golpe — usa o fallback do motor).
+//   danoPadrao: menor dano/turno observado nos golpes (dot/hot); dot/hot sem dano só contam turnos.
+//   acumulo: 'renova' = reaplicar leva a maior duração e atualiza o dano (regra do _applyStatus).
+//   modificadores: efeito mecânico real vindo de statusEffects() no battleManager.
+//   remocao: expiração (sempre) + itens de taverna cujo removeStatus lista o efeito.
 export const STATUS_DEFS = {
-  queimadura: { id: 'queimadura', nome: 'Queimadura', icon: '🔥', tipo: 'dot', desc: 'Causa dano de fogo a cada turno.' },
-  sangramento: { id: 'sangramento', nome: 'Sangramento', icon: '🩸', tipo: 'dot', desc: 'Perde HP a cada turno.' },
-  veneno: { id: 'veneno', nome: 'Veneno', icon: '☠️', tipo: 'dot', desc: 'Causa dano de veneno a cada turno.' },
-  regeneracao: { id: 'regeneracao', nome: 'Regeneração', icon: '🌿', tipo: 'hot', desc: 'Recupera HP a cada turno.' },
-  lentidao: { id: 'lentidao', nome: 'Lentidão', icon: '🐢', tipo: 'debuff', desc: 'Reduz a precisão e a esquiva.' },
-  cegueira: { id: 'cegueira', nome: 'Cegueira', icon: '🌫️', tipo: 'debuff', desc: 'Reduz muito a chance de acerto.' },
-  fraqueza: { id: 'fraqueza', nome: 'Fraqueza', icon: '💢', tipo: 'debuff', desc: 'Reduz o dano físico e mágico causado.' },
-  congelamento: { id: 'congelamento', nome: 'Congelamento', icon: '🧊', tipo: 'cc', desc: 'Pula os turnos até se libertar do gelo.' },
+  queimadura: { id: 'queimadura', nome: 'Queimadura', icon: '🔥', tipo: 'dot', desc: 'Causa dano de fogo a cada turno.', duracaoPadrao: 3, danoPadrao: 50, acumulo: 'renova', modificadores: 'dano por turno (definido pelo golpe)', remocao: ['expiração', 'itens com removeStatus: queimadura'] },
+  sangramento: { id: 'sangramento', nome: 'Sangramento', icon: '🩸', tipo: 'dot', desc: 'Perde HP a cada turno.', duracaoPadrao: 3, danoPadrao: 40, acumulo: 'renova', modificadores: 'dano por turno (definido pelo golpe)', remocao: ['expiração', 'itens com removeStatus: sangramento'] },
+  veneno: { id: 'veneno', nome: 'Veneno', icon: '☠️', tipo: 'dot', desc: 'Causa dano de veneno a cada turno.', duracaoPadrao: 3, danoPadrao: 30, acumulo: 'renova', modificadores: 'dano por turno (definido pelo golpe)', remocao: ['expiração', 'itens com removeStatus: veneno'] },
+  regeneracao: { id: 'regeneracao', nome: 'Regeneração', icon: '🌿', tipo: 'hot', desc: 'Recupera HP a cada turno.', duracaoPadrao: 3, danoPadrao: 50, acumulo: 'renova', modificadores: 'cura por turno (definida pelo item/golpe)', remocao: ['expiração'] },
+  lentidao: { id: 'lentidao', nome: 'Lentidão', icon: '🐢', tipo: 'debuff', desc: 'Reduz a precisão e a esquiva.', duracaoPadrao: 3, danoPadrao: 0, acumulo: 'renova', modificadores: '-10% acerto, -10% esquiva', remocao: ['expiração'] },
+  cegueira: { id: 'cegueira', nome: 'Cegueira', icon: '🌫️', tipo: 'debuff', desc: 'Reduz muito a chance de acerto.', duracaoPadrao: 2, danoPadrao: 0, acumulo: 'renova', modificadores: '-25% acerto', remocao: ['expiração'] },
+  fraqueza: { id: 'fraqueza', nome: 'Fraqueza', icon: '💢', tipo: 'debuff', desc: 'Reduz o dano físico e mágico causado.', duracaoPadrao: 1, danoPadrao: 0, acumulo: 'renova', modificadores: '×0.8 no dano causado', remocao: ['expiração', 'itens com removeStatus: fraqueza'] },
+  congelamento: { id: 'congelamento', nome: 'Congelamento', icon: '🧊', tipo: 'cc', desc: 'Pula os turnos até se libertar do gelo.', duracaoPadrao: 2, danoPadrao: 0, acumulo: 'renova', modificadores: 'pula o turno', remocao: ['expiração (libertação)'] },
 };
 
 export const STATUS_KEYS = Object.keys(STATUS_DEFS);
