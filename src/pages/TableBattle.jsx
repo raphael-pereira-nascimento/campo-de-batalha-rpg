@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import { ATTRIBUTE_NAMES } from '../config.js';
 import { danoFisicoAtaque, danoBaseDaArma } from '../game/sistema.js';
+import { MONSTERS } from '../game/monsters.js';
+import { SPELLS } from '../game/data.js';
 
 const BUFF_DEBUFF_PRESETS = [
   { id: 'forca_up', name: 'Força+', icon: '💪', type: 'buff', stat: 'forca', value: 2 },
@@ -93,6 +95,7 @@ const [lastRoll, setLastRoll] = useState(null);
   const [cbValue, setCbValue] = useState(2);
   const [cbIcon, setCbIcon] = useState('🔥');
   const [importTeam, setImportTeam] = useState('ally');
+  const [bossId, setBossId] = useState('');
 
   const [log, setLog] = useState([]);
 
@@ -150,6 +153,24 @@ const [lastRoll, setLastRoll] = useState(null);
     if (!c) return;
     setFighters((prev) => [...prev, { ...fighterFromCharacter(c, importTeam), _charId: charId }]);
   }, [characters, importTeam]);
+
+  const bosses = useMemo(
+    () => Object.values(MONSTERS)
+      .filter((m) => m.tipo === 'chefe')
+      .sort((a, b) => (a.nivel || 0) - (b.nivel || 0)),
+    [],
+  );
+
+  const addBoss = useCallback(() => {
+    const def = MONSTERS[bossId];
+    if (!def) return;
+    const f = makeFighter(`${def.icone || '👑'} ${def.nome}`, 'enemy', { ...def.attributes });
+    f._bossId = def.id;
+    setFighters((prev) => [...prev, f]);
+    const golpes = (def.spells || []).map((s) => SPELLS[s]?.nome || s).join(', ');
+    addLog(`👑 ${def.nome} (Nv.${def.nivel}) entra na mesa como inimigo! Passiva: ${def.passiva || '—'}${golpes ? ` Golpes: ${golpes}.` : ''}`);
+    setBossId('');
+  }, [bossId, addLog]);
 
   const applyBuff = useCallback(() => {
     if (!buffTarget || !buffPreset) return;
@@ -390,10 +411,44 @@ const [lastRoll, setLastRoll] = useState(null);
             </div>
           </section>
 
+          <section className="panel">
+            <h2>👑 Adicionar Chefão de Bioma</h2>
+            <p className="muted small">Entra como inimigo com os atributos do bestiário. Golpes, passiva, especial e ultimate vão para a crônica.</p>
+            <div className="table-battle-form">
+              <select value={bossId} onChange={(e) => setBossId(e.target.value)}>
+                <option value="">Escolha um chefão...</option>
+                {bosses.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.icone || '👑'} {b.nome} (Nv.{b.nivel}){b.bioma ? ` — ${b.bioma}` : ''}
+                  </option>
+                ))}
+              </select>
+              <button onClick={addBoss} disabled={!bossId}>Invocar chefão</button>
+            </div>
+            {bossId && (() => {
+              const b = MONSTERS[bossId];
+              if (!b) return null;
+              return (
+                <div className="muted small" style={{ marginTop: 8 }}>
+                  <div><strong>Passiva:</strong> {b.passiva}</div>
+                  <div><strong>Golpes:</strong> {(b.spells || []).map((s) => SPELLS[s]?.nome || s).join(' · ')}</div>
+                  {(b.especial || b.ultimate) && (
+                    <div>
+                      {b.especial && <><strong>Especial:</strong> {SPELLS[b.especial]?.nome || b.especial} </>}
+                      {b.ultimate && <><strong>Ultimate:</strong> {SPELLS[b.ultimate]?.nome || b.ultimate}</>}
+                      {b.varianteEclipse?.spell && (
+                        <> · <strong>Eclipse:</strong> {SPELLS[b.varianteEclipse.spell]?.nome || b.varianteEclipse.spell}</>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </section>
+
           {characters.length > 0 && (
             <section className="panel">
-              <h2>📥 Importar Ficha</h2>
-              <div className="table-battle-form">
+              <h2>📥 Importar Ficha</h2>              <div className="table-battle-form">
                 <select id="import-char-select" defaultValue="">
                   <option value="" disabled>Escolha uma ficha...</option>
                   {characters.filter((c) => !importedIds.has(c.id)).map((c) => (

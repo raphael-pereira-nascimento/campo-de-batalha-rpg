@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, emitAck, isOffline, getSocket } from '../api.js';
 import { dungeonsDisponiveis, montarEncontro } from '../game/dungeons.js';
+import { MONSTERS } from '../game/monsters.js';
+import { SPELLS } from '../game/data.js';
 import { estadoEclipse, ECLIPSE_PERIODO } from '../game/eclipse.js';
 
 export default function Dungeons({ player, characters, onBack, onOpenBattle }) {
@@ -104,6 +106,42 @@ export default function Dungeons({ player, characters, onBack, onOpenBattle }) {
     }
   };
 
+  // ── Arenas de Chefões: duelo direto contra um chefe de bioma ──
+  const chefes = useMemo(
+    () => Object.values(MONSTERS)
+      .filter((m) => m.tipo === 'chefe')
+      .sort((a, b) => (a.nivel || 0) - (b.nivel || 0)),
+    [],
+  );
+
+  const desafiarChefe = async (boss) => {
+    if (!personagem) {
+      setError('Escolha um personagem para a incursão.');
+      return;
+    }
+    setBusy(`chefe_${boss.id}`);
+    setError('');
+    try {
+      const ack = await emitAck('createBattle', {
+        name: `👑 ${boss.nome}`,
+        mode: 'mestre',
+        role: 'mestre_jogador',
+        playerId: player.id,
+        characterId: personagem.id,
+        character: personagem,
+        aiEnabled: true,
+      });
+      await emitAck('addMonster', { monsterId: boss.id });
+      await emitAck('startBattle', {});
+      onOpenBattle(ack.battleId);
+    } catch (e) {
+      setError(e.message);
+      setBusy('');
+    }
+  };
+
+  const nomeGolpe = (id) => SPELLS[id]?.nome || id;
+
   return (
     <div className="page">
       <header className="topbar">
@@ -164,6 +202,47 @@ export default function Dungeons({ player, characters, onBack, onOpenBattle }) {
                 A faixa da dungeon é escolhida pelo nível {nivel}.
               </span>
             )}
+          </div>
+        </section>
+
+        {/* ── Arenas de Chefões ── */}
+        <section className="panel">
+          <h2>👑 Arenas de Chefões</h2>
+          <p className="muted small">
+            Duelo direto contra um chefe de bioma, com golpes próprios, passiva, especial e ultimate.
+            {fase?.eclipseAtivo
+              ? ' O ECLIPSE está ativo: chefões entram na forma eclipsada, ainda mais forte!'
+              : ' Durante o Eclipse eles ganham uma forma eclipsada com ultimate próprio.'}
+          </p>
+          <div className="dungeon-list">
+            {chefes.map((b) => (
+              <div key={b.id} className="panel dungeon-card">
+                <div className="dungeon-head">
+                  <h2>{b.icone || '👑'} {b.nome}</h2>
+                  <span className="tag">NV {b.nivel}</span>
+                  {b.bioma && <span className="tag">{b.bioma}</span>}
+                  {fase?.eclipseAtivo && b.varianteEclipse && (
+                    <span className="tag eclipse-tag">🩸 Forma eclipsada</span>
+                  )}
+                </div>
+                <p className="muted">{b.passiva}</p>
+                <p className="flavour">
+                  🗡️ {(b.arma?.nome || 'Ataque')} · ✨ {b.spells.map(nomeGolpe).join(' · ')}
+                </p>
+                {(b.especial || b.ultimate) && (
+                  <p className="muted small">
+                    {b.especial && <>⭐ Especial: {nomeGolpe(b.especial)} </>}
+                    {b.ultimate && <>💥 Ultimate: {nomeGolpe(b.ultimate)}</>}
+                    {fase?.eclipseAtivo && b.varianteEclipse?.spell && (
+                      <> · 🩸 Eclipse: {nomeGolpe(b.varianteEclipse.spell)}</>
+                    )}
+                  </p>
+                )}
+                <button onClick={() => desafiarChefe(b)} disabled={!!busy || !personagem}>
+                  {busy === `chefe_${b.id}` ? 'Invocando o chefão...' : `⚔️ Desafiar ${b.nome}`}
+                </button>
+              </div>
+            ))}
           </div>
         </section>
 

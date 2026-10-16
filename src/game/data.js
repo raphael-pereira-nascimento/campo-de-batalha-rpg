@@ -172,6 +172,15 @@ export const SPELLS = {
   baforada_obsidiana: { nome: 'Baforada de Obsidiana', tipo: 'ataque', custo: 12, poder: 2.6, desc: 'Chama negra derretida incinera o alvo.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3 }, alcanceVertical: 'limitado', alvo: 'cone', alvos: 2 },
   chuva_lava: { nome: 'Chuva de Lava', tipo: 'ataque', custo: 16, poder: 2.8, desc: 'Lava incandescente cai sobre todos os inimigos.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3 }, alvo: 'area' },
   apocalipse_obsidiana: { nome: 'Apocalipse de Obsidiana', tipo: 'ataque', custo: 28, poder: 3.6, desc: 'Erupção vulcânica devastadora reduz tudo a cinzas.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 4 }, alvo: 'area' },
+
+  // ── Ultimates do Eclipse (PROVISÓRIO: só usáveis na variante eclipsada) ──
+  abismo_eclipsado: { nome: 'Abismo Eclipsado', tipo: 'ataque', custo: 30, poder: 3.6, desc: 'O oceano profundo engole o campo inteiro durante o Eclipse.', elemento: 'agua', status: { tipo: 'cegueira', turnos: 3 }, alvo: 'area' },
+  fome_da_copa: { nome: 'Fome da Copa', tipo: 'ataque', custo: 28, poder: 3.5, desc: 'A copa eclipsada devora a luz e os invasores.', elemento: 'terra', status: { tipo: 'sangramento', turnos: 4 }, alvo: 'area' },
+  pestilencia_eclipsada: { nome: 'Pestilência Eclipsada', tipo: 'ataque', custo: 28, poder: 3.5, desc: 'O ar apodrece: toxinas do Eclipse corroem todos.', elemento: 'trevas', status: { tipo: 'veneno', turnos: 4 }, alvo: 'area' },
+  inverno_eclipsado: { nome: 'Inverno Eclipsado', tipo: 'ataque', custo: 30, poder: 3.6, desc: 'Nevasca eterna do Eclipse congela até a coragem.', elemento: 'agua', status: { tipo: 'congelamento', turnos: 3 }, alvo: 'area' },
+  fenda_eclipsada: { nome: 'Fenda Eclipsada', tipo: 'ataque', custo: 28, poder: 3.5, desc: 'Fendas do Eclipse engolem o campo de batalha.', elemento: 'terra', status: { tipo: 'lentidao', turnos: 4 }, alvo: 'area' },
+  cataclismo_eclipsado: { nome: 'Cataclismo Eclipsado', tipo: 'ataque', custo: 30, poder: 3.6, desc: 'A montanha anda e racha o mundo em dois.', elemento: 'terra', status: { tipo: 'lentidao', turnos: 4 }, alvo: 'area' },
+  sol_negro: { nome: 'Sol Negro', tipo: 'ataque', custo: 32, poder: 4.0, desc: 'O céu queima antes do fogo chegar: o ultimate do Eclipse.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 4 }, alvo: 'area' },
 };
 
 /**

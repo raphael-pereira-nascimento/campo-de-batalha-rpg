@@ -20,4 +20,23 @@ export default defineConfig(() => ({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      // Uma página HTML por parte do site: index + standalone que abrem
+      // direto na tela correspondente (via <meta name="cbr-view">).
+      input: {
+        main: 'index.html',
+        'mesa-de-batalha': 'mesa-de-batalha.html',
+        'campo-de-batalha': 'campo-de-batalha.html',
+        masmorras: 'masmorras.html',
+        taverna: 'taverna.html',
+        personagens: 'personagens.html',
+        arsenal: 'arsenal.html',
+        regras: 'regras.html',
+        forja: 'forja.html',
+        loja: 'loja.html',
+        registro: 'registro.html',
+      },
+    },
+  },
 }));

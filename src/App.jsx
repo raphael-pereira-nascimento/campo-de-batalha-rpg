@@ -27,10 +27,11 @@ function shareIdFromPath() {
 }
 const SHARE_MATCH = shareIdFromPath();
 
-export default function App() {
-  const [view, setView] = useState('home');
+export default function App({ initialView } = {}) {
+  const [view, setView] = useState(initialView || 'home');
   const [share, setShare] = useState(SHARE_MATCH);
   const [player, setPlayer] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [characters, setCharacters] = useState([]);
   const [customClasses, setCustomClasses] = useState([]);
   const [gameData, setGameData] = useState(null);
@@ -67,14 +68,19 @@ export default function App() {
         .listCharacters(stored.id)
         .then((d) => {
           setCharacters(d.characters);
-          setView('characters');
+          // Páginas standalone (mesa-de-batalha.html etc.) voltam para a
+          // página pedida após restaurar a sessão.
+          setView(initialView && initialView !== 'home' ? initialView : 'characters');
         })
         .catch(() => {
           if (getToken() && !isOffline()) {
             logout();
             setView('home');
           }
-        });
+        })
+        .finally(() => setAuthChecked(true));
+    } else {
+      setAuthChecked(true);
     }
   }, []);
 
@@ -85,7 +91,7 @@ export default function App() {
     localStorage.setItem('cbr_token', token);
     const d = await api.listCharacters(player.id);
     setCharacters(d.characters);
-    setView('characters');
+    setView(initialView && initialView !== 'home' ? initialView : 'characters');
     return { player, token };
   };
 
@@ -183,6 +189,12 @@ export default function App() {
   }
 
   if (view === 'home') {
+    return <Home onLogin={handleLogin} />;
+  }
+
+  // Páginas standalone exigem login: sem sessão, mostra o login e depois
+  // volta para a página pedida (handleLogin já cuida do retorno).
+  if (!player && authChecked && !share) {
     return <Home onLogin={handleLogin} />;
   }
 

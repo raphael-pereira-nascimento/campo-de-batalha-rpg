@@ -37,7 +37,7 @@ import {
   ALCANCE_VERTICAL,
   ALTITUDES,
 } from './sistema.js';
-import { estadoEclipse, sortearVarianteEclipse, aplicarEclipseEmChefe } from './eclipse.js';
+import { estadoEclipse, sortearVarianteEclipse, aplicarEclipseEmChefe, aplicarVarianteEclipseEmChefe } from './eclipse.js';
 import { RACES } from './races.js';
 import { buildMonster, bossActionsPerTurn } from './monsters.js';
 
@@ -336,7 +336,9 @@ export class BattleManager {
     const eclipse = battle.eclipse || estadoEclipse(1);
     // Variante de monstro sorteada durante o Eclipse (regra do criador).
     const variante = sortearVarianteEclipse(eclipse);
-    const def = { ...monsterDef, _uid: uid };
+    let def = { ...monsterDef, _uid: uid };
+    // Chefes de bioma têm forma eclipsada própria (golpe extra + passiva).
+    def = aplicarVarianteEclipseEmChefe(def, eclipse);
     if (variante) {
       // Sufixo para o nome não virar "Sedento Horda de Goblins".
       def.nome = `${def.nome} (${variante.prefixo})`;

@@ -253,3 +253,31 @@ export function aplicarEclipseEmChefe(chefe, { estado, hpBase } = {}) {
     passiva: `${chefe.passiva || 'Chefe.'} Eclipse: +${Math.round((mult - 1) * 100)}% de HP e +${extra} ação(ões) por turno.`.trim(),
   };
 }
+
+/**
+ * Variante eclipsada de um chefe de bioma (PROVISÓRIO).
+ * Fora do Eclipse devolve a definição intacta. Durante o Eclipse ativo,
+ * renomeia o chefe, soma os efeitos da variante, anexa o ultimate do
+ * Eclipse aos golpes e estende a passiva — sem tocar nas regras base.
+ */
+export function aplicarVarianteEclipseEmChefe(def, estado) {
+  const variante = def?.varianteEclipse;
+  if (!def || !variante || !estado?.eclipseAtivo) return def;
+  const spells = [...(def.spells || [])];
+  if (variante.spell && !spells.includes(variante.spell)) spells.push(variante.spell);
+  const efeitos = { ...(def.efeitos || {}) };
+  for (const [k, v] of Object.entries(variante.efeitos || {})) {
+    // Bônus somam sobre a base (ex.: 1.2 + 0.15); imunidades (arrays) unem.
+    if (Array.isArray(v)) efeitos[k] = [...(efeitos[k] || []), ...v.filter((x) => !(efeitos[k] || []).includes(x))];
+    else if (typeof v === 'number' && typeof efeitos[k] === 'number') efeitos[k] = Math.round((efeitos[k] + v) * 100) / 100;
+    else efeitos[k] = v;
+  }
+  return {
+    ...def,
+    nome: `${def.nome} (${variante.sufixo || 'Eclipsado'})`,
+    spells,
+    efeitos,
+    passiva: `${def.passiva || ''} ${variante.passiva || ''}`.trim(),
+    varianteEclipseAtiva: true,
+  };
+}
