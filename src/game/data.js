@@ -136,6 +136,42 @@ export const SPELLS = {
 
   golpe_sagrado: { nome: 'Golpe Sagrado', tipo: 'ataque', custo: 7, poder: 2.0, desc: 'Espada envolta em luz sagrada.', elemento: 'luz', alcanceVertical: 'terrestre' },
   escudo_divino: { nome: 'Escudo Divino', tipo: 'defesa', custo: 7, poder: 0.3, desc: 'Barreira sagrada que absorve dano.', elemento: 'luz' },
+
+  // ── Chefes de Biomas ───────────────────────────────────────────────
+  // Kraken
+  tentaculo_esmagador: { nome: 'Tentáculo Esmagador', tipo: 'ataque', custo: 12, poder: 2.4, desc: 'Tentáculo colossal esmagando o alvo com força titânica.', elemento: 'fisico', status: { tipo: 'lentidao', turnos: 2 }, alcanceVertical: 'limitado', alvo: 'area', alvos: 2 },
+  redemoinho_aguas_profundas: { nome: 'Redemoinho das Águas Profundas', tipo: 'ataque', custo: 15, poder: 2.6, desc: 'Redemoinho de mar profundo atingindo todos ao redor.', elemento: 'agua', status: { tipo: 'cegueira', turnos: 2 }, alvo: 'area' },
+  maremoto_colossal: { nome: 'Maremoto Colossal', tipo: 'ataque', custo: 25, poder: 3.2, desc: 'Maremoto devastador varrendo o campo inteiro.', elemento: 'agua', status: { tipo: 'lentidao', turnos: 3 }, alvo: 'area' },
+
+  // Espírito da Floresta
+  raiz_enraizante: { nome: 'Raiz Enraizante', tipo: 'ataque', custo: 10, poder: 2.0, desc: 'Raízes brotam do solo, prendendo e causando dano.', elemento: 'terra', status: { tipo: 'lentidao', turnos: 3 }, alcanceVertical: 'terrestre', alvo: 'area' },
+  floresta_vingativa: { nome: 'Floresta Vingativa', tipo: 'ataque', custo: 15, poder: 2.5, desc: 'Espinhos e galhos atacam todos os inimigos.', elemento: 'terra', status: { tipo: 'sangramento', turnos: 3 }, alvo: 'area' },
+  fúria_natureza: { nome: 'Fúria da Natureza', tipo: 'ataque', custo: 25, poder: 3.2, desc: 'Natureza se revolta e devasta o campo inteiro.', elemento: 'terra', status: { tipo: 'sangramento', turnos: 4 }, alvo: 'area' },
+
+  // Monstro do Pantano
+  lama_acida: { nome: 'Lama Ácida', tipo: 'ataque', custo: 10, poder: 2.0, desc: 'Jato de lama ácida que corrói o alvo.', elemento: 'agua', status: { tipo: 'queimadura', turnos: 3 }, alcanceVertical: 'terrestre' },
+  bolor_toxico: { nome: 'Bolor Tóxico', tipo: 'ataque', custo: 14, poder: 2.3, desc: 'Nuvem tóxica expande-se, envenenando todos.', elemento: 'trevas', status: { tipo: 'veneno', turnos: 3 }, alvo: 'area' },
+  pestilencia_pantanal: { nome: 'Pestilência do Pantanal', tipo: 'ataque', custo: 24, poder: 3.1, desc: 'Mar de toxinas e podridão varre o campo.', elemento: 'trevas', status: { tipo: 'veneno', turnos: 4 }, alvo: 'area' },
+
+  // Yeti
+  golpe_gelo: { nome: 'Golpe de Gelo', tipo: 'ataque', custo: 11, poder: 2.2, desc: 'Punho gelado que congela o alvo.', elemento: 'agua', status: { tipo: 'congelamento', turnos: 2 }, alcanceVertical: 'terrestre' },
+  avalancha: { nome: 'Avalancha', tipo: 'ataque', custo: 16, poder: 2.6, desc: 'Massa de neve e gelo despenca sobre todos.', elemento: 'agua', status: { tipo: 'congelamento', turnos: 2 }, alvo: 'area' },
+  furia_glacial: { nome: 'Fúria Glacial', tipo: 'ataque', custo: 25, poder: 3.3, desc: 'Tempestade glacial de proporções titânicas.', elemento: 'agua', status: { tipo: 'congelamento', turnos: 3 }, alvo: 'area' },
+
+  // Minhoca de Broca
+  perfuracao_terrena: { nome: 'Perfuração Terrena', tipo: 'ataque', custo: 10, poder: 2.2, desc: 'Broca subterrânea que explode sob o alvo.', elemento: 'terra', status: { tipo: 'sangramento', turnos: 2 }, alcanceVertical: 'terrestre' },
+  tremor_subterraneo: { nome: 'Tremor Subterrâneo', tipo: 'ataque', custo: 15, poder: 2.5, desc: 'Tremor de proporções maciças atinge todo o campo.', elemento: 'terra', status: { tipo: 'lentidao', turnos: 3 }, alvo: 'area' },
+  colapso_caverna: { nome: 'Colapso da Caverna', tipo: 'ataque', custo: 24, poder: 3.2, desc: 'Techo da caverna desaba sobre todos.', elemento: 'terra', status: { tipo: 'lentidao', turnos: 4 }, alvo: 'area' },
+
+  // Jabuti Casco de Montanha
+  impacto_casco: { nome: 'Impacto do Casco', tipo: 'ataque', custo: 11, poder: 2.3, desc: 'Investida com casco de pedra maciço.', elemento: 'terra', status: { tipo: 'lentidao', turnos: 2 }, alcanceVertical: 'terrestre' },
+  onda_pedregulho: { nome: 'Onda de Pedregulho', tipo: 'ataque', custo: 15, poder: 2.6, desc: 'Chuva de pedras atinge todos os inimigos.', elemento: 'terra', status: { tipo: 'lentidao', turnos: 3 }, alvo: 'area' },
+  terremoto_montanha: { nome: 'Terremoto da Montanha', tipo: 'ataque', custo: 25, poder: 3.3, desc: 'Terremoto cataclísmico que abala o campo inteiro.', elemento: 'terra', status: { tipo: 'lentidao', turnos: 4 }, alvo: 'area' },
+
+  // Dragão de Obsidiana
+  baforada_obsidiana: { nome: 'Baforada de Obsidiana', tipo: 'ataque', custo: 12, poder: 2.6, desc: 'Chama negra derretida incinera o alvo.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3 }, alcanceVertical: 'limitado', alvo: 'cone', alvos: 2 },
+  chuva_lava: { nome: 'Chuva de Lava', tipo: 'ataque', custo: 16, poder: 2.8, desc: 'Lava incandescente cai sobre todos os inimigos.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3 }, alvo: 'area' },
+  apocalipse_obsidiana: { nome: 'Apocalipse de Obsidiana', tipo: 'ataque', custo: 28, poder: 3.6, desc: 'Erupção vulcânica devastadora reduz tudo a cinzas.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 4 }, alvo: 'area' },
 };
 
 /**
