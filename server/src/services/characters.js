@@ -8,6 +8,7 @@ import {
   POTIONS,
   deriveStats,
   applyMaxMults,
+  aplicarCrescimentoNivel,
   efeitosDeHabilidades,
   ATTRIBUTE_KEYS,
   POINTS_TO_DISTRIBUTE,
@@ -518,15 +519,8 @@ export async function grantRewards(battle) {
     }
 
     const levelsGained = level - char.level;
-    const attributes = { ...char.attributes };
-    if (levelsGained > 0) {
-      const primary = (char.classes || []).find((c) => c.primary) || (char.classes || [])[0] || {};
-      const upAttr = primary.levelUp || 'forca';
-      attributes[upAttr] = Math.min(
-        (attributes[upAttr] || 0) + levelsGained,
-        MAX_ATTRIBUTE_WITH_BONUS,
-      );
-    }
+    // Estilo FF/Pokémon: todos os atributos sobem juntos a cada nível.
+    const attributes = aplicarCrescimentoNivel(char.attributes, levelsGained);
 
     const stats = applyMaxMults(
       deriveStats(char.classes, level, attributes, char.equipment, char.races),
@@ -571,10 +565,8 @@ export function aplicarLevelUpManual(char) {
   if (xp < cost) {
     return { ok: false, error: `XP insuficiente: precisa de ${cost} (tem ${xp}).`, cost };
   }
-  const attributes = { ...(char.attributes || {}) };
-  const primary = (char.classes || []).find((c) => c.primary) || (char.classes || [])[0] || {};
-  const upAttr = primary.levelUp || 'forca';
-  attributes[upAttr] = Math.min((attributes[upAttr] || 0) + 1, MAX_ATTRIBUTE_WITH_BONUS);
+  // Estilo FF/Pokémon: todos os atributos sobem juntos.
+  const attributes = aplicarCrescimentoNivel(char.attributes, 1);
   const stats = applyMaxMults(
     deriveStats(char.classes || [], level + 1, attributes, char.equipment || {}, char.races || []),
     efeitosDaFicha(char.races, char.habilidades),
@@ -628,12 +620,8 @@ export function definirNivelManual(char, novoNivel) {
   );
   if (alvo === atual) return { ok: false, error: `O nível já é ${atual}.` };
   const diff = alvo - atual;
-  const attributes = { ...(char.attributes || {}) };
-  const primary = (char.classes || []).find((c) => c.primary) || (char.classes || [])[0] || {};
-  const upAttr = primary.levelUp || 'forca';
-  attributes[upAttr] = diff > 0
-    ? Math.min((attributes[upAttr] || 0) + diff, MAX_ATTRIBUTE_WITH_BONUS)
-    : Math.max((attributes[upAttr] || 0) + diff, 1);
+  // Estilo FF/Pokémon: todos os atributos sobem/descem juntos.
+  const attributes = aplicarCrescimentoNivel(char.attributes, diff);
   const stats = applyMaxMults(
     deriveStats(char.classes || [], alvo, attributes, char.equipment || {}, char.races || []),
     efeitosDaFicha(char.races, char.habilidades),

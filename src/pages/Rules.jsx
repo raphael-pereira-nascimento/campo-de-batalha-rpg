@@ -46,8 +46,7 @@ const SECTIONS = [
     conteudo: (
       <>
         <p>O limite máximo de nível ainda não está definido (possibilidade de chegar a aproximadamente LV 1100).</p>
-        <p>Ao subir de nível, os atributos evoluem automaticamente. A progressão não é simplesmente +1 em tudo: atributos maiores podem gerar aumentos maiores conforme a fórmula de progressão.</p>
-        <p className="muted">Não inventar nova fórmula de progressão sem autorização.</p>
+        <p>Ao subir de nível, todos os atributos (FOR, INT, RES, VEL e REF) sobem juntos, estilo Final Fantasy/Pokémon — cada nível soma o crescimento definido em CRESCIMENTO_POR_NIVEL, até o teto de atributo com bônus.</p>
       </>
     ),
   },

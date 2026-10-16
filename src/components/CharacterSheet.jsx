@@ -213,7 +213,7 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
             className="ghost small"
             onClick={levelUp}
             disabled={busy === 'levelup' || (character.xp || 0) < (character.level || 1) * 100}
-            title={`Subir para o Nv. ${(character.level || 1) + 1} por ${(character.level || 1) * 100} de XP (+1 no atributo da classe primária)`}
+            title={`Subir para o Nv. ${(character.level || 1) + 1} por ${(character.level || 1) * 100} de XP (todos os atributos sobem juntos)`}
           >
             {busy === 'levelup' ? 'Subindo...' : '⬆️ Subir com XP'}
           </button>

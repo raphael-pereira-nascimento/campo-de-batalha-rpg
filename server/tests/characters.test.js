@@ -231,13 +231,17 @@ describe('aplicarLevelUpManual — subir de nível gastando XP', () => {
     mp_current: 40,
   });
 
-  it('sobe 1 nível pelo custo level × 100 e soma no atributo da classe primária', () => {
+  it('sobe 1 nível pelo custo level × 100 e todos os atributos sobem juntos', () => {
     const r = aplicarLevelUpManual(ficha());
     expect(r.ok).toBe(true);
     expect(r.cost).toBe(200);
     expect(r.character.level).toBe(3);
     expect(r.character.xp).toBe(50);
     expect(r.character.attributes.forca).toBe(ATTRS.forca + 1);
+    expect(r.character.attributes.inteligencia).toBe(ATTRS.inteligencia + 1);
+    expect(r.character.attributes.resistencia).toBe(ATTRS.resistencia + 1);
+    expect(r.character.attributes.destreza).toBe(ATTRS.destreza + 1);
+    expect(r.character.attributes.reflexos).toBe(ATTRS.reflexos + 1);
     expect(r.character.hp_max).toBeGreaterThan(0);
   });
 
@@ -262,21 +266,24 @@ describe('definirNivelManual — ajuste livre do Mestre (1..30)', () => {
     mp_current: 40,
   });
 
-  it('sobe vários níveis somando no atributo primário', () => {
+  it('sobe vários níveis com todos os atributos juntos', () => {
     const r = definirNivelManual(ficha(), 8);
     expect(r.ok).toBe(true);
     expect(r.diff).toBe(3);
     expect(r.character.level).toBe(8);
     expect(r.character.attributes.forca).toBe(11);
+    expect(r.character.attributes.inteligencia).toBe(7);
+    expect(r.character.attributes.destreza).toBe(8);
     expect(r.character.xp).toBe(120);
   });
 
-  it('desce níveis, reduz o atributo e zera o XP', () => {
+  it('desce níveis com todos os atributos juntos e zera o XP', () => {
     const r = definirNivelManual(ficha(), 3);
     expect(r.ok).toBe(true);
     expect(r.diff).toBe(-2);
     expect(r.character.level).toBe(3);
     expect(r.character.attributes.forca).toBe(6);
+    expect(r.character.attributes.inteligencia).toBe(2);
     expect(r.character.xp).toBe(0);
   });
 

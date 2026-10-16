@@ -4,7 +4,7 @@ import { isOffline, setServerStatus, saveOfflinePlayer, getOfflinePlayer, getOff
 import { offlineBattle } from './offline/battle.js';
 import { MONSTERS } from './game/monsters.js';
 import { gemIsRaw } from './game/gems.js';
-import { EQUIPMENT, POTIONS, deriveStats, applyMaxMults, efeitosDeHabilidades, TAVERN_DRINKS, TAVERN_FOODS } from './game/data.js';
+import { EQUIPMENT, POTIONS, deriveStats, applyMaxMults, aplicarCrescimentoNivel, efeitosDeHabilidades, TAVERN_DRINKS, TAVERN_FOODS } from './game/data.js';
 import { DUNGEONS } from './game/dungeons.js';
 import {
   estadoMundo,
@@ -226,12 +226,8 @@ export function applyOfflineRewards(charId, xpGained, wins = 0) {
   let level = c.level || 1;
   while (xp >= level * 100) { xp -= level * 100; level += 1; }
   const levelsGained = level - (c.level || 1);
-  const attributes = { ...c.attributes };
-  if (levelsGained > 0) {
-    const primary = (c.classes || []).find((cl) => cl.primary) || (c.classes || [])[0] || {};
-    const upAttr = primary.levelUp || 'forca';
-    attributes[upAttr] = Math.min((attributes[upAttr] || 0) + levelsGained, 14);
-  }
+  // Estilo FF/Pokémon: todos os atributos sobem juntos a cada nível.
+  const attributes = aplicarCrescimentoNivel(c.attributes, levelsGained);
   const stats = applyMaxMults(
     deriveStats(c.classes || [], level, attributes, c.equipment || {}, c.races || []),
     efeitosDaFicha(c),
@@ -360,10 +356,8 @@ export const api = {
       if ((c.xp || 0) < cost) {
         return Promise.reject(new Error(`XP insuficiente: precisa de ${cost} (tem ${c.xp || 0}).`));
       }
-      const attributes = { ...(c.attributes || {}) };
-      const primary = (c.classes || []).find((cl) => cl.primary) || (c.classes || [])[0] || {};
-      const upAttr = primary.levelUp || 'forca';
-      attributes[upAttr] = Math.min((attributes[upAttr] || 0) + 1, 14);
+      // Estilo FF/Pokémon: todos os atributos sobem juntos.
+      const attributes = aplicarCrescimentoNivel(c.attributes, 1);
       const stats = applyMaxMults(
         deriveStats(c.classes || [], level + 1, attributes, c.equipment || {}, c.races || []),
         efeitosDaFicha(c),
@@ -390,12 +384,8 @@ export const api = {
       const alvo = Math.max(1, Math.min(30, Math.floor(Number(level) || atual)));
       if (alvo === atual) return Promise.reject(new Error(`O nível já é ${atual}.`));
       const diff = alvo - atual;
-      const attributes = { ...(c.attributes || {}) };
-      const primary = (c.classes || []).find((cl) => cl.primary) || (c.classes || [])[0] || {};
-      const upAttr = primary.levelUp || 'forca';
-      attributes[upAttr] = diff > 0
-        ? Math.min((attributes[upAttr] || 0) + diff, 14)
-        : Math.max((attributes[upAttr] || 0) + diff, 1);
+      // Estilo FF/Pokémon: todos os atributos sobem/descem juntos.
+      const attributes = aplicarCrescimentoNivel(c.attributes, diff);
       const stats = applyMaxMults(
         deriveStats(c.classes || [], alvo, attributes, c.equipment || {}, c.races || []),
         efeitosDaFicha(c),

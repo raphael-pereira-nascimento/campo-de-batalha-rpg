@@ -711,6 +711,33 @@ export const MAX_ATTRIBUTE = 10;
 export const MAX_ATTRIBUTE_WITH_BONUS = 12;
 export const MAX_PLAYERS_PER_BATTLE = 20;
 
+// ── Crescimento por nível, estilo FF/Pokémon (PROVISÓRIO) ───────────────
+// A cada nível, TODOS os atributos sobem juntos (não só o da classe).
+// Ajuste o ritmo por atributo aqui; o teto é MAX_ATTRIBUTE_WITH_BONUS.
+export const CRESCIMENTO_POR_NIVEL = {
+  forca: 1,
+  inteligencia: 1,
+  resistencia: 1,
+  destreza: 1,
+  reflexos: 1,
+};
+
+// Soma `niveis` níveis de crescimento (niveis pode ser negativo ao descer
+// de nível: nesse caso reduz até o piso MIN_ATTRIBUTE).
+export function aplicarCrescimentoNivel(attributes, niveis = 1) {
+  const out = { ...(attributes || {}) };
+  const n = Math.trunc(Number(niveis) || 0);
+  if (n === 0) return out;
+  for (const k of ATTRIBUTE_KEYS) {
+    const passo = CRESCIMENTO_POR_NIVEL[k] || 0;
+    if (!passo) continue;
+    out[k] = n > 0
+      ? Math.min((out[k] || 0) + passo * n, MAX_ATTRIBUTE_WITH_BONUS)
+      : Math.max((out[k] || 0) + passo * n, MIN_ATTRIBUTE);
+  }
+  return out;
+}
+
 // Atributos efetivos = base + bônus de raças (com penalidade) + bônus de classes + equipamento
 //
 // Penalidade por raças múltiplas:
