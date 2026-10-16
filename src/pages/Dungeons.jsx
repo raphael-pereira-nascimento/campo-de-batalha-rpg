@@ -210,6 +210,7 @@ export default function Dungeons({ player, characters, onBack, onOpenBattle }) {
           <h2>👑 Arenas de Chefões</h2>
           <p className="muted small">
             Duelo direto contra um chefe de bioma, com golpes próprios, passiva, especial e ultimate.
+            A vida do chefão cresce com o nº de adversários (+10% por lutador extra, PROVISÓRIO).
             {fase?.eclipseAtivo
               ? ' O ECLIPSE está ativo: chefões entram na forma eclipsada, ainda mais forte!'
               : ' Durante o Eclipse eles ganham uma forma eclipsada com ultimate próprio.'}

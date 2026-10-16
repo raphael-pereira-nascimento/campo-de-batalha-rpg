@@ -6,7 +6,7 @@ import {
   dungeonXpTotal,
   montarEncontro,
 } from '../src/game/dungeons.js';
-import { MONSTERS, buildMonster, monsterXp } from '../src/game/monsters.js';
+import { MONSTERS, buildMonster, monsterXp, chefeHpMultPorAdversarios } from '../src/game/monsters.js';
 
 describe('Dungeons — progressão confirmada pelo criador', () => {
   it('a progressão começa no manequim e termina no Golem de Pedra', () => {
@@ -124,6 +124,17 @@ describe('Dungeons — montagem do encontro', () => {
     const eclipse = montarEncontro('golem_pedra', { nivelJogadores: 5, dia: 30 });
     expect(eclipse.recompensas.xp).toBeGreaterThan(normal.recompensas.xp);
     expect(eclipse.recompensas.moedas).toBeGreaterThan(normal.recompensas.moedas);
+  });
+
+  it('a vida do chefe cresce com o nº de adversários (bônus PROVISÓRIO)', () => {
+    expect(chefeHpMultPorAdversarios(1)).toBe(1);
+    expect(chefeHpMultPorAdversarios(2)).toBeGreaterThan(1);
+    expect(chefeHpMultPorAdversarios(5)).toBeGreaterThan(chefeHpMultPorAdversarios(2));
+    const solo = montarEncontro('golem_pedra', { nivelJogadores: 1 }).participantes
+      .find((p) => p.ondaRotulo === 'Chefe');
+    const grupo = montarEncontro('golem_pedra', { nivelJogadores: 4 }).participantes
+      .find((p) => p.ondaRotulo === 'Chefe');
+    expect(grupo.hpMax).toBeGreaterThan(solo.hpMax);
   });
 });
 

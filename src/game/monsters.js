@@ -374,6 +374,16 @@ export function bossActionsPerTurn(playerCount) {
   return 4;
 }
 
+// ── Vida do chefe pelo nº de adversários (PROVISÓRIO) ─────────────────
+// Além da regra do criador (HP = soma do HP do grupo × multiplicador),
+// o chefe ganha um bônus por cada adversário além do primeiro, para duelos
+// 1×1 não virarem passeio e grupos grandes sentirem a diferença.
+export const CHEFE_BONUS_POR_ADVERSARIO = 0.1; // +10% por adversário extra
+export function chefeHpMultPorAdversarios(n) {
+  const k = Math.max(1, Math.floor(Number(n) || 1));
+  return Math.round((1 + CHEFE_BONUS_POR_ADVERSARIO * (k - 1)) * 100) / 100;
+}
+
 // XP concedido por abater um monstro.
 // Hordas valem XP por unidade: cada corpo abatido dá o seu XP.
 export function monsterXp(def, unidades = 1) {

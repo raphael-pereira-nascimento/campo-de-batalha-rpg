@@ -6,6 +6,7 @@ import {
   normalizeMegaSkill,
   buildCharacterData,
   validateAttributes,
+  aplicarLevelUpManual,
 } from '../src/services/characters.js';
 
 const ATTRS = { forca: 8, inteligencia: 4, resistencia: 8, destreza: 5, reflexos: 5 }; // soma 30
@@ -212,5 +213,36 @@ describe('buildCharacterData — ficha livre', () => {
     expect(data.ultimate.nome).toBe('Fúria Ancestral');
     expect(data.ultimate.modo.turnos).toBe(3);
     expect(data.especial.nome).toBe('Meteoro');
+  });
+});
+
+describe('aplicarLevelUpManual — subir de nível gastando XP', () => {
+  const ficha = () => ({
+    id: 'c1',
+    level: 2,
+    xp: 250,
+    attributes: { ...ATTRS },
+    classes: [{ id: 'guerreiro', primary: true, levelUp: 'forca' }],
+    equipment: {},
+    races: [],
+    habilidades: [],
+    hp_current: 600,
+    mp_current: 40,
+  });
+
+  it('sobe 1 nível pelo custo level × 100 e soma no atributo da classe primária', () => {
+    const r = aplicarLevelUpManual(ficha());
+    expect(r.ok).toBe(true);
+    expect(r.cost).toBe(200);
+    expect(r.character.level).toBe(3);
+    expect(r.character.xp).toBe(50);
+    expect(r.character.attributes.forca).toBe(ATTRS.forca + 1);
+    expect(r.character.hp_max).toBeGreaterThan(0);
+  });
+
+  it('recusa quando o XP não cobre o custo', () => {
+    const r = aplicarLevelUpManual({ ...ficha(), xp: 199 });
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('200');
   });
 });

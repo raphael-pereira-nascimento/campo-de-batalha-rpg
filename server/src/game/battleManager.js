@@ -39,7 +39,7 @@ import {
 } from './sistema.js';
 import { estadoEclipse, sortearVarianteEclipse, aplicarEclipseEmChefe, aplicarVarianteEclipseEmChefe } from './eclipse.js';
 import { RACES } from './races.js';
-import { buildMonster, bossActionsPerTurn } from './monsters.js';
+import { buildMonster, bossActionsPerTurn, chefeHpMultPorAdversarios } from './monsters.js';
 
 let logCounter = 0;
 
@@ -375,20 +375,21 @@ export class BattleManager {
 
     if (modoChefeDinamico) {
       // Modo Chefe Dinâmico: vira chefe com HP = soma do HP dos jogadores x 2.0
-      // e acoesPorTurno conforme o nº de jogadores (1-4=1, 5-8=2, 9-12=3, 13+=4).
+      // (× bônus por nº de adversários) e acoesPorTurno conforme o nº de jogadores.
       m.isBoss = true;
       m.monsterDef = { ...m.monsterDef, multiplicadorHP: 2.0 };
-      m.hp = m.hpMax = Math.max(50, Math.round(sumHeroHp * 2.0));
+      m.hp = m.hpMax = Math.max(50, Math.round(sumHeroHp * 2.0 * chefeHpMultPorAdversarios(playerCount)));
       if (playerCount <= 4) m.acoesPorTurno = 1;
       else if (playerCount <= 8) m.acoesPorTurno = 2;
       else if (playerCount <= 12) m.acoesPorTurno = 3;
       else m.acoesPorTurno = 4;
     } else if (m.isBoss) {
-      m.hp = m.hpMax = Math.max(50, Math.round(sumHeroHp * (def.multiplicadorHP || 3)));
+      // Regra do criador (soma do HP × multiplicador) + bônus por adversários.
+      m.hp = m.hpMax = Math.max(50, Math.round(sumHeroHp * (def.multiplicadorHP || 3) * chefeHpMultPorAdversarios(playerCount)));
     }
     m.monsterDef = { ...m.monsterDef, acoesPorTurno: m.acoesPorTurno };
     battle.participants.push(m);
-    battle.log.push(makeLog(`🐲 ${m.monsterName} entra na batalha pelo lado do mestre!${m.isBoss ? ' (CHEFE)' : ''}`, 'enemy'));
+    battle.log.push(makeLog(`🐲 ${m.monsterName} entra na batalha pelo lado do mestre!${m.isBoss ? ` (CHEFE · vida ajustada para ${playerCount} adversário(s))` : ''}`, 'enemy'));
     return battle;
   }
 
@@ -433,7 +434,8 @@ export class BattleManager {
       const sum = heroes.reduce((s, h) => s + h.hpMax, 0);
       enemies.forEach((e) => {
         if (e.isBoss) {
-          const hpBase = Math.max(50, Math.round(sum * (e.monsterDef.multiplicadorHP || 3)));
+          // Recalcula no início: soma do HP × multiplicador × bônus por adversários.
+          const hpBase = Math.max(50, Math.round(sum * (e.monsterDef.multiplicadorHP || 3) * chefeHpMultPorAdversarios(heroes.length)));
           const ajustado = aplicarEclipseEmChefe(
             { ...e, hp: hpBase, hpMax: hpBase, acoesPorTurno: e.acoesPorTurno },
             { estado: eclipse, hpBase },

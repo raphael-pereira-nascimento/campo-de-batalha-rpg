@@ -69,6 +69,18 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
     }
   };
 
+  const levelUp = async () => {
+    setBusy('levelup');
+    try {
+      await api.levelUpCharacter(character.id);
+      onChanged();
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const handleSocket = async (equipSlot, slotIndex, gemId) => {
     setBusy('socket');
     try {
@@ -169,6 +181,14 @@ export default function CharacterSheet({ character, gameData, onChanged }) {
           ))}
           <span className="tag">Nv. {character.level}</span>
           <span className="tag">XP {character.xp}/{character.level * 100}</span>
+          <button
+            className="ghost small"
+            onClick={levelUp}
+            disabled={busy === 'levelup' || (character.xp || 0) < (character.level || 1) * 100}
+            title={`Subir para o Nv. ${(character.level || 1) + 1} por ${(character.level || 1) * 100} de XP (+1 no atributo da classe primária)`}
+          >
+            {busy === 'levelup' ? 'Subindo...' : '⬆️ Subir de nível'}
+          </button>
         </div>
       </div>
 

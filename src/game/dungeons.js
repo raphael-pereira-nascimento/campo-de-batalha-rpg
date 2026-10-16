@@ -7,7 +7,7 @@
 //   Golem de Pedra      → chefe LV 25
 // PROVISÓRIO: quantidade de ondas, recompensas em moedas e gemas.
 // ─────────────────────────────────────────────────────────────────────────────
-import { MONSTERS, buildMonster, monsterXp } from './monsters.js';
+import { MONSTERS, buildMonster, monsterXp, chefeHpMultPorAdversarios } from './monsters.js';
 import { estadoEclipse } from './eclipse.js';
 
 export const DUNGEONS = [
@@ -193,6 +193,8 @@ export function montarEncontro(dungeonId, { nivelJogadores = 1, dia = 1, tipoEcl
   if (d.chefe && MONSTERS[d.chefe]) {
     const p = buildMonster({ ...MONSTERS[d.chefe], _uid: `${d.id}_chefe` }, somaHpJogadores);
     p.ondaRotulo = 'Chefe';
+    // Prévia com o mesmo bônus por nº de adversários da batalha real.
+    p.hp = p.hpMax = Math.round(p.hpMax * chefeHpMultPorAdversarios(nivelJogadores));
     escalaEclipse(p, est);
     if (est.eclipseAtivo) {
       // Chefes ganham ação extra e HP conforme o multiplicador de chefe.

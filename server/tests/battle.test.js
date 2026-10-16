@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BattleManager } from '../src/game/battleManager.js';
-import { MONSTERS, buildMonster } from '../src/game/monsters.js';
+import { MONSTERS, buildMonster, chefeHpMultPorAdversarios } from '../src/game/monsters.js';
 import { MULTI_AREA_MULT, MULTI_CONE_MULT } from '../src/game/sistema.js';
 
 function makeCharacter(overrides = {}) {
@@ -508,7 +508,8 @@ describe('BattleManager — melhorias do Mestre', () => {
     });
     const boss = battle.participants.find((q) => q.isMonster);
     expect(boss.isBoss).toBe(true);
-    expect(boss.hpMax).toBe(Math.max(50, Math.round(sumHeroHp * 2.0)));
+    // 2.0 × bônus por nº de adversários (5 heróis => ×1.4, PROVISÓRIO).
+    expect(boss.hpMax).toBe(Math.max(50, Math.round(sumHeroHp * 2.0 * chefeHpMultPorAdversarios(5))));
     expect(boss.acoesPorTurno).toBe(2); // 5 jogadores => faixa 5-8
   });
 

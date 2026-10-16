@@ -561,6 +561,59 @@ export async function grantRewards(battle) {
   }
 }
 
+// ── Subir de nível manualmente (mesma regra do grantRewards) ───────────
+// Custa level × 100 de XP, dá +1 nível e +1 no atributo da classe primária.
+// Função pura (sem banco) para reuso e testes; o UPDATE fica no levelUpCharacter.
+export function aplicarLevelUpManual(char) {
+  const level = char.level || 1;
+  const xp = char.xp || 0;
+  const cost = level * 100;
+  if (xp < cost) {
+    return { ok: false, error: `XP insuficiente: precisa de ${cost} (tem ${xp}).`, cost };
+  }
+  const attributes = { ...(char.attributes || {}) };
+  const primary = (char.classes || []).find((c) => c.primary) || (char.classes || [])[0] || {};
+  const upAttr = primary.levelUp || 'forca';
+  attributes[upAttr] = Math.min((attributes[upAttr] || 0) + 1, MAX_ATTRIBUTE_WITH_BONUS);
+  const stats = applyMaxMults(
+    deriveStats(char.classes || [], level + 1, attributes, char.equipment || {}, char.races || []),
+    efeitosDaFicha(char.races, char.habilidades),
+  );
+  return {
+    ok: true,
+    cost,
+    character: {
+      ...char,
+      level: level + 1,
+      xp: xp - cost,
+      attributes,
+      hp_max: stats.hpMax,
+      mp_max: stats.mpMax,
+      hp_current: Math.min(char.hp_current ?? stats.hpMax, stats.hpMax),
+      mp_current: Math.min(char.mp_current ?? stats.mpMax, stats.mpMax),
+    },
+  };
+}
+
+export async function levelUpCharacter(characterId, playerId) {
+  const char = await getCharacter(characterId);
+  if (!char) throw new Error('Personagem não encontrado.');
+  if (playerId && char.player_id && char.player_id !== playerId) {
+    throw new Error('Este personagem não é seu.');
+  }
+  const r = aplicarLevelUpManual(char);
+  if (!r.ok) throw new Error(r.error);
+  const c = r.character;
+  await query(
+    `UPDATE characters
+     SET xp = $1, level = $2, hp_max = $3, mp_max = $4, hp_current = $5, mp_current = $6,
+         attributes = $7
+     WHERE id = $8`,
+    [c.xp, c.level, c.hp_max, c.mp_max, c.hp_current, c.mp_current, JSON.stringify(c.attributes), characterId],
+  );
+  return getCharacter(characterId);
+}
+
 export async function getWallet(playerId) {
   const { rows } = await query('SELECT wallet_cents, name FROM players WHERE id = $1', [playerId]);
   if (!rows.length) throw new Error('Jogador não encontrado.');

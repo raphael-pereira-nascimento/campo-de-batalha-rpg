@@ -47,7 +47,7 @@ export function initConnection() {
     .then((ok) => (ok ? true : ping(20000)))
     .then((ok) => {
       setServerStatus(ok ? 'up' : 'down');
-      console.info(`[conexao] servidor ${ok ? 'online' : 'indisponÃ­vel â?" modo local ativado'}`);
+      console.info(`[conexao] servidor ${ok ? 'online' : 'indisponÃ­vel ï¿½?" modo local ativado'}`);
       return ok;
     });
 }
@@ -74,7 +74,7 @@ function potionItem(id) {
   return { id, nome: p.nome, tipo: 'pocao', cura: p.cura || null, mana: p.mana || null };
 }
 
-/* â"?â"?â"? Mock Socket for offline mode â"?â"?â"? */
+/* ï¿½"?ï¿½"?ï¿½"? Mock Socket for offline mode ï¿½"?ï¿½"?ï¿½"? */
 class MockSocket {
   constructor() {
     this._handlers = {};
@@ -186,7 +186,7 @@ class MockSocket {
       return;
     }
 
-    // â"?â"? CalendÃ¡rio do mundo / Eclipse (mock) â"?â"?
+    // ï¿½"?ï¿½"? CalendÃ¡rio do mundo / Eclipse (mock) ï¿½"?ï¿½"?
     if (event === 'getCalendario') {
       if (ack) ack({ ok: true, calendario: estadoMundo() });
       return;
@@ -247,7 +247,7 @@ export function applyOfflineRewards(charId, xpGained, wins = 0) {
   localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
 }
 
-/* â"?â"?â"? Socket (online or mock) â"?â"?â"? */
+/* ï¿½"?ï¿½"?ï¿½"? Socket (online or mock) ï¿½"?ï¿½"?ï¿½"? */
 export function getSocket() {
   if (isOffline()) {
     return mockSocket;
@@ -277,7 +277,7 @@ async function request(url, options = {}) {
       ...options,
     });
   } catch {
-    throw new Error('Servidor indisponÃ­vel. Recarregue a pÃ¡gina â?" se persistir, o modo local serÃ¡ usado no prÃ³ximo acesso.');
+    throw new Error('Servidor indisponÃ­vel. Recarregue a pÃ¡gina ï¿½?" se persistir, o modo local serÃ¡ usado no prÃ³ximo acesso.');
   }
   const json = await res.json().catch(() => ({ ok: false, error: 'Resposta invÃ¡lida' }));
   if (!res.ok || json.ok === false) {
@@ -294,7 +294,7 @@ function auth(url, options = {}) {
   });
 }
 
-/* â"?â"?â"? API (online or offline) â"?â"?â"? */
+/* ï¿½"?ï¿½"?ï¿½"? API (online or offline) ï¿½"?ï¿½"?ï¿½"? */
 export const api = {
   createPlayer: (name, password) => {
     if (isOffline()) {
@@ -349,6 +349,37 @@ export const api = {
     }
     return request(`/api/characters/${id}`);
   },
+  // Sobe 1 nÃ­vel gastando level Ã— 100 de XP (mesma regra do servidor).
+  levelUpCharacter: (id) => {
+    if (isOffline()) {
+      const chars = getOfflineCharacters();
+      const c = chars.find((ch) => ch.id === id);
+      if (!c) return Promise.reject(new Error('Personagem nÃ£o encontrado.'));
+      const level = c.level || 1;
+      const cost = level * 100;
+      if ((c.xp || 0) < cost) {
+        return Promise.reject(new Error(`XP insuficiente: precisa de ${cost} (tem ${c.xp || 0}).`));
+      }
+      const attributes = { ...(c.attributes || {}) };
+      const primary = (c.classes || []).find((cl) => cl.primary) || (c.classes || [])[0] || {};
+      const upAttr = primary.levelUp || 'forca';
+      attributes[upAttr] = Math.min((attributes[upAttr] || 0) + 1, 14);
+      const stats = applyMaxMults(
+        deriveStats(c.classes || [], level + 1, attributes, c.equipment || {}, c.races || []),
+        efeitosDaFicha(c),
+      );
+      c.level = level + 1;
+      c.xp = (c.xp || 0) - cost;
+      c.attributes = attributes;
+      c.hp_max = stats.hpMax;
+      c.mp_max = stats.mpMax;
+      c.hp_current = Math.min(c.hp_current ?? stats.hpMax, stats.hpMax);
+      c.mp_current = Math.min(c.mp_current ?? stats.mpMax, stats.mpMax);
+      localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
+      return Promise.resolve({ ok: true, character: c, cost });
+    }
+    return auth(`/api/characters/${id}/level-up`, { method: 'POST' });
+  },
   equipItem: (id, slot, itemId) => {
     if (isOffline()) {
       const chars = getOfflineCharacters();
@@ -401,7 +432,7 @@ export const api = {
     return request('/api/gamedata');
   },
 
-  // â"?â"? CalendÃ¡rio do mundo / Eclipse â"?â"?
+  // ï¿½"?ï¿½"? CalendÃ¡rio do mundo / Eclipse ï¿½"?ï¿½"?
   calendario: () => {
     if (isOffline()) return Promise.resolve(estadoMundo());
     return request('/api/calendario');
@@ -428,7 +459,7 @@ export const api = {
     return auth('/api/calendario/tipo', { method: 'POST', body: JSON.stringify({ tipo }) });
   },
 
-  // â"?â"? Dungeons â"?â"?
+  // ï¿½"?ï¿½"? Dungeons ï¿½"?ï¿½"?
   getDungeons: () => {
     if (isOffline()) {
       return Promise.resolve({ ok: true, dungeons: DUNGEONS, calendario: estadoMundo() });
@@ -442,7 +473,7 @@ export const api = {
   getSharedCharacter: (id) => {
     return request(`/api/share/characters/${id}`);
   },
-  // â"?â"? Ranking/Wallet â"?â"?
+  // ï¿½"?ï¿½"? Ranking/Wallet ï¿½"?ï¿½"?
   getRanking: () => {
     if (isOffline()) {
       const chars = getOfflineCharacters().map((c) => ({
@@ -579,7 +610,7 @@ export const api = {
     return auth(`/api/custom-skills/${id}`, { method: 'DELETE' });
   },
 
-  // â"?â"? Gemas â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?â"?
+  // ï¿½"?ï¿½"? Gemas ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?ï¿½"?
 
   getCharacterGems: (characterId) => {
     if (isOffline()) {
@@ -601,7 +632,7 @@ export const api = {
       const gems = getOfflineGems(characterId);
       const gemIdx = gems.indexOf(gemId);
       if (gemIdx === -1) return Promise.reject(new Error('Gema nÃ£o encontrada.'));
-      if (gemIsRaw(gemId)) return Promise.reject(new Error('âs ï¸? Requer polimento antes de usar'));
+      if (gemIsRaw(gemId)) return Promise.reject(new Error('ï¿½sï¿½ï¿½? Requer polimento antes de usar'));
       removeOfflineGem(characterId, gemId);
       socketedGems[slotIndex] = gemId;
       c.equipment[equipSlot] = { ...item, socketedGems };
