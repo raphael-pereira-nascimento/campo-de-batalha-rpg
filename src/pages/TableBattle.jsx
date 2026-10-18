@@ -35,6 +35,7 @@ function makeFighter(name, team, attrs = {}, extra = {}) {
     forca: a.forca || 5, inteligencia: a.inteligencia || 5,
     resistencia: a.resistencia || 5, destreza: a.destreza || 5,
     statusEffects: [],
+    initiative: null,
     equipment: extra.equipment || {},
     spells: extra.spells || [],
     skills: extra.skills || [],
@@ -83,6 +84,9 @@ function computeDamage(attacker, isCrit) {
 export default function TableBattle({ onBack, characters = [], gameData }) {
   const [fighters, setFighters] = useState([]);
   const [round, setRound] = useState(1);
+  const [initiativeOrder, setInitiativeOrder] = useState([]);
+  const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
+  const [initiativeRolled, setInitiativeRolled] = useState(false);
   const [newName, setNewName] = useState('');
   const [newTeam, setNewTeam] = useState('ally');
   const [newAttrs, setNewAttrs] = useState({ forca: 5, inteligencia: 5, resistencia: 5, destreza: 5, reflexos: 5 });
@@ -184,19 +188,45 @@ const [lastRoll, setLastRoll] = useState(null);
 
   const addFighter = useCallback(() => {
     if (!newName.trim()) return;
-    setFighters((prev) => [...prev, makeFighter(newName.trim(), newTeam, { ...newAttrs })]);
+    setFighters((prevFighters) => {
+      const next = [...prevFighters, makeFighter(newName.trim(), newTeam, { ...newAttrs })];
+      if (initiativeRolled) {
+        setInitiativeOrder((prevOrder) => [...prevOrder, next[next.length - 1].id]);
+      }
+      return next;
+    });
     setNewName('');
-  }, [newName, newTeam, newAttrs]);
+  }, [newName, newTeam, newAttrs, initiativeRolled]);
 
   const removeFighter = useCallback((id) => {
-    setFighters((prev) => prev.filter((f) => f.id !== id));
-  }, []);
+    setFighters((prevFighters) => {
+      const removedIdx = prevFighters.findIndex((f) => f.id === id);
+      const updated = prevFighters.filter((f) => f.id !== id);
+      setInitiativeOrder((prevOrder) => {
+        if (!prevOrder.includes(id)) return prevOrder;
+        const next = prevOrder.filter((fid) => fid !== id);
+        const curIdx = prevOrder.indexOf(id);
+        let newIdx = currentTurnIndex;
+        if (curIdx <= currentTurnIndex) newIdx = Math.max(0, currentTurnIndex - 1);
+        if (newIdx >= next.length) newIdx = Math.max(0, next.length - 1);
+        setCurrentTurnIndex(newIdx);
+        return next;
+      });
+      return updated;
+    });
+  }, [currentTurnIndex]);
 
   const importCharacter = useCallback((charId) => {
     const c = characters.find((ch) => ch.id === charId);
     if (!c) return;
-    setFighters((prev) => [...prev, { ...fighterFromCharacter(c, importTeam), _charId: charId }]);
-  }, [characters, importTeam]);
+    setFighters((prevFighters) => {
+      const next = [...prevFighters, { ...fighterFromCharacter(c, importTeam), _charId: charId }];
+      if (initiativeRolled) {
+        setInitiativeOrder((prevOrder) => [...prevOrder, next[next.length - 1].id]);
+      }
+      return next;
+    });
+  }, [characters, importTeam, initiativeRolled]);
 
   const bosses = useMemo(
     () => Object.values(MONSTERS)
@@ -210,11 +240,35 @@ const [lastRoll, setLastRoll] = useState(null);
     if (!def) return;
     const f = makeFighter(`${def.icone || '👑'} ${def.nome}`, 'enemy', { ...def.attributes });
     f._bossId = def.id;
-    setFighters((prev) => [...prev, f]);
+    setFighters((prevFighters) => {
+      const next = [...prevFighters, f];
+      if (initiativeRolled) {
+        setInitiativeOrder((prevOrder) => [...prevOrder, next[next.length - 1].id]);
+      }
+      return next;
+    });
     const golpes = (def.spells || []).map((s) => SPELLS[s]?.nome || s).join(', ');
     addLog(`👑 ${def.nome} (Nv.${def.nivel}) entra na mesa como inimigo! Passiva: ${def.passiva || '—'}${golpes ? ` Golpes: ${golpes}.` : ''}`);
     setBossId('');
-  }, [bossId, addLog]);
+  }, [bossId, addLog, initiativeRolled]);
+
+  // Rola iniciativa (D20 + VEL) para todos que ainda não têm e define a ordem de turnos.
+  const rollInitiative = useCallback(() => {
+    setFighters((prev) =>
+      prev.map((f) => ({
+        ...f,
+        initiative: f.initiative ?? Math.floor(Math.random() * 20) + 1 + effectiveStat(f, 'destreza'),
+      }))
+    );
+    const order = [...fighters]
+      .filter((f) => f.hp > 0)
+      .sort((a, b) => (b.initiative ?? 0) - (a.initiative ?? 0))
+      .map((f) => f.id);
+    setInitiativeOrder(order);
+    setCurrentTurnIndex(0);
+    setInitiativeRolled(true);
+    addLog(`🎯 Iniciativa rolada! Ordem: ${order.map((id) => fighters.find((f) => f.id === id)?.name).join(' → ')}`);
+  }, [fighters, addLog, effectiveStat]);
 
   const applyBuff = useCallback(() => {
     if (!buffTarget || !buffPreset) return;
@@ -247,6 +301,16 @@ const [lastRoll, setLastRoll] = useState(null);
   const executarAcao = useCallback(() => {
     const attacker = fighters.find((f) => f.id === actAttacker);
     if (!attacker || attacker.hp <= 0 || actTargets.length === 0) return;
+
+    // Respeita a ordem de turno quando a iniciativa já foi rolada.
+    if (initiativeRolled && initiativeOrder.length > 0) {
+      const currentId = initiativeOrder[currentTurnIndex];
+      if (actAttacker !== currentId) {
+        const current = fighters.find((f) => f.id === currentId);
+        addLog(`⛔ Não é a vez de ${attacker.name}. Aguarde a vez de ${current ? current.name : '—'}.`);
+        return;
+      }
+    }
 
     if (actionMode === 'attack') {
       const armas = armasDoLutador(attacker);
@@ -326,6 +390,7 @@ const [lastRoll, setLastRoll] = useState(null);
   }, [
     fighters, actAttacker, actTargets, actionMode, selWeaponId, selSpellId, selItemId,
     armasDoLutador, magiasDoLutador, itensDoLutador, addLog, STATUS_DEFS, SPELLS,
+    initiativeRolled, initiativeOrder, currentTurnIndex,
   ]);
 
   const removeCustomEffect = useCallback((type, uid_) => {
@@ -355,6 +420,17 @@ const [lastRoll, setLastRoll] = useState(null);
     const attacker = fighters.find((f) => f.id === atkAttacker);
     const defender = fighters.find((f) => f.id === atkDefender);
     if (!attacker || !defender || defender.hp <= 0) return;
+
+    // Respeita a ordem de turno quando a iniciativa já foi rolada.
+    if (initiativeRolled && initiativeOrder.length > 0) {
+      const currentId = initiativeOrder[currentTurnIndex];
+      if (atkAttacker !== currentId) {
+        const current = fighters.find((f) => f.id === currentId);
+        addLog(`⛔ Não é a vez de ${attacker.name}. Aguarde a vez de ${current ? current.name : '—'}.`);
+        return;
+      }
+    }
+
     setRolling(true);
     setRollResult(null);
     let step = 0;
@@ -383,14 +459,38 @@ const [lastRoll, setLastRoll] = useState(null);
         }
       }
     }, 60);
-  }, [atkAttacker, atkDefender, fighters, addLog]);
+  }, [atkAttacker, atkDefender, fighters, addLog, initiativeRolled, initiativeOrder, currentTurnIndex]);
 
-  const nextRound = useCallback(() => {
-    tickEffects();
-    setRound((r) => r + 1);
-    setRollResult(null);
-    addLog(`═══ Rodada ${round + 1} ═══`);
-  }, [round, tickEffects, addLog]);
+  const nextTurn = useCallback(() => {
+    if (initiativeOrder.length === 0) {
+      // Sem iniciativa rolando: comportamento antigo (próxima rodada)
+      tickEffects();
+      setRound((r) => r + 1);
+      setRollResult(null);
+      addLog(`═══ Rodada ${round + 1} ═══`);
+      return;
+    }
+    const advance = (idx) => {
+      const nextIdx = idx + 1;
+      if (nextIdx >= initiativeOrder.length) {
+        // Fim da rodada: processa efeitos e reinicia a ordem
+        tickEffects();
+        setRound((r) => r + 1);
+        setCurrentTurnIndex(0);
+        addLog(`═══ Fim da rodada ${round}. Iniciando rodada ${round + 1} ═══`);
+      } else {
+        const nextFighter = fighters.find((f) => f.id === initiativeOrder[nextIdx]);
+        if (nextFighter && nextFighter.hp <= 0) {
+          // Pula combatentes derrotados
+          advance(nextIdx);
+        } else {
+          setCurrentTurnIndex(nextIdx);
+        }
+      }
+      setRollResult(null);
+    };
+    advance(currentTurnIndex);
+  }, [currentTurnIndex, initiativeOrder, round, fighters, tickEffects, addLog]);
 
   const doRoll = useCallback(() => {
     const faces = Math.max(2, Math.min(100, Number(diceFaces) || 20));
@@ -421,21 +521,25 @@ const [lastRoll, setLastRoll] = useState(null);
     const hpPct = f.hpMax > 0 ? (f.hp / f.hpMax) * 100 : 0;
     const mpPct = f.mpMax > 0 ? (f.mp / f.mpMax) * 100 : 0;
     const dead = f.hp <= 0;
+    const isTurn = initiativeRolled && initiativeOrder.length > 0 && initiativeOrder[currentTurnIndex] === f.id;
+    const turnPos = initiativeRolled ? initiativeOrder.indexOf(f.id) + 1 : null;
     return (
-      <div key={f.id} className={`fighter-card ${dead ? 'fighter-dead' : ''}`}>
+      <div key={f.id} className={`fighter-card ${dead ? 'fighter-dead' : ''} ${isTurn ? 'fighter-turn' : ''}`}>
         <div className="fighter-card-header">
-          <span className="fighter-card-name">{dead && '☠️ '}{f.name}</span>
+          <span className="fighter-card-name">{dead && '☠️ '}{f.name}{isTurn ? ' ◀── vez' : ''}</span>
+          {turnPos && <span className="turn-pos">#{turnPos}</span>}
           <button className="ghost remove-x" onClick={() => removeFighter(f.id)}>✕</button>
         </div>
         <div className="fighter-card-stats-row">
           {[
+            { label: 'INI', val: f.initiative ?? '—' },
             { label: 'VEL', val: effectiveStat(f, 'destreza') },
             { label: 'REF', val: effectiveStat(f, 'reflexos') },
             { label: 'FOR', val: effectiveStat(f, 'forca') },
             { label: 'INT', val: effectiveStat(f, 'inteligencia') },
             { label: 'RES', val: effectiveStat(f, 'resistencia') },
           ].map(({ label, val }) => (
-            <span key={label} className="fighter-card-stat">{label} {val}</span>
+            <span key={label} className={`fighter-card-stat ${label === 'INI' && isTurn ? 'stat-ini-turn' : ''}`}>{label} {val}</span>
           ))}
         </div>
         <div className="fighter-card-bars">
@@ -487,9 +591,25 @@ const [lastRoll, setLastRoll] = useState(null);
         <div>
           <h1>📋 Batalha de Mesa</h1>
           <span className="player-name">Rodada {round}</span>
+          {initiativeRolled && initiativeOrder.length > 0 && (
+            <span className="turn-badge">
+              🎯 Vez de:{' '}
+              <strong>{fighters.find((f) => f.id === initiativeOrder[currentTurnIndex])?.name}</strong>
+              {currentTurnIndex + 1}/{initiativeOrder.length}
+            </span>
+          )}
         </div>
         <button className="ghost" onClick={onBack}>← Voltar</button>
-        <button onClick={nextRound}>Próxima Rodada →</button>
+        <button
+          onClick={rollInitiative}
+          disabled={initiativeRolled || fighters.length === 0}
+          className={initiativeRolled ? 'ghost' : ''}
+        >
+          {initiativeRolled ? '✅ Iniciativa definida' : '🎲 Rolar Iniciativa'}
+        </button>
+        <button onClick={nextTurn} disabled={fighters.length === 0}>
+          ➡️ Próximo Turno
+        </button>
       </header>
 
       <div className="table-battle-layout">
