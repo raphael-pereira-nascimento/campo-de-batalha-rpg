@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import { ATTRIBUTE_NAMES } from '../config.js';
-import { danoFisicoAtaque, danoBaseDaArma } from '../game/sistema.js';
+import { danoFisicoAtaque, danoBaseDaArma, danoMagico } from '../game/sistema.js';
 import { MONSTERS } from '../game/monsters.js';
-import { SPELLS } from '../game/data.js';
+import { SPELLS, STATUS_DEFS, armasDeEquipamento, melhorArma, skillFromSpell } from '../game/data.js';
 
 const BUFF_DEBUFF_PRESETS = [
   { id: 'forca_up', name: 'Força+', icon: '💪', type: 'buff', stat: 'forca', value: 2 },
@@ -24,10 +24,10 @@ const ICON_SUGGESTIONS = ['🔥', '❄️', '⚡', '💀', '🌿', '🌙', '⭐'
 let _nextId = 1;
 const uid = () => `tb_${_nextId++}`;
 
-function makeFighter(name, team, attrs = {}) {
+function makeFighter(name, team, attrs = {}, extra = {}) {
   const a = { forca: 5, inteligencia: 5, resistencia: 5, destreza: 5, reflexos: 5, ...attrs };
   const hpMax = 500 + (a.resistencia || 5) * 10;
-  const mpMax = (a.inteligencia || 5) * 10; // mana = INT × 10 (mesma regra do combate principal)
+  const mpMax = (a.inteligencia || 5) * 10;
   return {
     id: uid(), name, team,
     hp: hpMax, hpMax, mp: mpMax, mpMax,
@@ -35,12 +35,26 @@ function makeFighter(name, team, attrs = {}) {
     forca: a.forca || 5, inteligencia: a.inteligencia || 5,
     resistencia: a.resistencia || 5, destreza: a.destreza || 5,
     statusEffects: [],
+    equipment: extra.equipment || {},
+    spells: extra.spells || [],
+    skills: extra.skills || [],
+    inventory: extra.inventory || [],
+    level: extra.level || 1,
+    _charId: extra._charId || null,
+    ...extra,
   };
 }
 
 function fighterFromCharacter(c, team) {
   const attrs = c.attributes || {};
-  return makeFighter(c.name, team, attrs);
+  return makeFighter(c.name, team, attrs, {
+    equipment: c.equipment || {},
+    spells: c.spells || [],
+    skills: c.skills || [],
+    inventory: c.inventory || [],
+    level: c.level || 1,
+    _charId: c.id,
+  });
 }
 
 function effectiveStat(fighter, stat) {
@@ -97,6 +111,14 @@ const [lastRoll, setLastRoll] = useState(null);
   const [importTeam, setImportTeam] = useState('ally');
   const [bossId, setBossId] = useState('');
 
+  // Estados das ações rápidas (espelham o painel do Campo de Batalha)
+  const [actionMode, setActionMode] = useState('attack'); // attack | spell | item
+  const [actAttacker, setActAttacker] = useState('');
+  const [actTargets, setActTargets] = useState([]);
+  const [selWeaponId, setSelWeaponId] = useState('');
+  const [selSpellId, setSelSpellId] = useState('');
+  const [selItemId, setSelItemId] = useState('');
+
   const [log, setLog] = useState([]);
 
   const allies = useMemo(() => fighters.filter((f) => f.team === 'ally'), [fighters]);
@@ -109,6 +131,28 @@ const [lastRoll, setLastRoll] = useState(null);
     ...customBuffs.map((c) => ({ ...c, id: c.uid, type: 'buff' })),
     ...customDebuffs.map((c) => ({ ...c, id: c.uid, type: 'debuff' })),
   ], [customBuffs, customDebuffs]);
+
+  // Lista as armas de um lutador (fallback: desarmado, dano base 2).
+  const armasDoLutador = useCallback((f) => {
+    if (!f) return [];
+    const lista = armasDeEquipamento(f.equipment || {});
+    if (lista.length === 0) {
+      lista.push({ id: 'desarmado', nome: 'Desarmado', danoBase: 2, slot: 'perto', categoria: 'corpo_a_corpo', recarga: 0 });
+    }
+    return lista;
+  }, []);
+
+  const magiasDoLutador = useCallback((f) => {
+    if (!f) return [];
+    return (f.spells || [])
+      .map((sid) => ({ sid, spell: SPELLS[sid], skill: skillFromSpell(sid, gameData) }))
+      .filter((x) => x.spell);
+  }, [gameData, SPELLS]);
+
+  const itensDoLutador = useCallback((f) => {
+    if (!f) return [];
+    return (f.inventory || []).filter((it) => it && it.tipo !== 'equipamento');
+  }, []);
 
   const addLog = useCallback((text) => {
     setLog((prev) => [...prev.slice(-50), { id: Date.now() + Math.random(), text, round }]);
@@ -198,6 +242,91 @@ const [lastRoll, setLastRoll] = useState(null);
     else setCustomDebuffs((p) => [...p, eff]);
     setCbName('');
   }, [cbName, cbStat, cbValue, cbIcon, customBuffs, customDebuffs]);
+
+  // Executa uma ação rápida: ataque físico, magia (consome MP) ou item (cura).
+  const executarAcao = useCallback(() => {
+    const attacker = fighters.find((f) => f.id === actAttacker);
+    if (!attacker || attacker.hp <= 0 || actTargets.length === 0) return;
+
+    if (actionMode === 'attack') {
+      const armas = armasDoLutador(attacker);
+      const arma = armas.find((a) => a.id === selWeaponId) || melhorArma(attacker.equipment) || armas[0];
+      const defender = fighters.find((f) => f.id === actTargets[0]);
+      if (!defender || defender.hp <= 0) return;
+
+      const roll = Math.floor(Math.random() * 20) + 1;
+      const chance = computeHitChance(attacker, defender);
+      const threshold = Math.ceil(chance * 20);
+      const hit = roll >= threshold;
+      const isCrit = roll === 20;
+
+      if (hit) {
+        const dmg = Math.round(danoFisicoAtaque(effectiveStat(attacker, 'forca'), danoBaseDaArma(arma)) * (isCrit ? 2 : 1));
+        setFighters((prev) => prev.map((f) => f.id === defender.id ? { ...f, hp: Math.max(0, f.hp - dmg) } : f));
+        addLog(`⚔️ ${attacker.name} ataca ${defender.name} com ${arma.nome || 'desarmado'} → D20:${roll} (${threshold}+) ${isCrit ? 'CRÍTICO ' : ''}→ ${dmg} dano`);
+      } else {
+        addLog(`⚔️ ${attacker.name} erra ${defender.name} com ${arma.nome || 'desarmado'} → D20:${roll} (${threshold}+)`);
+      }
+      setActTargets([]);
+      return;
+    }
+
+    if (actionMode === 'spell') {
+      const m = magiasDoLutador(attacker).find((x) => x.sid === selSpellId);
+      if (!m) return;
+      const custo = m.spell.custo || 0;
+      if ((attacker.mp || 0) < custo) { addLog(`🔮 ${attacker.name} não tem MP suficiente (${custo})`); return; }
+      const defender = fighters.find((f) => f.id === actTargets[0]);
+      if (!defender || defender.hp <= 0) return;
+
+      const poder = m.spell.poder || 1.6;
+      const dmg = Math.round(danoMagico(effectiveStat(attacker, 'inteligencia'), poder));
+      setFighters((prev) => prev.map((f) => {
+        if (f.id === attacker.id) return { ...f, mp: Math.max(0, f.mp - custo) };
+        if (f.id === defender.id) return { ...f, hp: Math.max(0, f.hp - dmg) };
+        return f;
+      }));
+      addLog(`🔮 ${attacker.name} lança ${m.spell.nome} em ${defender.name} → ${dmg} dano (MP ${custo})`);
+
+      if (m.spell.status) {
+        const st = m.spell.status;
+        const def = STATUS_DEFS[st.tipo] || {};
+        const tipoBuff = st.tipo === 'dot' || st.tipo === 'veneno' ? 'debuff' : st.tipo === 'hot' ? 'buff' : 'debuff';
+        const statMap = { veneno: 'poison', regeneracao: 'regen' };
+        const eff = {
+          uid: uid(), name: def.nome || st.tipo, icon: def.icon || '✦',
+          stat: statMap[st.tipo] || 'custom', value: st.dano || 0,
+          duration: st.turnos || 2, type: tipoBuff,
+        };
+        setFighters((prev) => prev.map((f) => f.id === defender.id ? { ...f, statusEffects: [...f.statusEffects, eff] } : f));
+        addLog(`✨ ${defender.name} recebe ${eff.name} por ${eff.duration} rodadas`);
+      }
+      setActTargets([]);
+      return;
+    }
+
+    if (actionMode === 'item') {
+      const itens = itensDoLutador(attacker);
+      const it = itens.find((x) => x.id === selItemId);
+      if (!it) return;
+      const alvo = fighters.find((f) => f.id === actTargets[0]) || attacker;
+      let hpDelta = 0, mpDelta = 0;
+      if (it.cura) hpDelta += it.cura;
+      if (it.mana) mpDelta += it.mana;
+      setFighters((prev) => prev.map((f) => {
+        if (f.id !== alvo.id) return f;
+        let hp = Math.max(0, Math.min(f.hpMax, f.hp + hpDelta));
+        let mp = Math.max(0, Math.min(f.mpMax, f.mp + mpDelta));
+        return { ...f, hp, mp };
+      }));
+      addLog(`🧪 ${attacker.name} usa ${it.nome} em ${alvo.name}${hpDelta ? ` +${hpDelta} HP` : ''}${mpDelta ? ` +${mpDelta} MP` : ''}`);
+      setActTargets([]);
+      return;
+    }
+  }, [
+    fighters, actAttacker, actTargets, actionMode, selWeaponId, selSpellId, selItemId,
+    armasDoLutador, magiasDoLutador, itensDoLutador, addLog, STATUS_DEFS, SPELLS,
+  ]);
 
   const removeCustomEffect = useCallback((type, uid_) => {
     if (type === 'buff') setCustomBuffs((p) => p.filter((e) => e.uid !== uid_));
@@ -525,6 +654,101 @@ const [lastRoll, setLastRoll] = useState(null);
                     </span>
                   </div>
                 )}
+              </div>
+            </div>
+          </section>
+
+          <section className="panel">
+            <h2>🎯 Ações Rápidas (igual ao Campo de Batalha)</h2>
+            <div className="attack-panel">
+              <div className="attack-selects">
+                <label>
+                  Atacante
+                  <select value={actAttacker} onChange={(e) => { setActAttacker(e.target.value); setActTargets([]); }}>
+                    <option value="">—</option>
+                    {alive.map((f) => (
+                      <option key={f.id} value={f.id}>{f.name} (HP {f.hp} MP {f.mp})</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Modo
+                  <select value={actionMode} onChange={(e) => {
+                    setActionMode(e.target.value);
+                    setSelSpellId('');
+                    setSelItemId('');
+                    setActTargets([]);
+                  }}>
+                    <option value="attack">Ataque</option>
+                    <option value="spell">Magia</option>
+                    <option value="item">Item</option>
+                  </select>
+                </label>
+              </div>
+
+              {actAttacker && actionMode === 'attack' && (
+                <div className="attack-selects">
+                  <label>
+                    Arma
+                    <select value={selWeaponId} onChange={(e) => setSelWeaponId(e.target.value)}>
+                      {armasDoLutador(fighters.find((f) => f.id === actAttacker)).map((a) => (
+                        <option key={a.id} value={a.id}>{a.nome} (dano base {danoBaseDaArma(a)})</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              )}
+
+              {actAttacker && actionMode === 'spell' && (
+                <div className="attack-selects">
+                  <label>
+                    Magia
+                    <select value={selSpellId} onChange={(e) => setSelSpellId(e.target.value)}>
+                      <option value="">—</option>
+                      {magiasDoLutador(fighters.find((f) => f.id === actAttacker)).map((x) => (
+                        <option key={x.sid} value={x.sid}>{x.spell.nome} (MP {x.spell.custo || 0})</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              )}
+
+              {actAttacker && actionMode === 'item' && (
+                <div className="attack-selects">
+                  <label>
+                    Item
+                    <select value={selItemId} onChange={(e) => setSelItemId(e.target.value)}>
+                      <option value="">—</option>
+                      {itensDoLutador(fighters.find((f) => f.id === actAttacker)).map((it) => (
+                        <option key={it.id} value={it.id}>{it.nome}{it.cura ? ` +${it.cura} HP` : ''}{it.mana ? ` +${it.mana} MP` : ''}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              )}
+
+              {actAttacker && (
+                <div className="attack-selects">
+                  <label>
+                    Alvo(s)
+                    <select multiple size={Math.min(4, Math.max(1, alive.length))} value={actTargets} onChange={(e) => {
+                      const vals = Array.from(e.target.selectedOptions).map((o) => o.value);
+                      setActTargets(vals);
+                    }}>
+                      {alive.filter((f) => f.id !== actAttacker).map((f) => (
+                        <option key={f.id} value={f.id}>{f.team === 'ally' ? '🛡️' : '⚔️'} {f.name} (HP {f.hp})</option>
+                      ))}
+                      {alive.length <= 1 && <option disabled>Sem outros alvos vivos</option>}
+                    </select>
+                  </label>
+                  <small className="muted">Segure Ctrl/Cmd para múltiplos alvos (efeito de área segue a arma/magia)</small>
+                </div>
+              )}
+
+              <div className="dice-area">
+                <button className="dice-btn" onClick={executarAcao} disabled={!actAttacker || actTargets.length === 0 || (actionMode === 'spell' && !selSpellId) || (actionMode === 'item' && !selItemId)}>
+                  Executar Ação
+                </button>
               </div>
             </div>
           </section>
