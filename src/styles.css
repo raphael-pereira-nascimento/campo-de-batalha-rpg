@@ -1803,6 +1803,18 @@ button.danger {
 }
 .stat-bar-hp { background: linear-gradient(90deg, #1a4a2a, #2ecc71); }
 .stat-bar-mp { background: linear-gradient(90deg, #1a2a5a, #3498db); }
+.stat-bar-prot { background: linear-gradient(90deg, #4a235a, #9b59b6); }
+.stat-bar-prot.prot-vuln { background: linear-gradient(90deg, #c0392b, #e74c3c); animation: prot-pulse 1.5s infinite; }
+
+.prot-state { font-size: 10px; color: var(--muted); margin-left: 6px; white-space: nowrap; }
+.prot-state.vulnerable { color: #e74c3c; font-weight: 700; }
+.prot-state.recharging { color: #f39c12; font-weight: 600; }
+.prot-state.active { color: #2ecc71; }
+
+@keyframes prot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
 .stat-input {
   width: 42px;
   background: transparent;

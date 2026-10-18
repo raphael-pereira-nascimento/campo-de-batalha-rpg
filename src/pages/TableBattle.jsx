@@ -21,6 +21,89 @@ const STAT_OPTIONS = ['forca', 'inteligencia', 'resistencia', 'destreza', 'refle
 const STAT_SHORT = { forca: 'FOR', inteligencia: 'INT', resistencia: 'RES', destreza: 'VEL', reflexos: 'REF' };
 const ICON_SUGGESTIONS = ['🔥', '❄️', '⚡', '💀', '🌿', '🌙', '⭐', '🗡️', '🔮', '🧪', '👁️', '🩸'];
 
+// Chefes com mecânica de proteção: só recebem dano direto após quebrar a proteção.
+// A proteção fica vulnerável por N turnos antes de recarregar.
+// eclipseOnly: só tem proteção na forma Eclipse.
+// eclipseExtra: tem proteção nas duas formas, mas ganha HP extra no Eclipse.
+const PROTECTION_CHEFS = {
+  minhoca_broca: { baseHp: 180, vulnerableTurns: 3, rechargeTurns: 2, eclipseOnly: true },
+  jabuti_montanha: { baseHp: 220, vulnerableTurns: 3, rechargeTurns: 2, eclipseExtra: true },
+  dragao_obsidiana: { baseHp: 260, vulnerableTurns: 3, rechargeTurns: 2, eclipseExtra: true },
+};
+
+function makeProtection(cfg, eclipse = false) {
+  if (cfg.eclipseOnly && !eclipse) return null;
+  const hp = eclipse ? Math.round(cfg.baseHp * 1.5) : cfg.baseHp;
+  return {
+    hp, maxHp: hp,
+    state: 'active', // active | vulnerable | recharging
+    vulnerableTurnsLeft: 0,
+    rechargeTurnsLeft: 0,
+  };
+}
+
+// Aplica dano a um combatente respeitando a proteção do chefe.
+// Retorna { danoReal, protecaoDano, protecaoQuebrou, vulneravel, msg }.
+function applyDamageWithProtection(target, dmg) {
+  const prot = target.protection;
+  if (!prot) return { danoReal: dmg, protecaoDano: 0, protecaoQuebrou: false, vulneravel: false, msg: '' };
+
+  if (prot.state === 'active') {
+    // Dano vai para a proteção.
+    const absorvido = Math.min(dmg, prot.hp);
+    const novoHp = prot.hp - absorvido;
+    const quebrou = novoHp <= 0;
+    if (quebrou) {
+      prot.state = 'vulnerable';
+      prot.vulnerableTurnsLeft = PROTECTION_CHEFS[target._bossId]?.vulnerableTurns ?? 3;
+      prot.hp = 0;
+      return {
+        danoReal: 0, protecaoDano: absorvido, protecaoQuebrou: true, vulneravel: true,
+        msg: `🛡️ A proteção de ${target.name} se QUEBROU! Ficará vulnerável por ${prot.vulnerableTurnsLeft} turno(s).`,
+      };
+    }
+    prot.hp = novoHp;
+    return {
+      danoReal: 0, protecaoDano: absorvido, protecaoQuebrou: false, vulneravel: false,
+      msg: `🛡️ ${target.name} absorveu ${absorvido} dano na proteção (${novoHp}/${prot.maxHp}).`,
+    };
+  }
+
+  if (prot.state === 'vulnerable') {
+    // Dano direto ao chefe.
+    return { danoReal: dmg, protecaoDano: 0, protecaoQuebrou: false, vulneravel: true, msg: '' };
+  }
+
+  // recharging: proteção não está disponível ainda, dano direto ao chefe.
+  return { danoReal: dmg, protecaoDano: 0, protecaoQuebrou: false, vulneravel: false, msg: '' };
+}
+
+// Avança os contadores de proteção de todos os lutadores no início de cada turno.
+function processProtectionTick(fighters) {
+  let changed = false;
+  const next = fighters.map((f) => {
+    const prot = f.protection;
+    if (!prot) return f;
+    if (prot.state === 'vulnerable') {
+      prot.vulnerableTurnsLeft -= 1;
+      changed = true;
+      if (prot.vulnerableTurnsLeft <= 0) {
+        prot.state = 'recharging';
+        prot.rechargeTurnsLeft = PROTECTION_CHEFS[f._bossId]?.rechargeTurns ?? 2;
+      }
+    } else if (prot.state === 'recharging') {
+      prot.rechargeTurnsLeft -= 1;
+      changed = true;
+      if (prot.rechargeTurnsLeft <= 0) {
+        prot.state = 'active';
+        prot.hp = prot.maxHp;
+      }
+    }
+    return f;
+  });
+  return changed ? next : fighters;
+}
+
 let _nextId = 1;
 const uid = () => `tb_${_nextId++}`;
 
@@ -36,6 +119,7 @@ function makeFighter(name, team, attrs = {}, extra = {}) {
     resistencia: a.resistencia || 5, destreza: a.destreza || 5,
     statusEffects: [],
     initiative: null,
+    protection: extra.protection || null,
     equipment: extra.equipment || {},
     spells: extra.spells || [],
     skills: extra.skills || [],
@@ -114,6 +198,7 @@ const [lastRoll, setLastRoll] = useState(null);
   const [cbIcon, setCbIcon] = useState('🔥');
   const [importTeam, setImportTeam] = useState('ally');
   const [bossId, setBossId] = useState('');
+  const [bossEclipse, setBossEclipse] = useState(false);
 
   // Estados das ações rápidas (espelham o painel do Campo de Batalha)
   const [actionMode, setActionMode] = useState('attack'); // attack | spell | item
@@ -238,8 +323,14 @@ const [lastRoll, setLastRoll] = useState(null);
   const addBoss = useCallback(() => {
     const def = MONSTERS[bossId];
     if (!def) return;
-    const f = makeFighter(`${def.icone || '👑'} ${def.nome}`, 'enemy', { ...def.attributes });
-    f._bossId = def.id;
+    const cfg = PROTECTION_CHEFS[def.id];
+    const protection = cfg ? makeProtection(cfg, bossEclipse) : null;
+    const f = makeFighter(
+      `${bossEclipse && def.varianteEclipse ? '🌑 ' : ''}${def.icone || '👑'} ${def.nome}${bossEclipse && def.varianteEclipse ? ` (${def.varianteEclipse.sufixo || 'Eclipse'})` : ''}`,
+      'enemy',
+      { ...def.attributes },
+      { protection, _bossId: def.id, _eclipse: bossEclipse && def.varianteEclipse ? true : null }
+    );
     setFighters((prevFighters) => {
       const next = [...prevFighters, f];
       if (initiativeRolled) {
@@ -248,9 +339,12 @@ const [lastRoll, setLastRoll] = useState(null);
       return next;
     });
     const golpes = (def.spells || []).map((s) => SPELLS[s]?.nome || s).join(', ');
-    addLog(`👑 ${def.nome} (Nv.${def.nivel}) entra na mesa como inimigo! Passiva: ${def.passiva || '—'}${golpes ? ` Golpes: ${golpes}.` : ''}`);
+    const protoTxt = protection
+      ? ` 🛡️ Proteção: ${protection.hp}/${protection.maxHp} (${bossEclipse ? 'Eclipse' : 'normal'})`
+      : '';
+    addLog(`👑 ${def.nome} (Nv.${def.nivel}) entra na mesa como inimigo! Passiva: ${def.passiva || '—'}${golpes ? ` Golpes: ${golpes}.` : ''}${protoTxt}`);
     setBossId('');
-  }, [bossId, addLog, initiativeRolled]);
+  }, [bossId, addLog, initiativeRolled, bossEclipse]);
 
   // Rola iniciativa (D20 + VEL) para todos que ainda não têm e define a ordem de turnos.
   const rollInitiative = useCallback(() => {
@@ -326,8 +420,17 @@ const [lastRoll, setLastRoll] = useState(null);
 
       if (hit) {
         const dmg = Math.round(danoFisicoAtaque(effectiveStat(attacker, 'forca'), danoBaseDaArma(arma)) * (isCrit ? 2 : 1));
-        setFighters((prev) => prev.map((f) => f.id === defender.id ? { ...f, hp: Math.max(0, f.hp - dmg) } : f));
-        addLog(`⚔️ ${attacker.name} ataca ${defender.name} com ${arma.nome || 'desarmado'} → D20:${roll} (${threshold}+) ${isCrit ? 'CRÍTICO ' : ''}→ ${dmg} dano`);
+        const res = applyDamageWithProtection(defender, dmg);
+        setFighters((prev) => prev.map((f) => {
+          if (f.id !== defender.id) return f;
+          if (res.protecaoDano > 0) {
+            return { ...f, protection: { ...f.protection, hp: Math.max(0, f.protection?.hp - res.protecaoDano) } };
+          }
+          return { ...f, hp: Math.max(0, f.hp - res.danoReal) };
+        }));
+        const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano` : '';
+        addLog(`⚔️ ${attacker.name} ataca ${defender.name} com ${arma.nome || 'desarmado'} → D20:${roll} (${threshold}+) ${isCrit ? 'CRÍTICO ' : ''}${suffix}`);
+        if (res.protecaoQuebrou) addLog(res.msg);
       } else {
         addLog(`⚔️ ${attacker.name} erra ${defender.name} com ${arma.nome || 'desarmado'} → D20:${roll} (${threshold}+)`);
       }
@@ -345,12 +448,20 @@ const [lastRoll, setLastRoll] = useState(null);
 
       const poder = m.spell.poder || 1.6;
       const dmg = Math.round(danoMagico(effectiveStat(attacker, 'inteligencia'), poder));
+      const res = applyDamageWithProtection(defender, dmg);
       setFighters((prev) => prev.map((f) => {
         if (f.id === attacker.id) return { ...f, mp: Math.max(0, f.mp - custo) };
-        if (f.id === defender.id) return { ...f, hp: Math.max(0, f.hp - dmg) };
+        if (f.id === defender.id) {
+          if (res.protecaoDano > 0) {
+            return { ...f, protection: { ...f.protection, hp: Math.max(0, f.protection?.hp - res.protecaoDano) } };
+          }
+          return { ...f, hp: Math.max(0, f.hp - res.danoReal) };
+        }
         return f;
       }));
-      addLog(`🔮 ${attacker.name} lança ${m.spell.nome} em ${defender.name} → ${dmg} dano (MP ${custo})`);
+      const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano` : '';
+      addLog(`🔮 ${attacker.name} lança ${m.spell.nome} em ${defender.name} ${suffix} (MP ${custo})`);
+      if (res.protecaoQuebrou) addLog(res.msg);
 
       if (m.spell.status) {
         const st = m.spell.status;
@@ -448,11 +559,19 @@ const [lastRoll, setLastRoll] = useState(null);
         const isCrit = finalRoll === 20;
         if (hit) {
           const dmg = computeDamage(attacker, isCrit);
-          const newHp = Math.max(0, defender.hp - dmg);
-          setFighters((prev) => prev.map((f) => f.id === defender.id ? { ...f, hp: newHp } : f));
+          const res = applyDamageWithProtection(defender, dmg);
+          setFighters((prev) => prev.map((f) => {
+            if (f.id !== defender.id) return f;
+            if (res.protecaoDano > 0) {
+              return { ...f, protection: { ...f.protection, hp: Math.max(0, f.protection?.hp - res.protecaoDano) } };
+            }
+            return { ...f, hp: Math.max(0, f.hp - res.danoReal) };
+          }));
           const critText = isCrit ? ' 🎯 CRÍTICO!' : '';
-          addLog(`${attacker.name} ataca ${defender.name} → D20: ${finalRoll} vs ${threshold}+ → ACERTA${critText} (${dmg} dano${isCrit ? ' x2' : ''})`);
-          setRollResult({ roll: finalRoll, threshold, hit: true, isCrit, damage: dmg });
+          const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${isCrit ? ' x2' : ''}` : '';
+          addLog(`${attacker.name} ataca ${defender.name} → D20: ${finalRoll} vs ${threshold}+ → ACERTA${critText}${suffix}`);
+          if (res.protecaoQuebrou) addLog(res.msg);
+          setRollResult({ roll: finalRoll, threshold, hit: true, isCrit, damage: res.danoReal });
         } else {
           addLog(`${attacker.name} ataca ${defender.name} → D20: ${finalRoll} vs ${threshold}+ → ERRA`);
           setRollResult({ roll: finalRoll, threshold, hit: false, isCrit: false, damage: 0 });
@@ -464,6 +583,7 @@ const [lastRoll, setLastRoll] = useState(null);
   const nextTurn = useCallback(() => {
     if (initiativeOrder.length === 0) {
       // Sem iniciativa rolando: comportamento antigo (próxima rodada)
+      setFighters((prev) => processProtectionTick(prev));
       tickEffects();
       setRound((r) => r + 1);
       setRollResult(null);
@@ -473,7 +593,8 @@ const [lastRoll, setLastRoll] = useState(null);
     const advance = (idx) => {
       const nextIdx = idx + 1;
       if (nextIdx >= initiativeOrder.length) {
-        // Fim da rodada: processa efeitos e reinicia a ordem
+        // Fim da rodada: processa efeitos e proteção, incrementa rodada e reinicia a ordem
+        setFighters((prev) => processProtectionTick(prev));
         tickEffects();
         setRound((r) => r + 1);
         setCurrentTurnIndex(0);
@@ -571,6 +692,20 @@ const [lastRoll, setLastRoll] = useState(null);
               <button className="stat-btn" onClick={() => adjustMp(f.id, 5)}>+5</button>
             </div>
           </div>
+          {f.protection && (
+            <div className="fighter-card-bar-row protection-row">
+              <span className="bar-label">🛡️ Prot</span>
+              <div className="stat-bar-wrap">
+                <div className={`stat-bar stat-bar-prot ${f.protection.state === 'vulnerable' ? 'prot-vuln' : ''}`} style={{ width: `${f.protection.maxHp > 0 ? (f.protection.hp / f.protection.maxHp) * 100 : 0}%` }} />
+                <span className="stat-num">{f.protection.hp}/{f.protection.maxHp}</span>
+              </div>
+              <span className={`prot-state ${f.protection.state}`}>
+                {f.protection.state === 'active' ? 'ativo'
+                  : f.protection.state === 'vulnerable' ? `vulnerável ${f.protection.vulnerableTurnsLeft}t`
+                  : `recarregando ${f.protection.rechargeTurnsLeft}t`}
+              </span>
+            </div>
+          )}
         </div>
         {f.statusEffects.length > 0 && (
           <div className="fighter-card-effects">
@@ -673,10 +808,22 @@ const [lastRoll, setLastRoll] = useState(null);
                 ))}
               </select>
               <button onClick={addBoss} disabled={!bossId}>Invocar chefão</button>
+              {bossId && PROTECTION_CHEFS[bossId] && (
+                <label className="check-label inline" style={{ marginLeft: 10 }}>
+                  <input
+                    type="checkbox"
+                    checked={bossEclipse}
+                    onChange={(e) => setBossEclipse(e.target.checked)}
+                  />
+                  🌑 Modo Eclipse (proteção extra)
+                </label>
+              )}
             </div>
             {bossId && (() => {
               const b = MONSTERS[bossId];
+              const cfg = PROTECTION_CHEFS[bossId];
               if (!b) return null;
+              const proto = cfg ? makeProtection(cfg, bossEclipse) : null;
               return (
                 <div className="muted small" style={{ marginTop: 8 }}>
                   <div><strong>Passiva:</strong> {b.passiva}</div>
@@ -688,6 +835,13 @@ const [lastRoll, setLastRoll] = useState(null);
                       {b.varianteEclipse?.spell && (
                         <> · <strong>Eclipse:</strong> {SPELLS[b.varianteEclipse.spell]?.nome || b.varianteEclipse.spell}</>
                       )}
+                    </div>
+                  )}
+                  {proto && (
+                    <div style={{ marginTop: 6, padding: 6, background: 'rgba(255, 209, 102, 0.12)', border: '1px solid var(--accent-2)', borderRadius: 8 }}>
+                      <strong>🛡️ Proteção do chefe:</strong> {proto.hp}/{proto.maxHp} HP ・
+                      vulnerável {cfg.vulnerableTurns}t ・ recarrega {cfg.rechargeTurns}t
+                      {bossEclipse ? ' (Eclipse: +50% HP)' : ''}
                     </div>
                   )}
                 </div>
