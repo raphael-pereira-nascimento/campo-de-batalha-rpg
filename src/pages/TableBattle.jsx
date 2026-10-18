@@ -723,7 +723,7 @@ const [lastRoll, setLastRoll] = useState(null);
   return (
     <div className="page">
       <header className="topbar">
-        <div>
+        <div className="topbar-left">
           <h1>📋 Batalha de Mesa</h1>
           <span className="player-name">Rodada {round}</span>
           {initiativeRolled && initiativeOrder.length > 0 && (
@@ -734,17 +734,19 @@ const [lastRoll, setLastRoll] = useState(null);
             </span>
           )}
         </div>
-        <button className="ghost" onClick={onBack}>← Voltar</button>
-        <button
-          onClick={rollInitiative}
-          disabled={initiativeRolled || fighters.length === 0}
-          className={initiativeRolled ? 'ghost' : ''}
-        >
-          {initiativeRolled ? '✅ Iniciativa definida' : '🎲 Rolar Iniciativa'}
-        </button>
-        <button onClick={nextTurn} disabled={fighters.length === 0}>
-          ➡️ Próximo Turno
-        </button>
+        <div className="topbar-right">
+          <button className="ghost" onClick={onBack}>← Voltar</button>
+          <button
+            onClick={rollInitiative}
+            disabled={initiativeRolled || fighters.length === 0}
+            className={initiativeRolled ? 'ghost' : ''}
+          >
+            {initiativeRolled ? '✅ Iniciativa definida' : '🎲 Rolar Iniciativa'}
+          </button>
+          <button onClick={nextTurn} disabled={fighters.length === 0} className="btn-next-turn">
+            ➡️ Próximo Turno
+          </button>
+        </div>
       </header>
 
       <div className="table-battle-layout">
@@ -874,29 +876,29 @@ const [lastRoll, setLastRoll] = useState(null);
             </section>
           )}
 
-          <section className="panel">
+          <section className="panel attack-section">
             <h2>⚔️ Ataque com Dado</h2>
-            <div className="attack-panel">
-              <div className="attack-selects">
-                <label>
-                  Atacante
+            <div className="attack-panel attack-command">
+              <div className="attack-row">
+                <div className="attack-field">
+                  <label>Atacante</label>
                   <select value={atkAttacker} onChange={(e) => setAtkAttacker(e.target.value)}>
                     <option value="">—</option>
                     {alive.map((f) => (
                       <option key={f.id} value={f.id}>{f.name} (HP {f.hp})</option>
                     ))}
                   </select>
-                </label>
-                <span className="vs-text">⚡</span>
-                <label>
-                  Alvo
+                </div>
+                <span className="attack-vs">⚔</span>
+                <div className="attack-field">
+                  <label>Alvo</label>
                   <select value={atkDefender} onChange={(e) => setAtkDefender(e.target.value)}>
                     <option value="">—</option>
                     {alive.map((f) => (
                       <option key={f.id} value={f.id}>{f.name} (HP {f.hp})</option>
                     ))}
                   </select>
-                </label>
+                </div>
               </div>
               {atkAttacker && atkDefender && (
                 <div className="attack-info">
@@ -916,7 +918,7 @@ const [lastRoll, setLastRoll] = useState(null);
                 </div>
               )}
               <div className="dice-area">
-                <button className="dice-btn" onClick={rollDice} disabled={rolling || !atkAttacker || !atkDefender}>
+                <button className="dice-btn dice-btn-roll" onClick={rollDice} disabled={rolling || !atkAttacker || !atkDefender}>
                   {rolling ? '🎲...' : '🎲 Rolar D20'}
                 </button>
                 {lastRoll !== null && !rolling && (
@@ -932,79 +934,82 @@ const [lastRoll, setLastRoll] = useState(null);
             </div>
           </section>
 
-          <section className="panel">
+          <section className="panel actions-section">
             <h2>🎯 Ações Rápidas (igual ao Campo de Batalha)</h2>
-            <div className="attack-panel">
-              <div className="attack-selects">
-                <label>
-                  Atacante
+            <div className="attack-panel actions-command">
+              {/* Linha 1: Atacante + Modo */}
+              <div className="actions-row">
+                <div className="action-field">
+                  <label>Atacante</label>
                   <select value={actAttacker} onChange={(e) => { setActAttacker(e.target.value); setActTargets([]); }}>
                     <option value="">—</option>
                     {alive.map((f) => (
                       <option key={f.id} value={f.id}>{f.name} (HP {f.hp} MP {f.mp})</option>
                     ))}
                   </select>
-                </label>
-                <label>
-                  Modo
+                </div>
+                <div className="action-field">
+                  <label>Modo</label>
                   <select value={actionMode} onChange={(e) => {
                     setActionMode(e.target.value);
                     setSelSpellId('');
                     setSelItemId('');
                     setActTargets([]);
                   }}>
-                    <option value="attack">Ataque</option>
-                    <option value="spell">Magia</option>
-                    <option value="item">Item</option>
+                    <option value="attack">⚔️ Ataque</option>
+                    <option value="spell">🔮 Magia</option>
+                    <option value="item">🧪 Item</option>
                   </select>
-                </label>
+                </div>
               </div>
 
+              {/* Linha 2: Arma / Magia / Item (apenas o relevante) */}
               {actAttacker && actionMode === 'attack' && (
-                <div className="attack-selects">
-                  <label>
-                    Arma
+                <div className="actions-row">
+                  <div className="action-field">
+                    <label>Arma</label>
                     <select value={selWeaponId} onChange={(e) => setSelWeaponId(e.target.value)}>
                       {armasDoLutador(fighters.find((f) => f.id === actAttacker)).map((a) => (
                         <option key={a.id} value={a.id}>{a.nome} (dano base {danoBaseDaArma(a)})</option>
                       ))}
                     </select>
-                  </label>
+                  </div>
                 </div>
               )}
 
               {actAttacker && actionMode === 'spell' && (
-                <div className="attack-selects">
-                  <label>
-                    Magia
+                <div className="actions-row">
+                  <div className="action-field">
+                    <label>Magia</label>
                     <select value={selSpellId} onChange={(e) => setSelSpellId(e.target.value)}>
-                      <option value="">—</option>
+                      <option value="">— Escolha uma magia —</option>
                       {magiasDoLutador(fighters.find((f) => f.id === actAttacker)).map((x) => (
                         <option key={x.sid} value={x.sid}>{x.spell.nome} (MP {x.spell.custo || 0})</option>
                       ))}
                     </select>
-                  </label>
+                  </div>
                 </div>
               )}
 
               {actAttacker && actionMode === 'item' && (
-                <div className="attack-selects">
-                  <label>
-                    Item
+                <div className="actions-row">
+                  <div className="action-field">
+                    <label>Item</label>
                     <select value={selItemId} onChange={(e) => setSelItemId(e.target.value)}>
-                      <option value="">—</option>
+                      <option value="">— Escolha um item —</option>
                       {itensDoLutador(fighters.find((f) => f.id === actAttacker)).map((it) => (
                         <option key={it.id} value={it.id}>{it.nome}{it.cura ? ` +${it.cura} HP` : ''}{it.mana ? ` +${it.mana} MP` : ''}</option>
                       ))}
                     </select>
-                  </label>
+                  </div>
                 </div>
               )}
 
+              {/* Linha 3: Alvo(s) */}
               {actAttacker && (
-                <div className="attack-selects">
-                  <label>
-                    Alvo(s)
+                <div className="actions-row">
+                  <div className="action-field action-field-full">
+                    <label>Alvo(s)</label>
                     <select multiple size={Math.min(4, Math.max(1, alive.length))} value={actTargets} onChange={(e) => {
                       const vals = Array.from(e.target.selectedOptions).map((o) => o.value);
                       setActTargets(vals);
@@ -1014,14 +1019,15 @@ const [lastRoll, setLastRoll] = useState(null);
                       ))}
                       {alive.length <= 1 && <option disabled>Sem outros alvos vivos</option>}
                     </select>
-                  </label>
-                  <small className="muted">Segure Ctrl/Cmd para múltiplos alvos (efeito de área segue a arma/magia)</small>
+                    <small className="muted">Segure Ctrl/Cmd para múltiplos alvos</small>
+                  </div>
                 </div>
               )}
 
-              <div className="dice-area">
-                <button className="dice-btn" onClick={executarAcao} disabled={!actAttacker || actTargets.length === 0 || (actionMode === 'spell' && !selSpellId) || (actionMode === 'item' && !selItemId)}>
-                  Executar Ação
+              {/* Botão executar */}
+              <div className="actions-row actions-row-execute">
+                <button className="dice-btn dice-btn-execute" onClick={executarAcao} disabled={!actAttacker || actTargets.length === 0 || (actionMode === 'spell' && !selSpellId) || (actionMode === 'item' && !selItemId)}>
+                  ▶ Executar Ação
                 </button>
               </div>
             </div>
