@@ -6,6 +6,7 @@ import {
   efeitosParaLista,
   polirPedra,
   calcularCustoPolimento,
+  NIVEIS_POLIMENTO,
 } from '../game/gems.js';
 import GemPolisher from '../components/GemPolisher.jsx';
 import { api } from '../api.js';
@@ -82,10 +83,13 @@ function GemaSlot({ label, gema, onSelect, onDrop, onClear, compat }) {
 export default function GemForge({ onBack, player, characters, onRefresh }) {
   const [gemaAId, setGemaAId] = useState('');
   const [gemaBId, setGemaBId] = useState('');
+  const [gemaAEstado, setGemaAEstado] = useState('polido');
+  const [gemaBEstado, setGemaBEstado] = useState('polido');
 
   // Cópias mutáveis das gemas disponíveis (para o polimento refletir o novo
   // estado) + saldo de ouro/mana do jogador.
   const [disponiveis, setDisponiveis] = useState(() => gemas.map((g) => ({ ...g })));
+  const [inventario, setInventario] = useState([]);
   const [ouro, setOuro] = useState(1000);
   const [mana, setMana] = useState(500);
   // Jogador de demonstração com a profissão Lapidador (para exibir os bônus).
@@ -95,8 +99,22 @@ export default function GemForge({ onBack, player, characters, onRefresh }) {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
 
-  const gemaA = useMemo(() => getGemaById(gemaAId), [gemaAId]);
-  const gemaB = useMemo(() => getGemaById(gemaBId), [gemaBId]);
+  useEffect(() => {
+    if (characterId && player) {
+      api.getCharacterGemsDetailed?.(characterId).then((d) => {
+        setInventario(d.gems || []);
+      }).catch(() => {});
+    }
+  }, [characterId, player]);
+
+  const gemaA = useMemo(() => {
+    const base = getGemaById(gemaAId);
+    return base ? { ...base, estado: gemaAEstado } : null;
+  }, [gemaAId, gemaAEstado]);
+  const gemaB = useMemo(() => {
+    const base = getGemaById(gemaBId);
+    return base ? { ...base, estado: gemaBEstado } : null;
+  }, [gemaBId, gemaBEstado]);
 
   const resultado = useMemo(() => verificarFusao(gemaA, gemaB), [gemaA, gemaB]);
 
@@ -106,8 +124,22 @@ export default function GemForge({ onBack, player, characters, onRefresh }) {
   };
 
   // Persiste a mudança de estado após o polimento no inventário local.
-  const handleEstadoChange = (id, estadoNovo) => {
+  const handleEstadoChange = async (id, estadoNovo) => {
     setDisponiveis((prev) => prev.map((g) => (g.id === id ? { ...g, estado: estadoNovo } : g)));
+    if (characterId && player) {
+      const inv = inventario.find((x) => x.gem_id === id && x.estado !== estadoNovo);
+      if (inv) {
+        try {
+          await api.polishGem?.(characterId, id, inv.estado, estadoNovo);
+          const d = await api.getCharacterGemsDetailed?.(characterId);
+          setInventario(d?.gems || []);
+        } catch (e) {
+          console.warn(e);
+        }
+      }
+    }
+    if (gemaAId === id) setGemaAEstado(estadoNovo);
+    if (gemaBId === id) setGemaBEstado(estadoNovo);
   };
 
   const aviso = (() => {
@@ -137,17 +169,13 @@ export default function GemForge({ onBack, player, characters, onRefresh }) {
     }
     setLoading(true);
     try {
-      // Fusão funcional: no modo atual usa o fluxo server; no offline adiciona resultado ao inventário
-      if (player) {
-        // Tenta via API (servidor tem rotas de gemas)
-        try {
-          await api.buyGem?.(characterId, resultado.resultado.id);
-        } catch (e) {
-          console.warn(e);
-        }
-      }
+      await api.fuseGems?.(characterId, { id: gemaA.id, estado: gemaA.estado }, { id: gemaB.id, estado: gemaB.estado }, resultado.resultado);
       mostraToast(`✨ ${resultado.resultado.nome} obtida!`);
       setGemaAId(''); setGemaBId('');
+      if (player) {
+        const d = await api.getCharacterGemsDetailed?.(characterId);
+        setInventario(d?.gems || []);
+      }
       if (onRefresh) onRefresh();
     } catch (e) {
       mostraToast(e.message);
@@ -180,28 +208,30 @@ export default function GemForge({ onBack, player, characters, onRefresh }) {
         <div className="forge-inventory">
           <h3>💎 Pedras disponíveis <span className="muted">(clique para polir)</span></h3>
           <div className="forge-gem-pool">
-            {disponiveis.map((g) => (
-              <div
-                key={g.id}
-                className={`forge-pool-gem ${g.estado === 'bruta' ? 'is-bruta' : ''}`}
-                draggable
-                onDragStart={handleDragStart(g.id)}
-                onClick={() => {
-                  // Clique abre o polidor para pedras políveis; caso contrário,
-                  // usa a pedra na forja (preenchendo o próximo slot livre).
-                  if (['bruta', 'lapidada', 'polido'].includes(g.estado)) {
-                    setPolindoGema(g);
-                  } else if (!gemaA) setGemaAId(g.id);
-                  else if (!gemaB) setGemaBId(g.id);
-                }}
-                title={['bruta', 'lapidada', 'polido'].includes(g.estado) ? 'Clique para polir' : 'Clique para usar na fusão'}
-                style={{ borderColor: RARITY_GLOW[g.raridade] || 'var(--border)' }}
-              >
-                <span>{FUSION_ICONS[g.id] || DEFAULT_ICON}</span>
-                <strong>{g.nome}</strong>
-                <small>{g.raridade} · {g.estado === 'bruta' ? '⛓ Bruta' : g.estado === 'lapidada' ? '🔷 Lapidada' : g.estado === 'polido' ? '✨ Polida' : g.estado === 'perfeita' ? '🌟 Perfeita' : '💥 Destruída'}</small>
-              </div>
-            ))}
+            {(player && characterId ? inventario : disponiveis).map((x) => {
+              const g = (player && characterId) ? getGemaById(x.gem_id) || { id: x.gem_id, nome: x.gem_id, raridade: 'Comum' } : x;
+              const est = (player && characterId) ? x.estado : g.estado;
+              return (
+                <div
+                  key={`${g.id}-${est}`}
+                  className={`forge-pool-gem ${est === 'bruta' ? 'is-bruta' : ''}`}
+                  draggable
+                  onDragStart={handleDragStart(g.id)}
+                  onClick={() => {
+                    if (['bruta', 'lapidada', 'polido'].includes(est)) {
+                      setPolindoGema({ ...g, estado: est });
+                    } else if (!gemaA) { setGemaAId(g.id); setGemaAEstado(est); }
+                    else if (!gemaB) { setGemaBId(g.id); setGemaBEstado(est); }
+                  }}
+                  title={['bruta', 'lapidada', 'polido'].includes(est) ? 'Clique para polir' : 'Clique para usar na fusão'}
+                  style={{ borderColor: RARITY_GLOW[g.raridade] || 'var(--border)' }}
+                >
+                  <span>{FUSION_ICONS[g.id] || DEFAULT_ICON}</span>
+                  <strong>{g.nome}</strong>
+                  <small>{g.raridade} · {est === 'bruta' ? '⛓ Bruta' : est === 'lapidada' ? '🔷 Lapidada' : est === 'polido' ? '✨ Polida' : est === 'perfeita' ? '🌟 Perfeita' : '💥 Destruída'}</small>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -274,7 +304,7 @@ export default function GemForge({ onBack, player, characters, onRefresh }) {
               </div>
             </div>
 
-            <button className="forge-fundir" onClick={fundir} disabled={!resultado.ok || gemaA?.estado === 'bruta' || gemaB?.estado === 'bruta' || loading}>
+            <button className="forge-fundir" onClick={fundir} disabled={!resultado.ok || gemaA?.estado === 'bruta' || gemaB?.estado === 'bruta' || loading || !characterId}>
               {loading ? 'Fundindo...' : 'Fundir gemas'}
             </button>
           </div>

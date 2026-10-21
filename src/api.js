@@ -786,6 +786,18 @@ export const api = {
     }
     return auth('/api/gems/shop/buy', { method: 'POST', body: JSON.stringify({ characterId, gemId }) });
   },
+  fuseGems: (characterId, gemA, gemB, resultado) => {
+    if (isOffline()) {
+      return Promise.resolve({ ok: true, resultadoId: resultado?.id });
+    }
+    return auth('/api/gems/fuse', { method: 'POST', body: JSON.stringify({ characterId, gemA, gemB, resultado }) });
+  },
+  polishGem: (characterId, gemId, fromEstado, toEstado) => {
+    if (isOffline()) {
+      return Promise.resolve({ ok: true });
+    }
+    return auth('/api/gems/polish', { method: 'POST', body: JSON.stringify({ characterId, gemId, fromEstado, toEstado }) });
+  },
   getCharacterGems: (characterId) => {
     if (isOffline()) {
       return Promise.resolve({ ok: true, gems: getOfflineGems(characterId) });

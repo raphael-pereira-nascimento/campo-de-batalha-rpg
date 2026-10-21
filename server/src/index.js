@@ -23,6 +23,7 @@ import {
   getCharacterGems,
   getCharacterGemsDetailed,
   addGemToInventory,
+  removeGemFromInventory,
   socketGem,
   unsocketGem,
 } from './services/characters.js';
@@ -341,6 +342,43 @@ app.post('/api/gems/shop/buy', requireAuth, async (req, res) => {
     // Compra vem bruta para incentivar o uso da Forja
     await addGemToInventory(characterId, gemId, 'bruta');
     res.json({ ok: true, gemId });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/gems/fuse', requireAuth, async (req, res) => {
+  try {
+    const { characterId, gemA, gemB, resultado } = req.body || {};
+    if (!characterId) throw new Error('Informe o personagem.');
+    if (!gemA || !gemB || !resultado) throw new Error('Dados inválidos para fusão.');
+    const char = await getCharacter(characterId);
+    if (!char || char.player_id !== req.player.id) throw new Error('Acesso negado.');
+    const gems = await getCharacterGemsDetailed(characterId);
+    const hasA = gems.some((g) => g.gem_id === gemA.id && g.estado === gemA.estado);
+    const hasB = gems.some((g) => g.gem_id === gemB.id && g.estado === gemB.estado);
+    if (!hasA || !hasB) throw new Error('Gemas não encontradas no inventário.');
+    await removeGemFromInventory(characterId, gemA.id, gemA.estado);
+    await removeGemFromInventory(characterId, gemB.id, gemB.estado);
+    await addGemToInventory(characterId, resultado.id, 'bruta');
+    res.json({ ok: true, resultadoId: resultado.id });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/gems/polish', requireAuth, async (req, res) => {
+  try {
+    const { characterId, gemId, fromEstado, toEstado } = req.body || {};
+    if (!characterId || !gemId || !fromEstado || !toEstado) throw new Error('Dados inválidos para polimento.');
+    const char = await getCharacter(characterId);
+    if (!char || char.player_id !== req.player.id) throw new Error('Acesso negado.');
+    const gems = await getCharacterGemsDetailed(characterId);
+    const has = gems.some((g) => g.gem_id === gemId && g.estado === fromEstado);
+    if (!has) throw new Error('Gema não encontrada no inventário.');
+    await removeGemFromInventory(characterId, gemId, fromEstado);
+    await addGemToInventory(characterId, gemId, toEstado);
+    res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }

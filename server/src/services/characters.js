@@ -736,6 +736,20 @@ export async function addGemToInventory(characterId, gemId, estado = 'polido') {
   return rows[0];
 }
 
+export async function removeGemFromInventory(characterId, gemId, estado) {
+  if (estado) {
+    await query(
+      'DELETE FROM character_gems WHERE id = (SELECT id FROM character_gems WHERE character_id = $1 AND gem_id = $2 AND estado = $3 ORDER BY created_at ASC LIMIT 1)',
+      [characterId, gemId, estado],
+    );
+    return;
+  }
+  await query(
+    'DELETE FROM character_gems WHERE id = (SELECT id FROM character_gems WHERE character_id = $1 AND gem_id = $2 ORDER BY created_at ASC LIMIT 1)',
+    [characterId, gemId],
+  );
+}
+
 export async function socketGem(characterId, slotKey, gemId) {
   const char = await getCharacter(characterId);
   if (!char) throw new Error('Personagem não encontrado.');
