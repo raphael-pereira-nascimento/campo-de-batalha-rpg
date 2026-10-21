@@ -88,3 +88,67 @@ export function gemIsRaw(id) {
   const g = GEMS[id];
   return !!g && g.estado === 'bruta';
 }
+
+// ── Sorteio por peso (dropWeight) ──────────────────────────────────────────
+
+export function getGemsByWeight() {
+  return GEM_LIST.map((g) => ({
+    id: g.id,
+    peso: g.dropWeight || (g.raridade === 'lendaria' ? 3 : g.raridade === 'epica' ? 12 : g.raridade === 'rara' ? 25 : g.raridade === 'incomum' ? 40 : 60),
+  }));
+}
+
+export function pickGemByWeight(excludeRaw = false) {
+  const pool = GEM_LIST.filter((g) => (excludeRaw ? g.estado !== 'bruta' : true));
+  if (!pool.length) return null;
+  const total = pool.reduce((acc, g) => {
+    const w = g.dropWeight || (g.raridade === 'lendaria' ? 3 : g.raridade === 'epica' ? 12 : g.raridade === 'rara' ? 25 : g.raridade === 'incomum' ? 40 : 60);
+    return acc + w;
+  }, 0);
+  let roll = Math.random() * total;
+  for (const g of pool) {
+    const w = g.dropWeight || (g.raridade === 'lendaria' ? 3 : g.raridade === 'epica' ? 12 : g.raridade === 'rara' ? 25 : g.raridade === 'incomum' ? 40 : 60);
+    roll -= w;
+    if (roll <= 0) return g.id;
+  }
+  return pool[pool.length - 1].id;
+}
+
+// Gema inicial para personagem novo (sempre bruta pra incentivar uso da Forja)
+export function getInitialGem() {
+  // Dá preferência a gemas comuns/incomuns
+  const iniciais = ['diamante', 'obsidiana'].filter((id) => GEMS[id]);
+  if (iniciais.length) return iniciais[Math.floor(Math.random() * iniciais.length)];
+  return pickGemByWeight(true) || 'diamante';
+}
+
+// ── Mineração ──────────────────────────────────────────────────────────────
+// As 3 formas: botão com cooldown, veios/biomas e integrado às masmorras.
+
+export const MINERA_VEIOS = [
+  { id: 'veio_comum', nome: 'Veio Comum', custoCents: 0, cooldownMin: 10, chanceBonus: 0, biomas: ['plains', 'floresta'] },
+  { id: 'veio_montanha', nome: 'Veio da Montanha', custoCents: 50, cooldownMin: 15, chanceBonus: 10, biomas: ['montanhas'] },
+  { id: 'veio_vulcanico', nome: 'Veio Vulcânico', custoCents: 150, cooldownMin: 25, chanceBonus: 18, biomas: ['vulcanico'] },
+  { id: 'veio_masmorra', nome: 'Veio Profundo', custoCents: 300, cooldownMin: 40, chanceBonus: 28, biomas: ['masmorra'] },
+];
+
+export function mineGem(veioId = 'veio_comum') {
+  const veio = MINERA_VEIOS.find((v) => v.id === veioId) || MINERA_VEIOS[0];
+  // Aplica bônus de chance por veio
+  let gemId = pickGemByWeight(true);
+  if (!gemId) gemId = getInitialGem();
+  // Pequena chance de "achado raro" nos veios mais profundos
+  if (veio.chanceBonus > 0 && Math.random() < veio.chanceBonus / 100) {
+    const raras = GEM_LIST.filter((g) => g.estado !== 'bruta' && (g.raridade === 'rara' || g.raridade === 'epica' || g.raridade === 'lendaria'));
+    if (raras.length) gemId = raras[Math.floor(Math.random() * raras.length)].id;
+  }
+  return { gemId, veio: veio.nome };
+}
+
+// Drop em batalha/masmorra com base em dropWeight
+export function rollGemDrop(dificuldade = 'normal') {
+  const chanceBase = dificuldade === 'chefe' ? 0.25 : dificuldade === 'masmorra' ? 0.18 : 0.12;
+  if (Math.random() > chanceBase) return null;
+  const gemId = pickGemByWeight(true);
+  return gemId ? { gemId, origem: dificuldade === 'chefe' ? 'chefe' : dificuldade === 'masmorra' ? 'masmorra' : 'batalha' } : null;
+}

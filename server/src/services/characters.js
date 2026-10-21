@@ -19,7 +19,7 @@ import {
 } from '../game/data.js';
 import { RACES } from '../game/races.js';
 import { ALVO_TIPOS } from '../game/sistema.js';
-import { gemIsRaw } from '../game/gems.js';
+import { gemIsRaw, getGemById, GEMS, pickGemByWeight, mineGem, rollGemDrop, getInitialGem, MINERA_VEIOS } from '../game/gems.js';
 import { getCustomEquipment } from './customContent.js';
 import { clampInt, clampFloat } from '../utils.js';
 
@@ -529,8 +529,17 @@ export async function grantRewards(battle) {
     const hpMax = stats.hpMax;
     const mpMax = stats.mpMax;
 
-    // Recompensa em moedas: vencedor ganha cobre (ℛ) + bônus por abates.
     const coins = 100 + (p.kills || 0) * 25;
+
+    // Drop de gema em batalha (Fase 3)
+    try {
+      const drop = rollGemDrop(p.isMonster ? 'normal' : 'normal');
+      if (drop && !p.isMonster && playerId) {
+        await addGemToInventory(p.characterId, drop.gemId, 'bruta');
+      }
+    } catch (e) {
+      // não bloqueia recompensas
+    }
 
     await query(
       `UPDATE characters
@@ -704,17 +713,27 @@ export const SHOP_ITEMS = {
 
 export async function getCharacterGems(characterId) {
   const { rows } = await query(
-    'SELECT gem_id FROM character_gems WHERE character_id = $1 ORDER BY created_at ASC',
+    'SELECT gem_id, estado FROM character_gems WHERE character_id = $1 ORDER BY created_at ASC',
     [characterId],
   );
   return rows.map((r) => r.gem_id);
 }
 
-export async function addGemToInventory(characterId, gemId) {
-  await query(
-    'INSERT INTO character_gems (character_id, gem_id) VALUES ($1, $2)',
-    [characterId, gemId],
+export async function getCharacterGemsDetailed(characterId) {
+  const { rows } = await query(
+    'SELECT id, gem_id, estado FROM character_gems WHERE character_id = $1 ORDER BY created_at ASC',
+    [characterId],
   );
+  return rows;
+}
+
+// Adiciona gema ao inventário e retorna o id do registro
+export async function addGemToInventory(characterId, gemId, estado = 'polido') {
+  const { rows } = await query(
+    'INSERT INTO character_gems (character_id, gem_id, estado) VALUES ($1, $2, $3) RETURNING id, gem_id, estado',
+    [characterId, gemId, estado],
+  );
+  return rows[0];
 }
 
 export async function socketGem(characterId, slotKey, gemId) {
@@ -733,8 +752,13 @@ export async function socketGem(characterId, slotKey, gemId) {
   const gemIdx = gems.indexOf(gemId);
   if (gemIdx === -1) throw new Error('Gema não encontrada no inventário.');
 
-  // Gemas brutas não podem ser socketadas até serem polidas
-  if (gemIsRaw(gemId)) throw new Error('⚠️ Requer polimento antes de usar');
+  // Checa estado real da gema (bruta/polida) — também respeita catálogo
+  const { rows: gemRows } = await query(
+    'SELECT estado FROM character_gems WHERE character_id = $1 AND gem_id = $2 ORDER BY created_at ASC LIMIT 1',
+    [characterId, gemId],
+  );
+  const estado = gemRows[0]?.estado || (gemIsRaw(gemId) ? 'bruta' : 'polido');
+  if (estado === 'bruta') throw new Error('⚠️ Requer polimento antes de usar');
 
   // Check slot is empty
   const socketedGems = item.socketedGems || [];
@@ -742,8 +766,8 @@ export async function socketGem(characterId, slotKey, gemId) {
 
   // Remove gem from inventory
   await query(
-    'DELETE FROM character_gems WHERE id = (SELECT id FROM character_gems WHERE character_id = $1 AND gem_id = $2 LIMIT 1)',
-    [characterId, gemId],
+    'DELETE FROM character_gems WHERE id = (SELECT id FROM character_gems WHERE character_id = $1 AND gem_id = $2 AND estado = $3 LIMIT 1)',
+    [characterId, gemId, estado],
   );
 
   // Add to socketed gems
@@ -771,7 +795,12 @@ export async function unsocketGem(characterId, slotKey) {
   if (!gemId) throw new Error('Slot vazio.');
 
   // Add gem back to inventory
-  await addGemToInventory(characterId, gemId);
+  const { rows: gemRows } = await query(
+    'SELECT estado FROM character_gems WHERE character_id = $1 AND gem_id = $2 ORDER BY created_at DESC LIMIT 1',
+    [characterId, gemId],
+  );
+  const estadoVolta = gemRows[0]?.estado || (gemIsRaw(gemId) ? 'bruta' : 'polido');
+  await addGemToInventory(characterId, gemId, estadoVolta);
 
   // Remove from socketed gems
   socketedGems[slotIndex] = null;

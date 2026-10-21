@@ -164,6 +164,42 @@ select:focus {
   gap: 6px;
   color: var(--muted);
   font-size: 14px;
+  text-align: left;
+}
+
+.home-tabs {
+  display: flex;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 12px;
+}
+.home-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  padding: 10px;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.home-tab.active {
+  background: var(--accent);
+  color: #0b0d16;
+}
+.home-hint {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 16px;
+  line-height: 1.4;
+}
+.home-next {
+  margin: 18px 0 0;
+  font-size: 12px;
 }
 
 .error {
@@ -182,6 +218,72 @@ select:focus {
   text-align: center;
   padding: 60px 20px;
   color: var(--muted);
+}
+
+.conn-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.conn-badge.online {
+  color: #8fe3b0;
+  border-color: rgba(61, 220, 132, 0.5);
+  background: rgba(61, 220, 132, 0.12);
+}
+.conn-badge.offline {
+  color: #ffd166;
+  border-color: rgba(255, 209, 102, 0.5);
+  background: rgba(255, 209, 102, 0.12);
+}
+.home-badge-row {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+.offline-warning {
+  background: rgba(255, 209, 102, 0.12);
+  border: 1px solid rgba(255, 209, 102, 0.5);
+  color: #ffe2a8;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 20px;
+  text-align: left;
+}
+.onboard-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0 auto 20px;
+  max-width: 460px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.onboard-steps li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.onboard-steps .step-num {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #0b0d16;
+  font-weight: 700;
+  font-size: 12px;
+  display: grid;
+  place-items: center;
 }
 
 .char-grid {
@@ -836,6 +938,21 @@ label {
 .registry-tabs button.active {
   background: var(--accent);
   border-color: var(--accent);
+}
+.scope-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.scope-toggle button {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+.scope-toggle button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0b0d16;
+  font-weight: 600;
 }
 .registry-grid {
   display: grid;

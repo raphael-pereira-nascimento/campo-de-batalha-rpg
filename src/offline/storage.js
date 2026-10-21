@@ -97,3 +97,55 @@ export function removeOfflineGem(characterId, gemId) {
   all[characterId] = gems;
   _saveAllGems(all);
 }
+
+// ── Conteúdo customizado offline (Registro do Mundo) ────────────────────
+// Guarda as criações no navegador para o Registro do Mundo funcionar sem
+// servidor. A forma de cada entrada espelha o retorno do backend online
+// (incluindo creator_id, creator_name, is_public e created_at).
+
+const CUSTOM_KEY = 'cbr_offline_custom';
+
+function _getAllCustom() {
+  const raw = localStorage.getItem(CUSTOM_KEY);
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw) || {};
+  } catch {
+    return {};
+  }
+}
+
+function _saveAllCustom(all) {
+  localStorage.setItem(CUSTOM_KEY, JSON.stringify(all));
+}
+
+// kind: 'classes' | 'monsters' | 'races' | 'equipment' | 'skills'
+export function listOfflineCustom(kind) {
+  const all = _getAllCustom();
+  return all[kind] || [];
+}
+
+export function saveOfflineCustom(kind, item, player) {
+  const all = _getAllCustom();
+  const list = all[kind] || [];
+  const stamped = {
+    ...item,
+    id: item.id || `${kind}-${nextId()}`,
+    creator_id: item.creator_id || player?.id || 'offline',
+    creator_name: item.creator_name || player?.name || 'Jogador',
+    is_public: !!item.is_public,
+    created_at: item.created_at || new Date().toISOString(),
+  };
+  const idx = list.findIndex((x) => x.id === stamped.id);
+  if (idx >= 0) list[idx] = { ...list[idx], ...stamped };
+  else list.unshift(stamped);
+  all[kind] = list;
+  _saveAllCustom(all);
+  return stamped;
+}
+
+export function removeOfflineCustom(kind, id) {
+  const all = _getAllCustom();
+  all[kind] = (all[kind] || []).filter((x) => x.id !== id);
+  _saveAllCustom(all);
+}

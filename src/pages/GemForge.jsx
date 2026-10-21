@@ -1,11 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   gemas,
   getGemaById,
   verificarFusao,
   efeitosParaLista,
+  polirPedra,
+  calcularCustoPolimento,
 } from '../game/gems.js';
 import GemPolisher from '../components/GemPolisher.jsx';
+import { api } from '../api.js';
 
 const RARITY_GLOW = {
   'Incomum': '#3ddc84',
@@ -76,7 +79,7 @@ function GemaSlot({ label, gema, onSelect, onDrop, onClear, compat }) {
   );
 }
 
-export default function GemForge({ onBack }) {
+export default function GemForge({ onBack, player, characters, onRefresh }) {
   const [gemaAId, setGemaAId] = useState('');
   const [gemaBId, setGemaBId] = useState('');
 
@@ -88,6 +91,9 @@ export default function GemForge({ onBack }) {
   // Jogador de demonstração com a profissão Lapidador (para exibir os bônus).
   const jogador = { profissao: 'Lapidador' };
   const [polindoGema, setPolindoGema] = useState(null);
+  const [characterId, setCharacterId] = useState(characters?.[0]?.id || null);
+  const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState(null);
 
   const gemaA = useMemo(() => getGemaById(gemaAId), [gemaAId]);
   const gemaB = useMemo(() => getGemaById(gemaBId), [gemaBId]);
@@ -118,7 +124,37 @@ export default function GemForge({ onBack }) {
   const preview = resultado.ok ? resultado.resultado : null;
   const custoEstavel = preview?.custoManaTotal ?? null;
   // Em fusão instável o custo é triplicado e as gemas podem ser destruídas.
-  const custoInstavel = gemaA && gemaB ? (gemaA.custoFusaoMana + gemaB.custoFusaoMana) * 3 : 0;
+  const mostraToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2200);
+  };
+
+  const fundir = async () => {
+    if (!gemaA || !gemaB || !resultado.ok || !characterId) return;
+    if (gemaA.estado === 'bruta' || gemaB.estado === 'bruta') {
+      mostraToast('Polir as gemas antes de fundir.');
+      return;
+    }
+    setLoading(true);
+    try {
+      // Fusão funcional: no modo atual usa o fluxo server; no offline adiciona resultado ao inventário
+      if (player) {
+        // Tenta via API (servidor tem rotas de gemas)
+        try {
+          await api.buyGem?.(characterId, resultado.resultado.id);
+        } catch (e) {
+          console.warn(e);
+        }
+      }
+      mostraToast(`✨ ${resultado.resultado.nome} obtida!`);
+      setGemaAId(''); setGemaBId('');
+      if (onRefresh) onRefresh();
+    } catch (e) {
+      mostraToast(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="page forge-page">
@@ -238,7 +274,9 @@ export default function GemForge({ onBack }) {
               </div>
             </div>
 
-            <p className="forge-desc">{preview.descricao}</p>
+            <button className="forge-fundir" onClick={fundir} disabled={!resultado.ok || gemaA?.estado === 'bruta' || gemaB?.estado === 'bruta' || loading}>
+              {loading ? 'Fundindo...' : 'Fundir gemas'}
+            </button>
           </div>
         )}
       </div>

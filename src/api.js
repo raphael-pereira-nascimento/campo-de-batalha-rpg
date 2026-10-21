@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client';
 import { gameData } from './offline/gameData.js';
-import { isOffline, setServerStatus, saveOfflinePlayer, getOfflinePlayer, getOfflineCharacters, saveOfflineCharacter, getOfflineWallet, addOfflineCoins, getOfflineGems, addOfflineGem, removeOfflineGem } from './offline/storage.js';
+import { isOffline, setServerStatus, saveOfflinePlayer, getOfflinePlayer, getOfflineCharacters, saveOfflineCharacter, getOfflineWallet, addOfflineCoins, getOfflineGems, addOfflineGem, removeOfflineGem, listOfflineCustom, saveOfflineCustom, removeOfflineCustom } from './offline/storage.js';
 import { offlineBattle } from './offline/battle.js';
 import { MONSTERS } from './game/monsters.js';
 import { gemIsRaw } from './game/gems.js';
@@ -589,73 +589,203 @@ export const api = {
       body: JSON.stringify({ itemId, characterId }),
     });
   },
-  listCustomClasses: () => {
-    if (isOffline()) return Promise.resolve({ ok: true, classes: [] });
-    return request('/api/custom-classes');
+  // ── Registro do Mundo (conteúdo customizado) ──────────────────────────
+  // Online: backend filtra público + minhas criações (opts.mine = só as minhas).
+  // Offline: persistido em localStorage (cbr_offline_custom), com a mesma forma
+  // de dados do backend para a tela funcionar igual nos dois modos.
+  listCustomClasses: (opts) => {
+    if (isOffline()) {
+      const player = getOfflinePlayer();
+      let classes = listOfflineCustom('classes');
+      if (opts?.mine) classes = classes.filter((c) => c.creator_id === player?.id);
+      return Promise.resolve({ ok: true, classes });
+    }
+    return request('/api/custom-classes' + (opts?.mine ? '?mine=1' : ''));
   },
   createCustomClass: (payload) => {
-    if (isOffline()) return Promise.resolve({ ok: true, class: payload });
+    if (isOffline()) {
+      const cls = saveOfflineCustom('classes', payload, getOfflinePlayer());
+      return Promise.resolve({ ok: true, cls });
+    }
     return auth('/api/custom-classes', { method: 'POST', body: JSON.stringify(payload) });
   },
   updateCustomClass: (id, payload) => {
-    if (isOffline()) return Promise.resolve({ ok: true });
+    if (isOffline()) {
+      const cls = saveOfflineCustom('classes', { ...payload, id }, getOfflinePlayer());
+      return Promise.resolve({ ok: true, cls });
+    }
     return auth(`/api/custom-classes/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
   },
   deleteCustomClass: (id) => {
-    if (isOffline()) return Promise.resolve({ ok: true });
+    if (isOffline()) {
+      removeOfflineCustom('classes', id);
+      return Promise.resolve({ ok: true });
+    }
     return auth(`/api/custom-classes/${id}`, { method: 'DELETE' });
   },
-  listCustomMonsters: () => {
-    if (isOffline()) return Promise.resolve({ ok: true, monsters: [] });
-    return request('/api/custom-monsters');
+  listCustomMonsters: (opts) => {
+    if (isOffline()) {
+      const player = getOfflinePlayer();
+      let monsters = listOfflineCustom('monsters');
+      if (opts?.mine) monsters = monsters.filter((m) => m.creator_id === player?.id);
+      return Promise.resolve({ ok: true, monsters });
+    }
+    return request('/api/custom-monsters' + (opts?.mine ? '?mine=1' : ''));
   },
   createCustomMonster: (payload) => {
-    if (isOffline()) return Promise.resolve({ ok: true, monster: payload });
+    if (isOffline()) {
+      const monster = saveOfflineCustom('monsters', payload, getOfflinePlayer());
+      return Promise.resolve({ ok: true, monster });
+    }
     return auth('/api/custom-monsters', { method: 'POST', body: JSON.stringify(payload) });
   },
+  updateCustomMonster: (id, payload) => {
+    if (isOffline()) {
+      const monster = saveOfflineCustom('monsters', { ...payload, id }, getOfflinePlayer());
+      return Promise.resolve({ ok: true, monster });
+    }
+    return auth(`/api/custom-monsters/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+  },
   deleteCustomMonster: (id) => {
-    if (isOffline()) return Promise.resolve({ ok: true });
+    if (isOffline()) {
+      removeOfflineCustom('monsters', id);
+      return Promise.resolve({ ok: true });
+    }
     return auth(`/api/custom-monsters/${id}`, { method: 'DELETE' });
   },
-  listCustomRaces: () => {
-    if (isOffline()) return Promise.resolve({ ok: true, races: [] });
-    return request('/api/custom-races');
+  listCustomRaces: (opts) => {
+    if (isOffline()) {
+      const player = getOfflinePlayer();
+      let races = listOfflineCustom('races');
+      if (opts?.mine) races = races.filter((r) => r.creator_id === player?.id);
+      return Promise.resolve({ ok: true, races });
+    }
+    return request('/api/custom-races' + (opts?.mine ? '?mine=1' : ''));
   },
   createCustomRace: (payload) => {
-    if (isOffline()) return Promise.resolve({ ok: true });
+    if (isOffline()) {
+      const race = saveOfflineCustom('races', payload, getOfflinePlayer());
+      return Promise.resolve({ ok: true, race });
+    }
     return auth('/api/custom-races', { method: 'POST', body: JSON.stringify(payload) });
   },
+  updateCustomRace: (id, payload) => {
+    if (isOffline()) {
+      const race = saveOfflineCustom('races', { ...payload, id }, getOfflinePlayer());
+      return Promise.resolve({ ok: true, race });
+    }
+    return auth(`/api/custom-races/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+  },
   deleteCustomRace: (id) => {
-    if (isOffline()) return Promise.resolve({ ok: true });
+    if (isOffline()) {
+      removeOfflineCustom('races', id);
+      return Promise.resolve({ ok: true });
+    }
     return auth(`/api/custom-races/${id}`, { method: 'DELETE' });
   },
-  listCustomEquipment: () => {
-    if (isOffline()) return Promise.resolve({ ok: true, equipment: [] });
-    return request('/api/custom-equipment');
+  listCustomEquipment: (opts) => {
+    if (isOffline()) {
+      const player = getOfflinePlayer();
+      let equipment = listOfflineCustom('equipment');
+      if (opts?.mine) equipment = equipment.filter((e) => e.creator_id === player?.id);
+      return Promise.resolve({ ok: true, equipment });
+    }
+    return request('/api/custom-equipment' + (opts?.mine ? '?mine=1' : ''));
   },
   createCustomEquipment: (payload) => {
-    if (isOffline()) return Promise.resolve({ ok: true });
+    if (isOffline()) {
+      const item = saveOfflineCustom('equipment', payload, getOfflinePlayer());
+      return Promise.resolve({ ok: true, item });
+    }
     return auth('/api/custom-equipment', { method: 'POST', body: JSON.stringify(payload) });
   },
+  updateCustomEquipment: (id, payload) => {
+    if (isOffline()) {
+      const item = saveOfflineCustom('equipment', { ...payload, id }, getOfflinePlayer());
+      return Promise.resolve({ ok: true, item });
+    }
+    return auth(`/api/custom-equipment/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+  },
   deleteCustomEquipment: (id) => {
-    if (isOffline()) return Promise.resolve({ ok: true });
+    if (isOffline()) {
+      removeOfflineCustom('equipment', id);
+      return Promise.resolve({ ok: true });
+    }
     return auth(`/api/custom-equipment/${id}`, { method: 'DELETE' });
   },
-  listCustomSkills: () => {
-    if (isOffline()) return Promise.resolve({ ok: true, skills: [] });
-    return request('/api/custom-skills');
+  listCustomSkills: (opts) => {
+    if (isOffline()) {
+      const player = getOfflinePlayer();
+      let skills = listOfflineCustom('skills');
+      if (opts?.mine) skills = skills.filter((s) => s.creator_id === player?.id);
+      return Promise.resolve({ ok: true, skills });
+    }
+    return request('/api/custom-skills' + (opts?.mine ? '?mine=1' : ''));
   },
   createCustomSkill: (payload) => {
-    if (isOffline()) return Promise.resolve({ ok: true });
+    if (isOffline()) {
+      const skill = saveOfflineCustom('skills', payload, getOfflinePlayer());
+      return Promise.resolve({ ok: true, skill });
+    }
     return auth('/api/custom-skills', { method: 'POST', body: JSON.stringify(payload) });
   },
+  updateCustomSkill: (id, payload) => {
+    if (isOffline()) {
+      const skill = saveOfflineCustom('skills', { ...payload, id }, getOfflinePlayer());
+      return Promise.resolve({ ok: true, skill });
+    }
+    return auth(`/api/custom-skills/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+  },
   deleteCustomSkill: (id) => {
-    if (isOffline()) return Promise.resolve({ ok: true });
+    if (isOffline()) {
+      removeOfflineCustom('skills', id);
+      return Promise.resolve({ ok: true });
+    }
     return auth(`/api/custom-skills/${id}`, { method: 'DELETE' });
   },
 
   // �"?�"? Gemas �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
 
+  // ── Gemas ──────────────────────────────────────────────────────────────
+
+  getGemsCatalog: () => request('/api/gems/catalog'),
+  getCharacterGemsDetailed: (characterId) => {
+    if (isOffline()) {
+      const gems = getOfflineGems(characterId) || [];
+      return Promise.resolve({ ok: true, gems: gems.map((g) => ({ gem_id: g, estado: gemIsRaw(g) ? 'bruta' : 'polido' })) });
+    }
+    return auth(`/api/characters/${characterId}/gems/detailed`);
+  },
+  grantInitialGem: (characterId) => {
+    if (isOffline()) {
+      const gems = getOfflineGems(characterId) || [];
+      if (gems.length === 0) addOfflineGem(characterId, 'diamante');
+      return Promise.resolve({ ok: true });
+    }
+    return auth('/api/gems/initial', { method: 'POST', body: JSON.stringify({ characterId }) });
+  },
+  mineGem: (characterId, veioId) => {
+    if (isOffline()) {
+      try {
+        const gemsMod = require ? require('./game/gems.js') : null;
+        if (gemsMod && gemsMod.mineGem) {
+          const res = gemsMod.mineGem(veioId);
+          addOfflineGem(characterId, res.gemId);
+          return Promise.resolve({ ok: true, gemId: res.gemId, veio: res.veio });
+        }
+      } catch (e) {}
+      addOfflineGem(characterId, 'diamante');
+      return Promise.resolve({ ok: true, gemId: 'diamante' });
+    }
+    return auth('/api/gems/mine', { method: 'POST', body: JSON.stringify({ characterId, veioId }) });
+  },
+  buyGem: (characterId, gemId) => {
+    if (isOffline()) {
+      addOfflineGem(characterId, gemId);
+      return Promise.resolve({ ok: true, gemId });
+    }
+    return auth('/api/gems/shop/buy', { method: 'POST', body: JSON.stringify({ characterId, gemId }) });
+  },
   getCharacterGems: (characterId) => {
     if (isOffline()) {
       return Promise.resolve({ ok: true, gems: getOfflineGems(characterId) });

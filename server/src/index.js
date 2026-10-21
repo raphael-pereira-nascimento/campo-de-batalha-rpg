@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { setupSockets } from './sockets.js';
 import { testConnection } from './db/index.js';
-import { requireAuth } from './middleware/auth.js';
+import { requireAuth, optionalAuth } from './middleware/auth.js';
 import { query } from './db/index.js';
 import {
   createPlayer,
@@ -21,10 +21,12 @@ import {
   formatCoins,
   SHOP_ITEMS,
   getCharacterGems,
+  getCharacterGemsDetailed,
+  addGemToInventory,
   socketGem,
   unsocketGem,
 } from './services/characters.js';
-import { CLASSES, SPELLS, EQUIPMENT, POTIONS, STATUS_DEFS, TAVERN_DRINKS, TAVERN_FOODS } from './game/data.js';
+import { gemIsRaw, getGemById, GEMS, pickGemByWeight, mineGem, rollGemDrop, getInitialGem, MINERA_VEIOS } from './game/gems.js';
 import { RACES } from './game/races.js';
 import { MONSTERS } from './game/monsters.js';
 import { DUNGEONS } from './game/dungeons.js';
@@ -38,15 +40,19 @@ import {
   deleteCustomClass,
   createCustomMonster,
   listCustomMonsters,
+  updateCustomMonster,
   deleteCustomMonster,
   createCustomRace,
   listCustomRaces,
+  updateCustomRace,
   deleteCustomRace,
   createCustomEquipment,
   listCustomEquipment,
+  updateCustomEquipment,
   deleteCustomEquipment,
   createCustomSkill,
   listCustomSkills,
+  updateCustomSkill,
   deleteCustomSkill,
 } from './services/customContent.js';
 
@@ -209,6 +215,16 @@ app.post('/api/characters', requireAuth, async (req, res) => {
   try {
     const body = { ...req.body, playerId: req.player.id };
     const character = await createCharacter(body);
+    // Gemas iniciais para todo personagem novo (Fase 3)
+    try {
+      const gems = await getCharacterGemsDetailed(character.id);
+      if (gems.length === 0) {
+        const gemId = getInitialGem();
+        await addGemToInventory(character.id, gemId, 'bruta');
+      }
+    } catch (e) {
+      // não bloqueia criação da ficha se falhar ao dar gema inicial
+    }
     res.json({ ok: true, character });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
@@ -253,10 +269,95 @@ app.post('/api/characters/:id/level', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/characters/:id/gems', requireAuth, async (req, res) => {
+// ── Sistema de Gemas: obtenção (drop/mineração/loja/iniciais) ──────────────
+app.get('/api/gems/catalog', (_req, res) => {
   try {
-    const gems = await getCharacterGems(req.params.id);
+    const catalog = Object.values(GEMS).map((g) => ({
+      id: g.id,
+      nome: g.nome,
+      raridade: g.raridade,
+      estado: g.estado,
+      bioma: g.bioma,
+      dropWeight: g.dropWeight,
+      efeitos: g.efeitos,
+      preco: g.preco || (g.raridade === 'lendaria' ? 5000 : g.raridade === 'epica' ? 2500 : g.raridade === 'rara' ? 1200 : g.raridade === 'incomum' ? 600 : 250),
+    }));
+    res.json({ ok: true, gems: catalog, veios: MINERA_VEIOS });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/characters/:id/gems/detailed', requireAuth, async (req, res) => {
+  try {
+    const gems = await getCharacterGemsDetailed(req.params.id);
     res.json({ ok: true, gems });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/gems/mine', requireAuth, async (req, res) => {
+  try {
+    const { characterId, veioId } = req.body || {};
+    if (!characterId) throw new Error('Informe o personagem.');
+    const char = await getCharacter(characterId);
+    if (!char) throw new Error('Personagem não encontrado.');
+    if (char.player_id !== req.player.id) throw new Error('Este personagem não é seu.');
+
+    const veio = MINERA_VEIOS.find((v) => v.id === veioId) || MINERA_VEIOS[0];
+    const { rows } = await query('SELECT wallet_cents FROM players WHERE id = $1 FOR UPDATE', [req.player.id]);
+    if (Number(rows[0]?.wallet_cents || 0) < (veio.custoCents || 0)) {
+      throw new Error(`Ouro insuficiente. Custo: ${veio.custoCents} moedas.`);
+    }
+    if ((veio.custoCents || 0) > 0) {
+      await query('UPDATE players SET wallet_cents = wallet_cents - $1 WHERE id = $2', [veio.custoCents, req.player.id]);
+    }
+
+    const result = mineGem(veio.id);
+    // Gema minerada vai pro inventário do personagem (começa bruta, incentivando polimento)
+    await addGemToInventory(characterId, result.gemId, 'bruta');
+    res.json({ ok: true, gemId: result.gemId, veio: result.veio });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/gems/shop/buy', requireAuth, async (req, res) => {
+  try {
+    const { characterId, gemId } = req.body || {};
+    const g = getGemById(gemId);
+    if (!g) throw new Error('Gema inválida.');
+    if (!characterId) throw new Error('Informe o personagem.');
+    const char = await getCharacter(characterId);
+    if (!char) throw new Error('Personagem não encontrado.');
+    if (char.player_id !== req.player.id) throw new Error('Este personagem não é seu.');
+
+    const preco = g.preco || (g.raridade === 'lendaria' ? 5000 : g.raridade === 'epica' ? 2500 : g.raridade === 'rara' ? 1200 : g.raridade === 'incomum' ? 600 : 250);
+    const { rows } = await query('SELECT wallet_cents FROM players WHERE id = $1 FOR UPDATE', [req.player.id]);
+    if (Number(rows[0]?.wallet_cents || 0) < preco) throw new Error('Ouro insuficiente.');
+
+    await query('UPDATE players SET wallet_cents = wallet_cents - $1 WHERE id = $2', [preco, req.player.id]);
+    // Compra vem bruta para incentivar o uso da Forja
+    await addGemToInventory(characterId, gemId, 'bruta');
+    res.json({ ok: true, gemId });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/gems/initial', requireAuth, async (req, res) => {
+  try {
+    const { characterId } = req.body || {};
+    if (!characterId) throw new Error('Informe o personagem.');
+    const char = await getCharacter(characterId);
+    if (!char) throw new Error('Personagem não encontrado.');
+    if (char.player_id !== req.player.id) throw new Error('Este personagem não é seu.');
+    const gems = await getCharacterGemsDetailed(characterId);
+    if (gems.length > 0) return res.json({ ok: true, already: true });
+    const gemId = getInitialGem();
+    await addGemToInventory(characterId, gemId, 'bruta');
+    res.json({ ok: true, gemId });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
@@ -357,153 +458,77 @@ app.get('/api/ranking', async (_req, res) => {
   }
 });
 
-// ---- Conteúdo customizado (Fase 3) ----
+// ---- Conteúdo customizado (Registro do Mundo) ----
+//
+// Visibilidade: as listagens mostram o catálogo público (is_public) de todos
+// MAIS as criações privadas do próprio jogador (?mine=1 filtra só as minhas).
+// A identidade vem do token opcional (optionalAuth).
 
-app.get('/api/custom-classes', async (_req, res) => {
-  try {
-    const classes = await listCustomClasses();
-    res.json({ ok: true, classes });
-  } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
-  }
-});
+const registryViews = {
+  classes: {
+    list: listCustomClasses, key: 'classes',
+    create: createCustomClass, update: updateCustomClass, remove: deleteCustomClass, singular: 'cls',
+  },
+  monsters: {
+    list: listCustomMonsters, key: 'monsters',
+    create: createCustomMonster, update: updateCustomMonster, remove: deleteCustomMonster, singular: 'monster',
+  },
+  races: {
+    list: listCustomRaces, key: 'races',
+    create: createCustomRace, update: updateCustomRace, remove: deleteCustomRace, singular: 'race',
+  },
+  equipment: {
+    list: listCustomEquipment, key: 'equipment',
+    create: createCustomEquipment, update: updateCustomEquipment, remove: deleteCustomEquipment, singular: 'item',
+  },
+  skills: {
+    list: listCustomSkills, key: 'skills',
+    create: createCustomSkill, update: updateCustomSkill, remove: deleteCustomSkill, singular: 'skill',
+  },
+};
 
-app.post('/api/custom-classes', requireAuth, async (req, res) => {
-  try {
-    const cls = await createCustomClass(req.player.id, req.body);
-    res.json({ ok: true, cls });
-  } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
-  }
-});
+for (const [route, view] of Object.entries(registryViews)) {
+  for (const [route, view] of Object.entries(registryViews)) {
+  app.get(`/api/custom-${route}`, optionalAuth, async (req, res) => {
+    try {
+      let rows = await view.list(req.player?.id);
+      if (req.query.mine === '1') {
+        if (!req.player) return res.status(401).json({ ok: false, error: 'Entre na sua conta para ver suas criações.' });
+        rows = rows.filter((row) => row.creator_id === req.player.id);
+      }
+      res.json({ ok: true, [view.key]: rows });
+    } catch (err) {
+      res.status(400).json({ ok: false, error: err.message });
+    }
+  });
 
-app.put('/api/custom-classes/:id', requireAuth, async (req, res) => {
-  try {
-    const cls = await updateCustomClass(req.params.id, req.player.id, req.body);
-    res.json({ ok: true, cls });
-  } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
-  }
-});
+  app.post(`/api/custom-${route}`, requireAuth, async (req, res) => {
+    try {
+      const item = await view.create(req.player.id, req.body);
+      res.json({ ok: true, [view.singular]: item });
+    } catch (err) {
+      res.status(400).json({ ok: false, error: err.message });
+    }
+  });
 
-app.delete('/api/custom-classes/:id', requireAuth, async (req, res) => {
-  try {
-    await deleteCustomClass(req.params.id, req.player.id);
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
-  }
-});
+  app.put(`/api/custom-${route}/:id`, requireAuth, async (req, res) => {
+    try {
+      const item = await view.update(req.params.id, req.player.id, req.body);
+      res.json({ ok: true, [view.singular]: item });
+    } catch (err) {
+      res.status(400).json({ ok: false, error: err.message });
+    }
+  });
 
-app.get('/api/custom-monsters', async (_req, res) => {
-  try {
-    const monsters = await listCustomMonsters();
-    res.json({ ok: true, monsters });
-  } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
-  }
-});
-
-app.post('/api/custom-monsters', requireAuth, async (req, res) => {
-  try {
-    const monster = await createCustomMonster(req.player.id, req.body);
-    res.json({ ok: true, monster });
-  } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
-  }
-});
-
-app.delete('/api/custom-monsters/:id', requireAuth, async (req, res) => {
-  try {
-    await deleteCustomMonster(req.params.id, req.player.id);
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
-  }
-});
-
-// ---- Raças, equipamentos e golpes customizados (Fase 4) ----
-
-app.get('/api/custom-races', async (_req, res) => {
-  try {
-    const races = await listCustomRaces();
-    res.json({ ok: true, races });
-  } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
-  }
-});
-
-app.post('/api/custom-races', requireAuth, async (req, res) => {
-  try {
-    const race = await createCustomRace(req.player.id, req.body);
-    res.json({ ok: true, race });
-  } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
-  }
-});
-
-app.delete('/api/custom-races/:id', requireAuth, async (req, res) => {
-  try {
-    await deleteCustomRace(req.params.id, req.player.id);
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
-  }
-});
-
-app.get('/api/custom-equipment', async (_req, res) => {
-  try {
-    const equipment = await listCustomEquipment();
-    res.json({ ok: true, equipment });
-  } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
-  }
-});
-
-app.post('/api/custom-equipment', requireAuth, async (req, res) => {
-  try {
-    const item = await createCustomEquipment(req.player.id, req.body);
-    res.json({ ok: true, item });
-  } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
-  }
-});
-
-app.delete('/api/custom-equipment/:id', requireAuth, async (req, res) => {
-  try {
-    await deleteCustomEquipment(req.params.id, req.player.id);
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
-  }
-});
-
-app.get('/api/custom-skills', async (_req, res) => {
-  try {
-    const skills = await listCustomSkills();
-    res.json({ ok: true, skills });
-  } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
-  }
-});
-
-app.post('/api/custom-skills', requireAuth, async (req, res) => {
-  try {
-    const skill = await createCustomSkill(req.player.id, req.body);
-    res.json({ ok: true, skill });
-  } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
-  }
-});
-
-app.delete('/api/custom-skills/:id', requireAuth, async (req, res) => {
-  try {
-    await deleteCustomSkill(req.params.id, req.player.id);
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
-  }
-});
+  app.delete(`/api/custom-${route}/:id`, requireAuth, async (req, res) => {
+    try {
+      await view.remove(req.params.id, req.player.id);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(400).json({ ok: false, error: err.message });
+    }
+  });
+}
 
 // Frontend build (produção)
 const clientDist = path.join(__dirname, '../../dist');

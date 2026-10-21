@@ -450,7 +450,7 @@ function RacesStep({ gameData, customRaces, races, gender, onAdd, onRemove, pena
     onAdd(def);
     if (publish) {
       try {
-        await api.createCustomRace({ creatorId: player.id, ...{ nome: def.nome, bonus: def.bonus, passiva: def.passiva } });
+        await api.createCustomRace({ creatorId: player.id, is_public: true, ...{ nome: def.nome, bonus: def.bonus, passiva: def.passiva } });
       } catch (_e) { /* publicação opcional */ }
     }
     setForm({ nome: '', bonus: {}, passiva: '' });
@@ -604,7 +604,7 @@ function ClassesStep({ gameData, customClasses, classes, onAdd, onRemove, onPrim
     onAdd(def);
     if (publish) {
       try {
-        await api.createCustomClass({ creatorId: player.id, name: def.nome, funcao: '', passiva: '', forcas: '', fraquezas: '', archetype: form.archetype });
+        await api.createCustomClass({ creatorId: player.id, is_public: true, name: def.nome, funcao: '', passiva: '', forcas: '', fraquezas: '', archetype: form.archetype });
       } catch (_e) { /* opcional */ }
     }
     setForm({ nome: '', bonus: {}, hpPerLevel: 8, mpPerLevel: 5, levelUp: 'forca', archetype: 'guerreiro', spellList: [] });
@@ -728,7 +728,7 @@ function SkillsStep({ skills, setSkills, customSkills, player }) {
     setSkills((prev) => [...prev, skill]);
     if (publish) {
       try {
-        await api.createCustomSkill({ creatorId: player.id, nome: form.nome, tipo: form.tipo, poder: form.poder, custo: form.custo, cooldown: form.cooldown, todos: form.todos, alvo: form.alvo, alvos: form.alvos, splash: form.splash });
+        await api.createCustomSkill({ creatorId: player.id, is_public: true, nome: form.nome, tipo: form.tipo, poder: form.poder, custo: form.custo, cooldown: form.cooldown, todos: form.todos, alvo: form.alvo, alvos: form.alvos, splash: form.splash });
       } catch (_e) { /* opcional */ }
     }
     setForm({ nome: '', tipo: 'magia', poder: 150, custo: 5, cooldown: 0, todos: false, alvo: 'unico', alvos: 3, splash: 0.5 });
@@ -1077,6 +1077,7 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player 
       try {
         await api.createCustomEquipment({
           creatorId: player.id,
+          is_public: true,
           nome: form.nome,
           tipo: form.tipo,
           categoria: form.categoria,

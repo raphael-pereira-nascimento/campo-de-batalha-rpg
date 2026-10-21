@@ -519,10 +519,10 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                     ))}
                   </optgroup>
                   {customMonsters.length > 0 && (
-                    <optgroup label="Criados por você">
+                    <optgroup label="Monstros do Registro do Mundo">
                       {customMonsters.map((m) => (
                         <option key={m.id} value={`custom_${m.id}`}>
-                          {m.escala_chefe ? '☠️ ' : ''}{m.nome} (Nv.{m.nivel})
+                          {m.escala_chefe ? '☠️ ' : ''}{m.nome} (Nv.{m.nivel}) — {m.creator_name}
                         </option>
                       ))}
                     </optgroup>

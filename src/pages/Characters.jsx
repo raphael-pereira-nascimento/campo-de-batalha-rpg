@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react';
 import FichaForm from '../components/FichaForm.jsx';
 import CharacterSheet from '../components/CharacterSheet.jsx';
+import ConnectionBadge from '../components/ConnectionBadge.jsx';
 import { exportarFicha, importarFicha } from '../utils/fichaFile.js';
-import { api } from '../api.js';
+import { api, isOffline } from '../api.js';
 import { shareCharacter, resolveSharedCharacter } from '../utils/shareCharacter.js';
 
 export default function Characters({ player, characters, gameData, customClasses = [], onRefresh, onEnterLobby, onOpenRegistry, onOpenCompendium, onOpenRules, onOpenGemForge, onOpenToolShop, onOpenTavern, onOpenTableBattle, onOpenDungeons, onLogout }) {
@@ -42,6 +43,9 @@ export default function Characters({ player, characters, gameData, customClasses
         <div>
           <h1>⚔️ Campo de Batalha</h1>
           <span className="player-name">Jogador: {player.name}</span>
+          <div style={{ marginTop: 6 }}>
+            <ConnectionBadge />
+          </div>
         </div>
         <div className="topbar-actions">
           <button onClick={() => setCreating(true)}>+ Nova Ficha</button>
@@ -69,8 +73,17 @@ export default function Characters({ player, characters, gameData, customClasses
         {importError && <div className="error">{importError}</div>}
         {characters.length === 0 && !creating && (
           <div className="empty">
-            <p>Você ainda não tem personagens. Crie sua primeira ficha!</p>
-            <button onClick={() => setCreating(true)}>Criar Ficha</button>
+            <p style={{ fontSize: 18, color: 'var(--text)' }}>Bem-vindo, {player.name}! 👋</p>
+            <p>Siga estes passos para começar a jogar:</p>
+            <ol className="onboard-steps">
+              <li><span className="step-num">1</span> Crie a <strong>ficha do seu personagem</strong> (raça, classe, golpes e equipamento).</li>
+              <li><span className="step-num">2</span> Entre no <strong>Campo de Batalha</strong> para lutar sozinho, em equipe ou contra o Mestre.</li>
+              <li><span className="step-num">3</span> Explore as <strong>Dungeons</strong>, forje <strong>gemas</strong> e registre criações no <strong>Registro do Mundo</strong>.</li>
+            </ol>
+            <button onClick={() => setCreating(true)}>➕ Criar Ficha</button>
+            <p className="muted" style={{ marginTop: 16, fontSize: 13 }}>
+              Já tem uma ficha pronta? Use <strong>📥 Importar</strong> ou <strong>📋 Colar ficha</strong> no topo.
+            </p>
           </div>
         )}
 

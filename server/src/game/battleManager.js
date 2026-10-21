@@ -17,6 +17,8 @@ import {
   melhorArma,
   armaParaAtaque,
   skillFromSpell,
+  GEMS,
+  gemsAttrs,
 } from './data.js';
 import {
   manaRecuperada,
@@ -540,6 +542,23 @@ export class BattleManager {
       p.mp = clamp(p.mp + extra, 0, p.mpMax);
       if (p.mp > before) battle.log.push(makeLog(`✨ ${p.charName} recupera mais ${p.mp - before} de MP (passiva).`, 'heal'));
     }
+    // Efeitos de gemas socketadas (acessório/armadura)
+    if (!p.isMonster && p.equipment) {
+      for (const [slot, item] of Object.entries(p.equipment)) {
+        if (!item) continue;
+        for (const gemId of item.socketedGems || []) {
+          const g = GEMS[gemId];
+          if (!g || g.estado === 'bruta') continue;
+          const fx = g.efeitos?.[slot];
+          if (fx?.regen && p.alive) {
+            const h = Math.max(1, fx.regen);
+            const b = p.hp;
+            p.hp = clamp(p.hp + h, 0, p.hpMax);
+            if (p.hp > b) battle.log.push(makeLog(`💎 ${g.nome} regenera ${p.hp - b} HP em ${p.charName}.`, 'heal'));
+          }
+        }
+      }
+    }
     this._processFlight(battle, p);
     if (efeito.regenHpPct && p.alive) {
       const heal = Math.max(1, Math.round(p.hpMax * efeito.regenHpPct));
@@ -756,12 +775,38 @@ export class BattleManager {
     let mult = efeito.danoFisicoMult || 1;
     if (efeito.furia && p.alive && p.hp < p.hpMax * 0.5) mult *= 1.2;
     if (p.ultimateMode) mult *= 1 + (p.ultimateModeMult || 0);
+    if (!p.isMonster && p.equipment) {
+      for (const [slot, item] of Object.entries(p.equipment)) {
+        if (!item) continue;
+        for (const gemId of item.socketedGems || []) {
+          const g = GEMS[gemId];
+          if (!g || g.estado === 'bruta') continue;
+          const fx = g.efeitos?.[slot];
+          if (fx?.bonus) {
+            if (fx.bonus.forca) mult *= 1.05;
+          }
+        }
+      }
+    }
     return mult * statusEffects(p).danoMult;
   }
 
   _magMult(p) {
     let mult = efeitosDe(p).danoMagicoMult || 1;
     if (p.ultimateMode) mult *= 1 + (p.ultimateModeMult || 0);
+    if (!p.isMonster && p.equipment) {
+      for (const [slot, item] of Object.entries(p.equipment)) {
+        if (!item) continue;
+        for (const gemId of item.socketedGems || []) {
+          const g = GEMS[gemId];
+          if (!g || g.estado === 'bruta') continue;
+          const fx = g.efeitos?.[slot];
+          if (fx?.bonus) {
+            if (fx.bonus.inteligencia) mult *= 1.05;
+          }
+        }
+      }
+    }
     return mult * statusEffects(p).danoMult;
   }
 
@@ -1175,6 +1220,19 @@ export class BattleManager {
       if (dealt > 0) this._lifesteal(battle, p, dealt);
       if (!t.alive && !t.horda) p.kills += 1;
       if (ataqueStatus && t.alive) this._applyStatus(battle, t, ataqueStatus, p);
+    // Efeitos de gema no arma
+    if (p.equipment && !p.isMonster) {
+      for (const { arma } of armasDeEquipamento(p.equipment)) {
+        for (const gemId of arma?.socketedGems || []) {
+          const g = GEMS[gemId];
+          if (!g || g.estado === 'bruta') continue;
+          const fx = g.efeitos?.arma;
+          if (fx?.status && t.alive && Math.random() < (fx.status.chance || 0.1)) {
+            this._applyStatus(battle, t, fx.status, p);
+          }
+        }
+      }
+    }
     });
   }
 
@@ -1248,6 +1306,18 @@ export class BattleManager {
       if (dealt > 0) this._lifesteal(battle, p, dealt);
       if (!t.alive && !t.horda) p.kills += 1;
       if (skill.status && t.alive) this._applyStatus(battle, t, skill.status, p);
+      if (p.equipment && !p.isMonster) {
+        for (const { arma } of armasDeEquipamento(p.equipment)) {
+          for (const gemId of arma?.socketedGems || []) {
+            const g = GEMS[gemId];
+            if (!g || g.estado === 'bruta') continue;
+            const fx = g.efeitos?.arma;
+            if (fx?.status && t.alive && Math.random() < (fx.status.chance || 0.1)) {
+              this._applyStatus(battle, t, fx.status, p);
+            }
+          }
+        }
+      }
     });
     if (!mega) this._setCooldown(p, skill);
   }

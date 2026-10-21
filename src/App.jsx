@@ -1,7 +1,8 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { api, getSocket, getPlayer, getToken, logout, isOffline } from './api.js';
+import { api, getSocket, getPlayer, getToken, logout, isOffline, setPlayerSession } from './api.js';
 import Home from './pages/Home.jsx';
 import Characters from './pages/Characters.jsx';
+import ConnectionBadge from './components/ConnectionBadge.jsx';
 
 const Lobby = lazy(() => import('./pages/Lobby.jsx'));
 const Battle = lazy(() => import('./pages/Battle.jsx'));
@@ -86,9 +87,10 @@ export default function App({ initialView } = {}) {
 
   const handleLogin = async (name, password) => {
     const { player, token } = await api.createPlayer(name, password);
+    // Persistência da sessão num único ponto (api.setPlayerSession) para o
+    // reload restaurar o login de forma confiável.
+    setPlayerSession(player, token);
     setPlayer(player);
-    localStorage.setItem('cbr_player_name', player.name);
-    localStorage.setItem('cbr_token', token);
     const d = await api.listCharacters(player.id);
     setCharacters(d.characters);
     setView(initialView && initialView !== 'home' ? initialView : 'characters');
@@ -240,7 +242,7 @@ export default function App({ initialView } = {}) {
 
   if (view === 'gemForge') {
     return <Suspense fallback={<div className="loading">Acesando a forja...</div>}>
-      <GemForge onBack={() => setView('characters')} />
+      <GemForge onBack={() => setView('characters')} player={player} characters={characters} onRefresh={refreshCharacters} />
     </Suspense>;
   }
 
