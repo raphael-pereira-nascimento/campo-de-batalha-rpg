@@ -474,9 +474,61 @@ export async function equipItem(characterId, slot, itemId) {
     if (!item) throw new Error('Item não existe.');
   }
 
+  // Ao trocar um equipamento, as gemas encaixadas no item antigo voltam para o
+  // inventário do personagem (mesmo estado). Sem isso, trocar de arma destruía
+  // as gemas equipadas — perda silenciosa e irreversível.
+  const oldCategoryItem = categoria ? char.equipment?.armas?.[categoria] : null;
+  const oldPrimary = char.equipment?.arma;
+  let oldItem = categoria
+    ? oldCategoryItem || (categoria === 'perto' ? oldPrimary : null)
+    : char.equipment?.armadura;
+  // Fichas antigas podem ter as gemas apenas no objeto `arma` (primário),
+  // enquanto `armas.<categoria>` ficou sem elas. Nesse caso, o primário é a
+  // fonte da verdade.
+  if (
+    categoria &&
+    oldCategoryItem &&
+    oldPrimary &&
+    oldCategoryItem.id === oldPrimary.id &&
+    (oldPrimary.socketedGems || []).some(Boolean)
+  ) {
+    oldItem = oldPrimary;
+  }
+  if (oldItem && item && oldItem.id === item.id) {
+    // Reequipar o mesmo item: preserva as gemas já encaixadas.
+    item = {
+      ...item,
+      socketedGems: oldItem.socketedGems || [],
+      socketedGemEstados: oldItem.socketedGemEstados || [],
+    };
+  } else if (oldItem?.socketedGems?.length) {
+    const estados = oldItem.socketedGemEstados || [];
+    for (let i = 0; i < oldItem.socketedGems.length; i += 1) {
+      const gemId = oldItem.socketedGems[i];
+      if (!gemId) continue;
+      await addGemToInventory(characterId, gemId, estados[i] || 'polido');
+    }
+  }
+
   let equipment;
   if (categoria) {
     const armas = { ...((char.equipment && char.equipment.armas) || {}) };
+    // Propaga as gemas do primário para a cópia da categoria. Isso protege
+    // fichas antigas em que só `equipment.arma` tinha as gemas: ao equipar uma
+    // arma de outra categoria, o primário continua equipado e não pode perder
+    // as gemas ao ser reconstruído a partir de `armas.<categoria>`.
+    const primarioComGemas = char.equipment?.arma;
+    if (primarioComGemas?.id && (primarioComGemas.socketedGems || []).some(Boolean)) {
+      for (const cat of Object.keys(armas)) {
+        if (armas[cat]?.id === primarioComGemas.id) {
+          armas[cat] = {
+            ...armas[cat],
+            socketedGems: primarioComGemas.socketedGems,
+            socketedGemEstados: primarioComGemas.socketedGemEstados,
+          };
+        }
+      }
+    }
     armas[categoria] = item;
     const armaPrimaria = armas.perto || armas.distancia || armas.utilitaria;
     equipment = { ...(char.equipment || {}), armas, arma: armaPrimaria ? { ...armaPrimaria } : null };
@@ -754,6 +806,28 @@ export async function removeGemFromInventory(characterId, gemId, estado) {
   );
 }
 
+// Mantém `equipment.arma` (primário, usado pela ficha) e `equipment.armas.<cat>`
+// sincronizados. Sem isso, encaixar uma gema no primário deixava a cópia da
+// categoria sem a gema, e trocar de arma perdia a gema.
+export function syncArmasComGemas(equipment, equipSlot, item) {
+  const updated = { ...(equipment || {}), [equipSlot]: item };
+  if (equipSlot === 'arma' && equipment?.armas) {
+    const armas = { ...equipment.armas };
+    for (const cat of Object.keys(armas)) {
+      const arma = armas[cat];
+      if (arma && arma.id === item.id) {
+        armas[cat] = {
+          ...arma,
+          socketedGems: item.socketedGems,
+          socketedGemEstados: item.socketedGemEstados,
+        };
+      }
+    }
+    updated.armas = armas;
+  }
+  return updated;
+}
+
 export async function socketGem(characterId, slotKey, gemId) {
   const char = await getCharacter(characterId);
   if (!char) throw new Error('Personagem não encontrado.');
@@ -790,10 +864,11 @@ export async function socketGem(characterId, slotKey, gemId) {
     ? [...item.socketedGemEstados]
     : [];
   socketedGemEstados[slotIndex] = gemaInv.estado;
-  const updatedEquipment = {
-    ...char.equipment,
-    [equipSlot]: { ...item, socketedGems, socketedGemEstados },
-  };
+  const updatedEquipment = syncArmasComGemas(char.equipment, equipSlot, {
+    ...item,
+    socketedGems,
+    socketedGemEstados,
+  });
   await query(
     'UPDATE characters SET equipment = $1 WHERE id = $2',
     [JSON.stringify(updatedEquipment), characterId],
@@ -832,10 +907,11 @@ export async function unsocketGem(characterId, slotKey) {
     ? [...item.socketedGemEstados]
     : [];
   socketedGemEstados[slotIndex] = null;
-  const updatedEquipment = {
-    ...char.equipment,
-    [equipSlot]: { ...item, socketedGems, socketedGemEstados },
-  };
+  const updatedEquipment = syncArmasComGemas(char.equipment, equipSlot, {
+    ...item,
+    socketedGems,
+    socketedGemEstados,
+  });
   await query(
     'UPDATE characters SET equipment = $1 WHERE id = $2',
     [JSON.stringify(updatedEquipment), characterId],

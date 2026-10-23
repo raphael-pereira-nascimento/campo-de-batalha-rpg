@@ -33,7 +33,7 @@ Jogue **online** (com backend + banco local PGlite ou PostgreSQL) ou **offline**
 
 ## Pré-requisitos
 
-- [Node.js](https://nodejs.org/) **20 LTS** (recomendado; mínimo 18)
+- [Node.js](https://nodejs.org/) **20 LTS** (obrigatório; `engines` exige `>=20`)
 - [PostgreSQL](https://www.postgresql.org/) >= 14 — **apenas para produção**. Para jogar localmente, o servidor cria um banco PGlite automaticamente.
 
 ## Instalação

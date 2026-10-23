@@ -37,7 +37,9 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
       .getCharacterGemsDetailed(character.id)
       .then((d) => setCharacterGems(d.gems || []))
       .catch(() => {});
-  }, [character.id]);
+    // Também recarrega quando o equipamento muda: trocar de arma devolve as
+    // gemas encaixadas ao inventário, e a lista precisa refletir isso.
+  }, [character.id, character.equipment]);
 
   // Status da batalha atual (via prop; a ficha fora de batalha não guarda status).
   const listaStatus = statuses ?? character.statuses ?? [];

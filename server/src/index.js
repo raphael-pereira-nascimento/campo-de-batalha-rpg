@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import express from 'express';
 import http from 'node:http';
 import cors from 'cors';
@@ -80,6 +80,10 @@ import {
 } from './services/customContent.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Carrega .env do diretório atual (raiz ou server/) e também server/.env.
+// Assim `npm start` (raiz) e `npm run dev` (server) funcionam do mesmo jeito.
+dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 const PORT = process.env.PORT || 3000;
 
 const app = express();
@@ -766,7 +770,12 @@ if (fs.existsSync(clientDist)) {
   // SPA catch-all: apenas páginas — nunca serve index.html no lugar de assets.
   // (um /assets/* pedido quando o arquivo ainda não existe vira 404, não HTML.)
   app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api/') && (req.path.startsWith('/assets/') || req.path.startsWith('/icon-') || req.path.startsWith('/manifest'))) {
+    // Rotas de API inexistentes devem responder 404 em JSON — nunca devolver
+    // o index.html com status 200 (isso confundia clientes e testes).
+    if (req.path.startsWith('/api/')) {
+      return res.status(404).json({ ok: false, error: 'Rota de API não encontrada.' });
+    }
+    if (req.path.startsWith('/assets/') || req.path.startsWith('/icon-') || req.path.startsWith('/manifest')) {
       return res.status(404).type('text').set('Cache-Control', 'no-store').send('Not found');
     }
     res.set('Cache-Control', 'no-cache');

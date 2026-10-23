@@ -8,6 +8,7 @@ import {
   validateAttributes,
   aplicarLevelUpManual,
   definirNivelManual,
+  syncArmasComGemas,
 } from '../src/services/characters.js';
 
 const ATTRS = { forca: 8, inteligencia: 4, resistencia: 8, destreza: 5, reflexos: 5 }; // soma 30
@@ -291,5 +292,59 @@ describe('definirNivelManual — ajuste livre do Mestre (1..30)', () => {
     expect(definirNivelManual(ficha(), 99).character.level).toBe(30);
     expect(definirNivelManual(ficha(), -5).character.level).toBe(1);
     expect(definirNivelManual(ficha(), 5).ok).toBe(false);
+  });
+});
+
+describe('syncArmasComGemas — gemas presas ao equipamento', () => {
+  const espadaComGema = {
+    id: 'espada_longa',
+    nome: 'Espada Longa',
+    socketedGems: [null, 'obsidiana'],
+    socketedGemEstados: [null, 'polido'],
+  };
+
+  it('mantém equipment.arma e equipment.armas.<categoria> sincronizados', () => {
+    const equipment = {
+      arma: { id: 'espada_longa', socketedGems: [null, null], socketedGemEstados: [null, null] },
+      armas: {
+        perto: { id: 'espada_longa', socketedGems: [null, null], socketedGemEstados: [null, null] },
+        distancia: { id: 'arco_simples' },
+      },
+      armadura: { id: 'couro' },
+    };
+    const updated = syncArmasComGemas(equipment, 'arma', espadaComGema);
+    expect(updated.arma).toBe(espadaComGema);
+    expect(updated.armas.perto.socketedGems).toEqual([null, 'obsidiana']);
+    expect(updated.armas.perto.socketedGemEstados).toEqual([null, 'polido']);
+    expect(updated.armas.distancia).toEqual({ id: 'arco_simples' });
+    expect(updated.armadura).toEqual({ id: 'couro' });
+  });
+
+  it('não altera armas de categorias diferentes e preserva o objeto original', () => {
+    const equipment = {
+      arma: { id: 'espada_curta', socketedGems: [], socketedGemEstados: [] },
+      armas: {
+        perto: { id: 'espada_curta', socketedGems: [], socketedGemEstados: [] },
+        distancia: { id: 'arco_longo', socketedGems: ['rubi'], socketedGemEstados: ['polido'] },
+      },
+    };
+    const nova = { id: 'espada_curta', socketedGems: ['hematita'], socketedGemEstados: ['polido'] };
+    const updated = syncArmasComGemas(equipment, 'arma', nova);
+    expect(updated.armas.perto.socketedGems).toEqual(['hematita']);
+    expect(updated.armas.distancia.socketedGems).toEqual(['rubi']);
+    expect(equipment.armas.perto.socketedGems).toEqual([]);
+  });
+
+  it('atualiza apenas a armadura quando o slot é armadura', () => {
+    const equipment = {
+      arma: { id: 'espada_longa', socketedGems: ['rubi'], socketedGemEstados: ['polido'] },
+      armas: { perto: { id: 'espada_longa', socketedGems: ['rubi'], socketedGemEstados: ['polido'] } },
+      armadura: { id: 'couro', socketedGems: [], socketedGemEstados: [] },
+    };
+    const novaArmadura = { id: 'couro', socketedGems: ['obsidiana'], socketedGemEstados: ['polido'] };
+    const updated = syncArmasComGemas(equipment, 'armadura', novaArmadura);
+    expect(updated.armadura).toBe(novaArmadura);
+    expect(updated.arma.socketedGems).toEqual(['rubi']);
+    expect(updated.armas.perto.socketedGems).toEqual(['rubi']);
   });
 });

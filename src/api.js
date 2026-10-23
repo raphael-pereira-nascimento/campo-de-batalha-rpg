@@ -330,6 +330,24 @@ function auth(url, options = {}) {
 }
 
 /* �"?�"?�"? API (online or offline) �"?�"?�"? */
+// Mantém `equipment.arma` (primário) e `equipment.armas.<categoria>` em sincronia
+// no modo offline, para que trocar de arma não perca as gemas encaixadas.
+function syncOfflineArmas(c, equipSlot, item) {
+  c.equipment[equipSlot] = item;
+  if (equipSlot === 'arma' && c.equipment.armas) {
+    for (const cat of Object.keys(c.equipment.armas)) {
+      const arma = c.equipment.armas[cat];
+      if (arma && arma.id === item.id) {
+        c.equipment.armas[cat] = {
+          ...arma,
+          socketedGems: item.socketedGems,
+          socketedGemEstados: item.socketedGemEstados,
+        };
+      }
+    }
+  }
+}
+
 export const api = {
   createPlayer: (name, password) => {
     if (isOffline()) {
@@ -463,6 +481,23 @@ export const api = {
             const def = EQUIPMENT.armaduras[itemId];
             item = def ? { id: itemId, ...def } : null;
           }
+        }
+        // Trocar de equipamento devolve as gemas encaixadas ao inventário.
+        // Reequipar o mesmo item preserva as gemas.
+        const oldItem = categoria
+          ? c.equipment.armas?.[categoria] || (categoria === 'perto' ? c.equipment.arma : null)
+          : c.equipment.armadura;
+        if (oldItem && item && oldItem.id === item.id) {
+          item = {
+            ...item,
+            socketedGems: oldItem.socketedGems || [],
+            socketedGemEstados: oldItem.socketedGemEstados || [],
+          };
+        } else if (oldItem?.socketedGems?.length) {
+          const estados = oldItem.socketedGemEstados || [];
+          oldItem.socketedGems.forEach((gemId, i) => {
+            if (gemId) addOfflineGem(id, gemId, estados[i] || 'polido');
+          });
         }
         if (categoria) {
           const armas = { ...(c.equipment.armas || {}) };
@@ -999,7 +1034,7 @@ export const api = {
         ? [...item.socketedGemEstados]
         : [];
       socketedGemEstados[slotIndex] = gema.estado;
-      c.equipment[equipSlot] = { ...item, socketedGems, socketedGemEstados };
+      syncOfflineArmas(c, equipSlot, { ...item, socketedGems, socketedGemEstados });
       localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
       return Promise.resolve({ ok: true, character: c });
     }
@@ -1024,7 +1059,7 @@ export const api = {
         ? [...item.socketedGemEstados]
         : [];
       socketedGemEstados[slotIndex] = null;
-      c.equipment[equipSlot] = { ...item, socketedGems, socketedGemEstados };
+      syncOfflineArmas(c, equipSlot, { ...item, socketedGems, socketedGemEstados });
       localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
       return Promise.resolve({ ok: true, character: c });
     }
