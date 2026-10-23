@@ -27,7 +27,20 @@ import {
   socketGem,
   unsocketGem,
 } from './services/characters.js';
-import { gemIsRaw, getGemById, GEMS, pickGemByWeight, mineGem, rollGemDrop, getInitialGem, MINERA_VEIOS } from './game/gems.js';
+import {
+  gemIsRaw,
+  getGemById,
+  GEMS,
+  GEM_LIST,
+  gemPrice,
+  mineGem,
+  getInitialGem,
+  MINERA_VEIOS,
+  NIVEIS_POLIMENTO,
+  polirPedra,
+} from './game/gems.js';
+import { acharReceitaFusao } from './game/forgeGems.js';
+import { TOOLS } from './game/tools.js';
 import { RACES } from './game/races.js';
 import { MONSTERS } from './game/monsters.js';
 import { DUNGEONS } from './game/dungeons.js';
@@ -139,6 +152,57 @@ app.post('/api/shop/buy', requireAuth, async (req, res) => {
       }
     }
     res.json({ ok: true, item });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+// Ferramentas de polimento: compra persistida no inventário do personagem.
+app.post('/api/shop/buy-tool', requireAuth, async (req, res) => {
+  try {
+    const { characterId, toolId } = req.body || {};
+    const tool = TOOLS[toolId];
+    if (!tool) throw new Error('Ferramenta inválida.');
+    if (!characterId) throw new Error('Escolha um personagem para guardar a ferramenta.');
+
+    const { rows: charRows } = await query(
+      'SELECT inventory FROM characters WHERE id = $1 AND player_id = $2 FOR UPDATE',
+      [characterId, req.player.id],
+    );
+    if (!charRows.length) throw new Error('Personagem não encontrado.');
+
+    const { rows } = await query('SELECT wallet_cents FROM players WHERE id = $1 FOR UPDATE', [
+      req.player.id,
+    ]);
+    const carteira = Number(rows[0]?.wallet_cents || 0);
+    if (carteira < tool.precoCents) {
+      throw new Error(`Ouro insuficiente: a ferramenta custa ${tool.precoCents} e você tem ${carteira}.`);
+    }
+
+    const inventory = typeof charRows[0].inventory === 'string'
+      ? JSON.parse(charRows[0].inventory)
+      : (charRows[0].inventory || []);
+    const item = {
+      id: tool.id,
+      nome: tool.nome,
+      tipo: 'ferramenta',
+      raridade: tool.raridade,
+      peso: tool.peso,
+      espacos: tool.espacos,
+      usos: tool.usos,
+    };
+    inventory.push(item);
+
+    await query('UPDATE players SET wallet_cents = wallet_cents - $1 WHERE id = $2', [
+      tool.precoCents,
+      req.player.id,
+    ]);
+    await query('UPDATE characters SET inventory = $1 WHERE id = $2', [
+      JSON.stringify(inventory),
+      characterId,
+    ]);
+
+    res.json({ ok: true, item, walletCents: carteira - tool.precoCents });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
@@ -273,15 +337,18 @@ app.post('/api/characters/:id/level', requireAuth, async (req, res) => {
 // ── Sistema de Gemas: obtenção (drop/mineração/loja/iniciais) ──────────────
 app.get('/api/gems/catalog', (_req, res) => {
   try {
-    const catalog = Object.values(GEMS).map((g) => ({
+    const catalog = GEM_LIST.map((g) => ({
       id: g.id,
       nome: g.nome,
+      descricao: g.descricao,
+      tipo: g.tipo,
       raridade: g.raridade,
-      estado: g.estado,
+      estado: g.estado || 'polido',
+      bruta: gemIsRaw(g.id),
       bioma: g.bioma,
       dropWeight: g.dropWeight,
       efeitos: g.efeitos,
-      preco: g.preco || (g.raridade === 'lendaria' ? 5000 : g.raridade === 'epica' ? 2500 : g.raridade === 'rara' ? 1200 : g.raridade === 'incomum' ? 600 : 250),
+      preco: gemPrice(g),
     }));
     res.json({ ok: true, gems: catalog, veios: MINERA_VEIOS });
   } catch (err) {
@@ -307,8 +374,30 @@ app.post('/api/gems/mine', requireAuth, async (req, res) => {
     if (char.player_id !== req.player.id) throw new Error('Este personagem não é seu.');
 
     const veio = MINERA_VEIOS.find((v) => v.id === veioId) || MINERA_VEIOS[0];
+
+    // Cooldown por personagem + veio (server-authoritative).
+    const cooldownMs = (veio.cooldownMin || 0) * 60_000;
+    if (cooldownMs > 0) {
+      const { rows: minas } = await query(
+        'SELECT last_mined_at FROM character_mining WHERE character_id = $1 AND veio_id = $2',
+        [characterId, veio.id],
+      );
+      if (minas[0]?.last_mined_at) {
+        const passado = Date.now() - new Date(minas[0].last_mined_at).getTime();
+        if (passado < cooldownMs) {
+          const restam = Math.ceil((cooldownMs - passado) / 1000);
+          const minutos = Math.floor(restam / 60);
+          const segundos = restam % 60;
+          throw new Error(
+            `Este veio ainda está se recuperando. Aguarde ${minutos > 0 ? `${minutos}min ` : ''}${segundos}s.`,
+          );
+        }
+      }
+    }
+
     const { rows } = await query('SELECT wallet_cents FROM players WHERE id = $1 FOR UPDATE', [req.player.id]);
-    if (Number(rows[0]?.wallet_cents || 0) < (veio.custoCents || 0)) {
+    const carteira = Number(rows[0]?.wallet_cents || 0);
+    if (carteira < (veio.custoCents || 0)) {
       throw new Error(`Ouro insuficiente. Custo: ${veio.custoCents} moedas.`);
     }
     if ((veio.custoCents || 0) > 0) {
@@ -316,9 +405,26 @@ app.post('/api/gems/mine', requireAuth, async (req, res) => {
     }
 
     const result = mineGem(veio.id);
-    // Gema minerada vai pro inventário do personagem (começa bruta, incentivando polimento)
-    await addGemToInventory(characterId, result.gemId, 'bruta');
-    res.json({ ok: true, gemId: result.gemId, veio: result.veio });
+    // Gema minerada já sai utilizável (lapidada); a Forja serve para evoluí-la.
+    const estado = result.estado || 'lapidada';
+    await addGemToInventory(characterId, result.gemId, estado);
+    await query(
+      `INSERT INTO character_mining (character_id, veio_id, last_mined_at)
+       VALUES ($1, $2, now())
+       ON CONFLICT (character_id, veio_id) DO UPDATE SET last_mined_at = now()`,
+      [characterId, veio.id],
+    );
+
+    res.json({
+      ok: true,
+      gemId: result.gemId,
+      estado,
+      veio: result.veio,
+      veioId: result.veioId,
+      bioma: result.bioma,
+      walletCents: carteira - (veio.custoCents || 0),
+      cooldownMin: veio.cooldownMin || 0,
+    });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
@@ -334,14 +440,18 @@ app.post('/api/gems/shop/buy', requireAuth, async (req, res) => {
     if (!char) throw new Error('Personagem não encontrado.');
     if (char.player_id !== req.player.id) throw new Error('Este personagem não é seu.');
 
-    const preco = g.preco || (g.raridade === 'lendaria' ? 5000 : g.raridade === 'epica' ? 2500 : g.raridade === 'rara' ? 1200 : g.raridade === 'incomum' ? 600 : 250);
+    const preco = gemPrice(g);
     const { rows } = await query('SELECT wallet_cents FROM players WHERE id = $1 FOR UPDATE', [req.player.id]);
-    if (Number(rows[0]?.wallet_cents || 0) < preco) throw new Error('Ouro insuficiente.');
+    const carteira = Number(rows[0]?.wallet_cents || 0);
+    if (carteira < preco) {
+      throw new Error(`Ouro insuficiente: a gema custa ${preco} e você tem ${carteira}.`);
+    }
 
     await query('UPDATE players SET wallet_cents = wallet_cents - $1 WHERE id = $2', [preco, req.player.id]);
-    // Compra vem bruta para incentivar o uso da Forja
-    await addGemToInventory(characterId, gemId, 'bruta');
-    res.json({ ok: true, gemId });
+    // Gema comprada já sai utilizável; o polimento é a progressão.
+    const estado = 'lapidada';
+    await addGemToInventory(characterId, gemId, estado);
+    res.json({ ok: true, gemId, estado, walletCents: carteira - preco });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
@@ -349,19 +459,48 @@ app.post('/api/gems/shop/buy', requireAuth, async (req, res) => {
 
 app.post('/api/gems/fuse', requireAuth, async (req, res) => {
   try {
-    const { characterId, gemA, gemB, resultado } = req.body || {};
+    const { characterId, gemA, gemB } = req.body || {};
     if (!characterId) throw new Error('Informe o personagem.');
-    if (!gemA || !gemB || !resultado) throw new Error('Dados inválidos para fusão.');
+    if (!gemA?.id || !gemB?.id || !gemA?.estado || !gemB?.estado) {
+      throw new Error('Dados inválidos para fusão.');
+    }
     const char = await getCharacter(characterId);
     if (!char || char.player_id !== req.player.id) throw new Error('Acesso negado.');
+    if (gemA.id === gemB.id) throw new Error('Não é possível fundir uma gema com ela mesma.');
+    if (gemA.estado === 'bruta' || gemB.estado === 'bruta') {
+      throw new Error('Pedras brutas precisam ser polidas antes de serem fundidas.');
+    }
+
+    // O servidor valida a receita (não confia no resultado enviado pelo cliente).
+    const receita = acharReceitaFusao(gemA.id, gemB.id);
+    if (!receita) throw new Error('Combinação de fusão inválida.');
+    const alvo = getGemById(receita.resultadoId);
+    if (!alvo) throw new Error('Gema resultante inválida.');
+
     const gems = await getCharacterGemsDetailed(characterId);
-    const hasA = gems.some((g) => g.gem_id === gemA.id && g.estado === gemA.estado);
-    const hasB = gems.some((g) => g.gem_id === gemB.id && g.estado === gemB.estado);
-    if (!hasA || !hasB) throw new Error('Gemas não encontradas no inventário.');
-    await removeGemFromInventory(characterId, gemA.id, gemA.estado);
-    await removeGemFromInventory(characterId, gemB.id, gemB.estado);
-    await addGemToInventory(characterId, resultado.id, 'bruta');
-    res.json({ ok: true, resultadoId: resultado.id });
+    const linhaA = gems.find((g) => g.gem_id === gemA.id && g.estado === gemA.estado);
+    const linhaB = gems.find((g) => g.gem_id === gemB.id && g.estado === gemB.estado);
+    if (!linhaA || !linhaB) throw new Error('Gemas não encontradas no inventário.');
+
+    const mpAtual = Number(char.mp_current || 0);
+    if (mpAtual < receita.custoMana) {
+      throw new Error(`Mana insuficiente: a fusão custa ${receita.custoMana}.`);
+    }
+
+    // Consome exatamente as linhas usadas (ids), evitando apagar outra gema igual.
+    await query('DELETE FROM character_gems WHERE id = ANY($1::uuid[])', [[linhaA.id, linhaB.id]]);
+    await query('UPDATE characters SET mp_current = GREATEST(0, mp_current - $1) WHERE id = $2', [
+      receita.custoMana,
+      characterId,
+    ]);
+    const nova = await addGemToInventory(characterId, receita.resultadoId, 'polido');
+    res.json({
+      ok: true,
+      resultadoId: receita.resultadoId,
+      gem: nova,
+      custoMana: receita.custoMana,
+      mpCurrent: Math.max(0, mpAtual - receita.custoMana),
+    });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
@@ -369,16 +508,49 @@ app.post('/api/gems/fuse', requireAuth, async (req, res) => {
 
 app.post('/api/gems/polish', requireAuth, async (req, res) => {
   try {
-    const { characterId, gemId, fromEstado, toEstado } = req.body || {};
-    if (!characterId || !gemId || !fromEstado || !toEstado) throw new Error('Dados inválidos para polimento.');
+    const { characterId, gemId, fromEstado } = req.body || {};
+    if (!characterId || !gemId || !fromEstado) throw new Error('Dados inválidos para polimento.');
+    if (!NIVEIS_POLIMENTO[fromEstado]) throw new Error('Estado de gema inválido.');
+
     const char = await getCharacter(characterId);
     if (!char || char.player_id !== req.player.id) throw new Error('Acesso negado.');
+
     const gems = await getCharacterGemsDetailed(characterId);
-    const has = gems.some((g) => g.gem_id === gemId && g.estado === fromEstado);
-    if (!has) throw new Error('Gema não encontrada no inventário.');
-    await removeGemFromInventory(characterId, gemId, fromEstado);
-    await addGemToInventory(characterId, gemId, toEstado);
-    res.json({ ok: true });
+    const linha = gems.find((g) => g.gem_id === gemId && g.estado === fromEstado);
+    if (!linha) throw new Error('Gema não encontrada no inventário (ela pode ter sido polida em outro lugar).');
+
+    const { rows } = await query('SELECT wallet_cents FROM players WHERE id = $1 FOR UPDATE', [req.player.id]);
+    const carteira = Number(rows[0]?.wallet_cents || 0);
+    const mpAtual = Number(char.mp_current || 0);
+
+    // O servidor decide o resultado (não confia no cliente).
+    const jogador = {};
+    const res2 = polirPedra({ id: gemId, estado: fromEstado }, carteira, jogador, mpAtual);
+    if (!res2.ok) throw new Error(res2.motivo || 'Não foi possível polir a gema.');
+
+    await query('UPDATE players SET wallet_cents = wallet_cents - $1 WHERE id = $2', [res2.custoOuro, req.player.id]);
+    await query('UPDATE characters SET mp_current = GREATEST(0, mp_current - $1) WHERE id = $2', [
+      res2.custoMana,
+      characterId,
+    ]);
+
+    if (res2.estadoNovo === 'destruida') {
+      await query('DELETE FROM character_gems WHERE id = $1', [linha.id]);
+    } else {
+      await query('UPDATE character_gems SET estado = $1, updated_at = now() WHERE id = $2', [
+        res2.estadoNovo,
+        linha.id,
+      ]);
+    }
+
+    res.json({
+      ok: true,
+      ...res2,
+      estadoNovo: res2.estadoNovo === 'destruida' ? null : res2.estadoNovo,
+      destruida: res2.estadoNovo === 'destruida',
+      walletCents: carteira - res2.custoOuro,
+      mpCurrent: Math.max(0, mpAtual - res2.custoMana),
+    });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
@@ -526,7 +698,6 @@ const registryViews = {
 };
 
 for (const [route, view] of Object.entries(registryViews)) {
-  for (const [route, view] of Object.entries(registryViews)) {
   app.get(`/api/custom-${route}`, optionalAuth, async (req, res) => {
     try {
       let rows = await view.list(req.player?.id);

@@ -97,9 +97,21 @@ export default function App({ initialView } = {}) {
     return { player, token };
   };
 
+  const refreshWallet = async () => {
+    try {
+      const d = await api.getWallet();
+      const cents = d && d.wallet && typeof d.wallet === 'object' ? d.wallet.cents : Number(d?.wallet) || 0;
+      setWalletCents(cents);
+      return cents;
+    } catch (_) {
+      return walletCents;
+    }
+  };
+
   const refreshCharacters = async () => {
     const d = await api.listCharacters(player.id);
     setCharacters(d.characters);
+    await refreshWallet();
   };
 
   const handleLogout = () => {
@@ -110,14 +122,13 @@ export default function App({ initialView } = {}) {
   };
 
   const abrirToolShop = async () => {
-    try {
-      const d = await api.getWallet();
-      const cents = d && d.wallet && typeof d.wallet === 'object' ? d.wallet.cents : Number(d?.wallet) || 0;
-      setWalletCents(cents);
-    } catch (_) {
-      // mantém o valor atual da carteira
-    }
+    await refreshWallet();
     setView('toolShop');
+  };
+
+  const abrirForja = async () => {
+    await refreshWallet();
+    setView('gemForge');
   };
 
   const handleToolBuy = (_ferramenta, preco) => {
@@ -212,7 +223,7 @@ export default function App({ initialView } = {}) {
         onOpenRegistry={() => setView('registry')}
         onOpenCompendium={() => setView('compendium')}
         onOpenRules={() => setView('rules')}
-        onOpenGemForge={() => setView('gemForge')}
+        onOpenGemForge={abrirForja}
         onOpenToolShop={abrirToolShop}
         onOpenTavern={abrirTaverna}
         onOpenTableBattle={() => setView('tableBattle')}
@@ -241,8 +252,14 @@ export default function App({ initialView } = {}) {
   }
 
   if (view === 'gemForge') {
-    return <Suspense fallback={<div className="loading">Acesando a forja...</div>}>
-      <GemForge onBack={() => setView('characters')} player={player} characters={characters} onRefresh={refreshCharacters} />
+    return <Suspense fallback={<div className="loading">Acessando a forja...</div>}>
+      <GemForge
+        onBack={() => setView('characters')}
+        player={player}
+        characters={characters}
+        onRefresh={refreshCharacters}
+        walletCents={walletCents}
+      />
     </Suspense>;
   }
 
@@ -257,7 +274,11 @@ export default function App({ initialView } = {}) {
           limiteEspacos: 20,
         }}
         localAtual="Porto Ferro"
+        characters={characters}
+        player={player}
         onComprar={handleToolBuy}
+        onWalletChange={setWalletCents}
+        onRefresh={refreshCharacters}
         onBack={() => setView('characters')}
       />
     </Suspense>;

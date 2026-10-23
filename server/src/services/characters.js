@@ -530,15 +530,20 @@ export async function grantRewards(battle) {
     const mpMax = stats.mpMax;
 
     const coins = 100 + (p.kills || 0) * 25;
+    const playerId = char.player_id;
 
-    // Drop de gema em batalha (Fase 3)
-    try {
-      const drop = rollGemDrop(p.isMonster ? 'normal' : 'normal');
-      if (drop && !p.isMonster && playerId) {
-        await addGemToInventory(p.characterId, drop.gemId, 'bruta');
+    // Drop de gema ao final da batalha (somente personagens de jogadores).
+    if (!p.isMonster && playerId) {
+      try {
+        const dificuldade = battle.dungeonId ? 'masmorra' : 'normal';
+        const drop = rollGemDrop(dificuldade);
+        if (drop) {
+          await addGemToInventory(p.characterId, drop.gemId, drop.estado || 'polido');
+        }
+      } catch (e) {
+        // Um drop falho nunca deve bloquear XP/moedas.
+        console.error('[gems] falha ao conceder drop:', e.message);
       }
-    } catch (e) {
-      // não bloqueia recompensas
     }
 
     await query(
@@ -557,7 +562,6 @@ export async function grantRewards(battle) {
         p.characterId,
       ],
     );
-    const playerId = char.player_id;
     if (playerId && coins > 0) {
       await query('UPDATE players SET wallet_cents = (wallet_cents + $1) WHERE id = $2', [coins, playerId]);
     }
@@ -761,32 +765,35 @@ export async function socketGem(characterId, slotKey, gemId) {
   const maxSlots = item.socketSlots || 0;
   if (slotIndex < 0 || slotIndex >= maxSlots) throw new Error('Slot inválido.');
 
-  // Check gem is in inventory
-  const gems = await getCharacterGems(characterId);
-  const gemIdx = gems.indexOf(gemId);
-  if (gemIdx === -1) throw new Error('Gema não encontrada no inventário.');
-
-  // Checa estado real da gema (bruta/polida) — também respeita catálogo
+  // Check gem is in inventory (prefere uma cópia já polida, se houver).
   const { rows: gemRows } = await query(
-    'SELECT estado FROM character_gems WHERE character_id = $1 AND gem_id = $2 ORDER BY created_at ASC LIMIT 1',
+    `SELECT id, estado FROM character_gems
+     WHERE character_id = $1 AND gem_id = $2
+     ORDER BY (estado = 'bruta') ASC, created_at ASC
+     LIMIT 1`,
     [characterId, gemId],
   );
-  const estado = gemRows[0]?.estado || (gemIsRaw(gemId) ? 'bruta' : 'polido');
-  if (estado === 'bruta') throw new Error('⚠️ Requer polimento antes de usar');
+  const gemaInv = gemRows[0];
+  if (!gemaInv) throw new Error('Gema não encontrada no inventário.');
+  if (gemaInv.estado === 'bruta') throw new Error('⚠️ Requer polimento antes de usar');
 
   // Check slot is empty
   const socketedGems = item.socketedGems || [];
   if (socketedGems[slotIndex]) throw new Error('Slot já possui uma gema.');
 
-  // Remove gem from inventory
-  await query(
-    'DELETE FROM character_gems WHERE id = (SELECT id FROM character_gems WHERE character_id = $1 AND gem_id = $2 AND estado = $3 LIMIT 1)',
-    [characterId, gemId, estado],
-  );
+  // Remove a linha exata que foi usada.
+  await query('DELETE FROM character_gems WHERE id = $1', [gemaInv.id]);
 
-  // Add to socketed gems
+  // Add to socketed gems (guardando o estado para devolver igual ao desencaixar)
   socketedGems[slotIndex] = gemId;
-  const updatedEquipment = { ...char.equipment, [equipSlot]: { ...item, socketedGems } };
+  const socketedGemEstados = Array.isArray(item.socketedGemEstados)
+    ? [...item.socketedGemEstados]
+    : [];
+  socketedGemEstados[slotIndex] = gemaInv.estado;
+  const updatedEquipment = {
+    ...char.equipment,
+    [equipSlot]: { ...item, socketedGems, socketedGemEstados },
+  };
   await query(
     'UPDATE characters SET equipment = $1 WHERE id = $2',
     [JSON.stringify(updatedEquipment), characterId],
@@ -808,17 +815,27 @@ export async function unsocketGem(characterId, slotKey) {
   const gemId = socketedGems[slotIndex];
   if (!gemId) throw new Error('Slot vazio.');
 
-  // Add gem back to inventory
+  // Devolve a gema ao inventário com o estado que ela tinha ao ser encaixada.
   const { rows: gemRows } = await query(
     'SELECT estado FROM character_gems WHERE character_id = $1 AND gem_id = $2 ORDER BY created_at DESC LIMIT 1',
     [characterId, gemId],
   );
-  const estadoVolta = gemRows[0]?.estado || (gemIsRaw(gemId) ? 'bruta' : 'polido');
+  const estadoVolta =
+    item.socketedGemEstados?.[slotIndex] ||
+    gemRows[0]?.estado ||
+    (gemIsRaw(gemId) ? 'bruta' : 'polido');
   await addGemToInventory(characterId, gemId, estadoVolta);
 
   // Remove from socketed gems
   socketedGems[slotIndex] = null;
-  const updatedEquipment = { ...char.equipment, [equipSlot]: { ...item, socketedGems } };
+  const socketedGemEstados = Array.isArray(item.socketedGemEstados)
+    ? [...item.socketedGemEstados]
+    : [];
+  socketedGemEstados[slotIndex] = null;
+  const updatedEquipment = {
+    ...char.equipment,
+    [equipSlot]: { ...item, socketedGems, socketedGemEstados },
+  };
   await query(
     'UPDATE characters SET equipment = $1 WHERE id = $2',
     [JSON.stringify(updatedEquipment), characterId],

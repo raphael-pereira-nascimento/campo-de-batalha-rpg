@@ -77,25 +77,49 @@ function _saveAllGems(gems) {
   localStorage.setItem(GEMS_KEY, JSON.stringify(gems));
 }
 
-export function getOfflineGems(characterId) {
-  const all = _getAllGems();
-  return all[characterId] || [];
+// Compatibilidade: versões antigas guardavam apenas o id ("jaspe").
+// O formato atual guarda { gem_id, estado } para o estado de polimento
+// sobreviver ao recarregar a página.
+function _normalizeGem(x) {
+  if (typeof x === 'string') return { gem_id: x, estado: 'polido' };
+  return { gem_id: x.gem_id, estado: x.estado || 'polido' };
 }
 
-export function addOfflineGem(characterId, gemId) {
+export function getOfflineGems(characterId) {
+  const all = _getAllGems();
+  return (all[characterId] || []).map(_normalizeGem);
+}
+
+export function addOfflineGem(characterId, gemId, estado = 'lapidada') {
   const all = _getAllGems();
   if (!all[characterId]) all[characterId] = [];
-  all[characterId].push(gemId);
+  all[characterId].push({ gem_id: gemId, estado });
   _saveAllGems(all);
 }
 
-export function removeOfflineGem(characterId, gemId) {
+export function removeOfflineGem(characterId, gemId, estado) {
   const all = _getAllGems();
-  const gems = all[characterId] || [];
-  const idx = gems.indexOf(gemId);
+  const gems = (all[characterId] || []).map(_normalizeGem);
+  const idx = gems.findIndex((g) => g.gem_id === gemId && (!estado || g.estado === estado));
   if (idx !== -1) gems.splice(idx, 1);
   all[characterId] = gems;
   _saveAllGems(all);
+}
+
+export function setOfflineGemEstado(characterId, gemId, estadoAtual, estadoNovo) {
+  const all = _getAllGems();
+  const gems = (all[characterId] || []).map(_normalizeGem);
+  if (estadoNovo === 'destruida') {
+    const idx = gems.findIndex((g) => g.gem_id === gemId && g.estado === estadoAtual);
+    if (idx !== -1) gems.splice(idx, 1);
+  } else {
+    const alvo = gems.find((g) => g.gem_id === gemId && g.estado === estadoAtual);
+    if (!alvo) return false;
+    alvo.estado = estadoNovo;
+  }
+  all[characterId] = gems;
+  _saveAllGems(all);
+  return true;
 }
 
 // ── Conteúdo customizado offline (Registro do Mundo) ────────────────────

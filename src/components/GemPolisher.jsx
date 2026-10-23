@@ -25,6 +25,7 @@ export default function GemPolisher({
   onManaChange,
   onEstadoChange,
   onPolirFalhaProtegida,
+  onPolir,
   onClose,
 }) {
   const [progresso, setProgresso] = useState(0);
@@ -76,17 +77,35 @@ export default function GemPolisher({
 
     const inicio = Date.now();
     clearInterval(timer.current);
-    timer.current = setInterval(() => {
+    timer.current = setInterval(async () => {
       const p = Math.min(100, ((Date.now() - inicio) / duracaoMs) * 100);
       setProgresso(p);
       if (p >= 100) {
         clearInterval(timer.current);
-        const resultado = polirPedra(gema, ouro, jogador, mana);
-        if (resultado.ok) {
-          if (onOuroChange) onOuroChange(resultado.ouroRestante);
-          if (onManaChange && resultado.manaRestante !== undefined) onManaChange(resultado.manaRestante);
-          setEstadoLocal(resultado.estadoNovo);
-          if (onEstadoChange) onEstadoChange(gema.id, resultado.estadoNovo);
+
+        let resultado;
+        try {
+          // Com servidor online o resultado é decidido lá (e o custo é
+          // realmente debitado da carteira/mana). Sem servidor, cai na
+          // regra local para o modo offline continuar funcionando.
+          resultado = onPolir
+            ? await onPolir(gema, estadoLocal)
+            : polirPedra(gema, ouro, jogador, mana);
+        } catch (e) {
+          mostrarToast(e.message || '❌ Não foi possível polir.', 'erro');
+          setPolindo(false);
+          return;
+        }
+
+        if (resultado?.ok) {
+          const estadoNovo = resultado.destruida ? 'destruida' : resultado.estadoNovo;
+          if (onOuroChange) onOuroChange(resultado.walletCents ?? resultado.ouroRestante);
+          if (onManaChange) {
+            const restante = resultado.mpCurrent ?? resultado.manaRestante;
+            if (restante !== undefined) onManaChange(restante);
+          }
+          setEstadoLocal(estadoNovo);
+          if (onEstadoChange) onEstadoChange(gema.id, estadoNovo);
           if (resultado.protegido && onPolirFalhaProtegida) {
             onPolirFalhaProtegida(gema.id, resultado.custoMana);
             mostrarToast('🛡️ Falha! A pedra foi protegida pelo Lapidador.', 'aviso');
@@ -97,7 +116,7 @@ export default function GemPolisher({
             );
           }
         } else {
-          mostrarToast(resultado.motivo || '❌ Não foi possível polir.', 'erro');
+          mostrarToast(resultado?.motivo || '❌ Não foi possível polir.', 'erro');
         }
         setPolindo(false);
       }

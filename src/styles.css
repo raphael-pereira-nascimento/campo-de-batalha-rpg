@@ -2514,6 +2514,49 @@ button.danger {
 }
 .forge-intro strong { color: #d4af37; }
 
+/* Seleção de personagem (Forja e Loja) */
+.forge-character-bar,
+.shop-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  margin: 0 0 14px;
+  border: 1px solid var(--border, #4a3a5e);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.forge-character-bar label,
+.shop-filter label {
+  font-weight: 600;
+  color: #cfc6e6;
+}
+
+.forge-character-bar select,
+.shop-filter select {
+  background: #221733;
+  color: #eee;
+  border: 1px solid var(--border, #4a3a5e);
+  border-radius: 8px;
+  padding: 6px 10px;
+  min-width: 190px;
+}
+
+.forge-wallet {
+  margin-left: auto;
+  font-weight: 700;
+  color: #ffd166;
+  white-space: nowrap;
+}
+
+.muted.small,
+.desc.small {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .forge-inventory { margin-bottom: 24px; }
 .forge-inventory h3 {
   margin: 0 0 10px;

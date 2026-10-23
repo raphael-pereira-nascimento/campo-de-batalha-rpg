@@ -16,6 +16,7 @@ import {
   STATUS_DEFS,
 } from '../src/game/data.js';
 import { gemIsRaw } from '../src/game/gems.js';
+import { acharReceitaFusao, FUSOES } from '../src/game/forgeGems.js';
 import { DANO_MULT } from '../src/game/sistema.js';
 
 const anao = { id: 'anao', bonus: { forca: 1, resistencia: 1 } };
@@ -238,10 +239,20 @@ describe('gemas — estado bruto/polido e efeitos por slot', () => {
 
   it('gemsAttrs soma bônus das gemas polidas por slot e ignora gemas brutas', () => {
     const equipment = {
-      arma: { socketedGems: ['ametista', 'diamante'] }, // ametista polida (int 2), diamante bruta (ignora)
+      // O estado bruta/polida pertence ao inventario (character_gems), nao ao
+      // catalogo: uma gema so chega aqui depois de validada no encaixe.
+      arma: { socketedGems: ['ametista', 'diamante'] }, // ametista int 2, diamante forca 2
       armadura: { socketedGems: ['lapis_lazuli'] },      // polida (int 2)
     };
-    expect(gemsAttrs(equipment)).toEqual({ inteligencia: 4 });
+    expect(gemsAttrs(equipment)).toEqual({ inteligencia: 4, forca: 2 });
+  });
+
+  it('gemas exclusivas da Forja tambem concedem bonus reais', () => {
+    const equipment = {
+      arma: { socketedGems: ['rubi', 'agataDeFogo'] },      // forca 2 + forca 1
+      armadura: { socketedGems: ['pedraDeSangue'] },        // resistencia 1
+    };
+    expect(gemsAttrs(equipment)).toEqual({ forca: 3, resistencia: 1 });
   });
 
   it('effectiveAttributes aplica efeitos de gemas socketadas', () => {
@@ -403,5 +414,22 @@ describe('STATUS_DEFS — catálogo central de status', () => {
     expect(STATUS_DEFS.cegueira.modificadores).toContain('-25%');
     expect(STATUS_DEFS.fraqueza.modificadores).toContain('0.8');
     expect(STATUS_DEFS.congelamento.tipo).toBe('cc');
+  });
+});
+
+describe('Forja - receitas validadas no servidor', () => {
+  it('reconhece as duas receitas estaveis em qualquer ordem', () => {
+    expect(FUSOES).toHaveLength(2);
+    const r1 = acharReceitaFusao('obsidiana', 'agataDeFogo');
+    expect(r1?.resultadoId).toBe('obsidiana_ardente');
+    expect(r1?.custoMana).toBe(50);
+    const r2 = acharReceitaFusao('pedraDeSangue', 'rubi');
+    expect(r2?.resultadoId).toBe('rubi_abissal');
+    expect(r2?.custoMana).toBe(150);
+  });
+
+  it('rejeita combinacoes fora das receitas', () => {
+    expect(acharReceitaFusao('jaspe', 'diamante')).toBeNull();
+    expect(acharReceitaFusao('rubi', 'rubi')).toBeNull();
   });
 });

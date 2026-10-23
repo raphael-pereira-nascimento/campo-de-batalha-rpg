@@ -1128,6 +1128,60 @@ export const GEMS = {
 export const GEM_LIST = Object.values(GEMS);
 export const GEM_IDS = Object.keys(GEMS);
 
+// Preço de loja (em moedas) por raridade, quando a gema não define `preco`.
+export const RARITY_PRICE = {
+  comum: 250,
+  incomum: 600,
+  rara: 1200,
+  epica: 2500,
+  lendaria: 5000,
+};
+
+export function gemPrice(gem) {
+  if (!gem) return 0;
+  return gem.preco || RARITY_PRICE[gem.raridade] || 250;
+}
+
+// Veios de mineração — espelho do servidor para o modo offline funcionar.
+export const MINERA_VEIOS = [
+  {
+    id: 'veio_comum',
+    nome: 'Veio Comum',
+    descricao: 'Pedras soltas na superfície. Grátis, mas com espera curta.',
+    custoCents: 0,
+    cooldownMin: 10,
+    chanceBonus: 0,
+    biomas: ['montanhas', 'floresta', 'plains'],
+  },
+  {
+    id: 'veio_montanha',
+    nome: 'Veio da Montanha',
+    descricao: 'Veio de rocha dura: boas chances de gemas raras.',
+    custoCents: 50,
+    cooldownMin: 15,
+    chanceBonus: 10,
+    biomas: ['montanhas', 'neve'],
+  },
+  {
+    id: 'veio_vulcanico',
+    nome: 'Veio Vulcânico',
+    descricao: 'Magma cristalizado. Gemas épicas aparecem com mais frequência.',
+    custoCents: 150,
+    cooldownMin: 25,
+    chanceBonus: 18,
+    biomas: ['vulcanico', 'deserto'],
+  },
+  {
+    id: 'veio_masmorra',
+    nome: 'Veio Profundo',
+    descricao: 'Fissura nas profundezas das masmorras. A melhor chance de lendárias.',
+    custoCents: 300,
+    cooldownMin: 40,
+    chanceBonus: 28,
+    biomas: ['masmorra', 'pantano', 'maritimo'],
+  },
+];
+
 export function getGemsByRarity(rarity) {
   return GEM_LIST.filter((g) => g.raridade === rarity);
 }
@@ -1166,10 +1220,32 @@ export const gemas = [
     bioma: ['Terrenos Vulcânicos'],
     custoFusaoMana: 30,
     efeitos: {
-      armadura: { resistenciaFogo: 35, resistenciaEscuridao: 35, debuff: { danoImpacto: 15 } },
-      arma: { danoLamina: 15, danoMagiaFogo: 20 },
-      acessorio: { resistenciaFogo: 25, resistenciaMaldicao: 25 },
-      golem: { imunidadeFogo: true, imunidadeEscuridao: true, fraquezaImpacto: 25 }
+      armadura: {
+        desc: '+25% resistência a fogo e escuridão',
+        bonus: { resistencia: 2 },
+        resistenciaFogo: 35,
+        resistenciaEscuridao: 35,
+        debuff: { danoImpacto: 15 },
+      },
+      arma: {
+        desc: '+30% dano cortante e de fogo',
+        bonus: { forca: 2, destreza: 1 },
+        danoLamina: 15,
+        danoMagiaFogo: 20,
+      },
+      acessorio: {
+        desc: 'Resistência a fogo e maldição',
+        bonus: { resistencia: 1 },
+        resistenciaFogo: 25,
+        resistenciaMaldicao: 25,
+      },
+      golem: {
+        desc: 'Golem +25% resistente ao fogo',
+        bonus: { resistencia: 2 },
+        imunidadeFogo: true,
+        imunidadeEscuridao: true,
+        fraquezaImpacto: 25,
+      },
     },
     fusoesCompativeis: ['agataDeFogo', 'rubi', 'granada'],
     descricao: 'Pedra vulcânica elemental. Precisa ser encantada antes da forja.'
@@ -1184,10 +1260,27 @@ export const gemas = [
     bioma: ['Terrenos Vulcânicos'],
     custoFusaoMana: 20,
     efeitos: {
-      armadura: { resistenciaFogo: 30 },
-      arma: { chanceIncendiar: true },
-      acessorio: { resistenciaCalor: true },
-      golem: { golpeExplosaoFogo: true }
+      armadura: {
+        desc: '+30% resistência ao fogo',
+        bonus: { resistencia: 2 },
+        resistenciaFogo: 30,
+      },
+      arma: {
+        desc: '+20% dano de fogo (chance de incendiar)',
+        bonus: { forca: 1 },
+        chanceIncendiar: true,
+        status: { tipo: 'queimadura', chance: 0.15 },
+      },
+      acessorio: {
+        desc: 'Resistência ao calor',
+        bonus: { resistencia: 1 },
+        resistenciaCalor: true,
+      },
+      golem: {
+        desc: 'Golem com golpe de explosão de fogo',
+        bonus: { forca: 1 },
+        golpeExplosaoFogo: true,
+      },
     },
     fusoesCompativeis: ['rubi', 'obsidiana', 'granada'],
     descricao: 'Pedra elemental de fogo. Aquece o ambiente ao redor.'
@@ -1202,10 +1295,30 @@ export const gemas = [
     bioma: ['Terrenos Vulcânicos', 'Masmorra'],
     custoFusaoMana: 50,
     efeitos: {
-      armadura: { resistenciaFogo: 35, debuff: { danoGelo: 20 } },
-      arma: { danoFogo: 30, efeitoQueimadura: true },
-      acessorio: { vidaMaxima: 15 },
-      golem: { ataqueExplosaoFogo: true, debuff: { perdaEnergiaFrio: true } }
+      armadura: {
+        desc: '+35% resistência ao fogo (fraqueza a gelo)',
+        bonus: { resistencia: 2 },
+        resistenciaFogo: 35,
+        debuff: { danoGelo: 20 },
+      },
+      arma: {
+        desc: '+30% dano de fogo (chance de queimadura)',
+        bonus: { forca: 2 },
+        danoFogo: 30,
+        efeitoQueimadura: true,
+        status: { tipo: 'queimadura', chance: 0.2 },
+      },
+      acessorio: {
+        desc: '+15 vida máxima',
+        bonus: { resistencia: 1 },
+        vidaMaxima: 15,
+      },
+      golem: {
+        desc: 'Golem com ataque de explosão de fogo',
+        bonus: { forca: 1 },
+        ataqueExplosaoFogo: true,
+        debuff: { perdaEnergiaFrio: true },
+      },
     },
     fusoesCompativeis: ['diamante', 'obsidiana', 'pedraDeSangue', 'agataDeFogo'],
     descricao: 'Pedra elemental de fogo e sangue. Bruta, necessita de polimento.'
@@ -1220,10 +1333,29 @@ export const gemas = [
     bioma: ['Masmorra', 'Pântano'],
     custoFusaoMana: 100,
     efeitos: {
-      armadura: { curaAoMatar: 5, debuff: { perdaVidaPorMinuto: 2 } },
-      arma: { danoSangramento: 35, danoMagiaDor: 25 },
-      acessorio: { detectarFeridos: true },
-      golem: { absorverSangue: true }
+      armadura: {
+        desc: 'Cura 5 ao matar (perde vida com o tempo)',
+        bonus: { resistencia: 1 },
+        curaAoMatar: 5,
+        debuff: { perdaVidaPorMinuto: 2 },
+      },
+      arma: {
+        desc: '+35% dano de sangramento (chance de sangrar)',
+        bonus: { forca: 2 },
+        danoSangramento: 35,
+        danoMagiaDor: 25,
+        status: { tipo: 'sangramento', chance: 0.25 },
+      },
+      acessorio: {
+        desc: 'Detecta inimigos feridos',
+        bonus: { inteligencia: 1 },
+        detectarFeridos: true,
+      },
+      golem: {
+        desc: 'Golem absorve sangue dos feridos',
+        bonus: { forca: 1 },
+        absorverSangue: true,
+      },
     },
     fusoesCompativeis: ['rubi', 'onix', 'lagrimasVermelhas'],
     descricao: 'Pedra proibida. Causa dano ao usuário, mas amplifica a magia de dor.'
@@ -1234,14 +1366,16 @@ export const gemas = [
 export const receitasFusao = [
   {
     ingredientes: ['obsidiana', 'agataDeFogo'],
+    // O id aponta para a gema real do catálogo (persistida no inventário).
     resultado: {
-      id: 'obsidianaArdente',
+      id: 'obsidiana_ardente',
       nome: 'Obsidiana Ardente',
       raridade: 'Épica',
+      raridadeId: 'lendaria',
       custoManaTotal: 50,
       efeitos: {
-        arma: { danoFogo: 55 },
-        debuff: { danoLeveAmbienteFrio: true }
+        arma: { desc: '+55% dano de fogo', bonus: { forca: 3 }, status: { tipo: 'queimadura', chance: 0.30 } },
+        armadura: { desc: '+40% resistência ao fogo', bonus: { resistencia: 3 } },
       },
       descricao: 'Fusão estável. Aumenta drasticamente o dano de fogo, mas o usuário sofre em ambientes frios.'
     }
@@ -1249,22 +1383,104 @@ export const receitasFusao = [
   {
     ingredientes: ['rubi', 'pedraDeSangue'],
     resultado: {
-      id: 'rubiAbissal',
+      id: 'rubi_abissal',
       nome: 'Rubi Abissal',
       raridade: 'Lendário',
+      raridadeId: 'lendaria',
       custoManaTotal: 150,
       efeitos: {
-        arma: { drenoVida: true, danoFogo: 40 },
-        debuff: { dorContinuaPosBatalha: true }
+        arma: { desc: 'Ataques drenam vida inimiga', bonus: { forca: 3 }, status: { tipo: 'sangramento', chance: 0.25 } },
+        acessorio: { desc: 'Usuário sofre dor contínua após batalhas longas', bonus: {} },
       },
       descricao: 'Fusão estável, mas perigosa. Drena vida inimiga, mas causa dor contínua ao usuário após batalhas longas.'
     }
   }
 ];
 
-export function getGemaById(id) {
-  return gemas.find((g) => g.id === id) || null;
+// ── CATÁLOGO UNIFICADO ─────────────────────────────────────────
+// A forja usa o MESMO catálogo do jogo (GEMS), para que qualquer gema
+// obtida em batalha, mineração ou loja possa ser polida e fundida.
+// As 4 pedras históricas da forja (gemas) têm prioridade por terem
+// receitas e estados próprios.
+
+const RARITY_ORDER = { comum: 0, incomum: 1, rara: 2, epica: 3, lendaria: 4 };
+const RARITY_LABEL = {
+  comum: 'Comum',
+  incomum: 'Incomum',
+  rara: 'Rara',
+  epica: 'Épica',
+  lendaria: 'Lendária',
+};
+const RARITY_ALIAS = {
+  Comum: 'comum',
+  Incomum: 'incomum',
+  Rara: 'rara',
+  'Épica': 'epica',
+  Epica: 'epica',
+  Mítica: 'lendaria',
+  Mitica: 'lendaria',
+  Lendária: 'lendaria',
+  Lendário: 'lendaria',
+  Lendario: 'lendaria',
+};
+const RARITY_MANA = { comum: 10, incomum: 20, rara: 30, epica: 50, lendaria: 80 };
+const SLOT_LABEL = { arma: 'Arma', armadura: 'Armadura', acessorio: 'Acessório', golem: 'Golem' };
+
+const tipoBase = (tipo) => String(tipo || '').toLowerCase().split(/[\s(/]/)[0];
+const parKey = (a, b) => [a, b].sort().join('|');
+
+// Pares que o catálogo declara como fundíveis (campo gem.fusao).
+const PARES_COMPATIVEIS = (() => {
+  const set = new Set();
+  for (const g of GEM_LIST) {
+    for (const f of g.fusao || []) set.add(parKey(g.id, f));
+  }
+  return set;
+})();
+
+// Normaliza uma gema do catálogo principal para o formato da forja.
+function gemadoCatalogo(g) {
+  const rid = g.raridade || 'comum';
+  return {
+    id: g.id,
+    nome: g.nome,
+    tipo: g.tipo || 'natural',
+    descricao: g.descricao || '',
+    raridade: RARITY_LABEL[rid] || rid,
+    raridadeId: rid,
+    estado: g.estado || 'polido',
+    bioma: g.bioma ? [g.bioma] : [],
+    preco: { ouro: g.preco || 0 },
+    custoFusaoMana: RARITY_MANA[rid] || 20,
+    efeitos: g.efeitos || {},
+    fusoesCompativeis: (g.fusao || []).slice(),
+    origem: 'catalogo',
+  };
 }
+
+function gemadaForja(g) {
+  return {
+    ...g,
+    raridadeId: RARITY_ALIAS[g.raridade] || String(g.raridade || '').toLowerCase(),
+    origem: 'forja',
+  };
+}
+
+export function getGemaById(id) {
+  const daForja = gemas.find((g) => g.id === id);
+  if (daForja) return gemadaForja(daForja);
+  const doCatalogo = GEMS[id];
+  if (doCatalogo) return gemadoCatalogo(doCatalogo);
+  return null;
+}
+
+// Lista completa (forja + catálogo) para a forja exibir tudo que existe.
+export const gemasDisponiveis = (() => {
+  const mapa = new Map();
+  for (const g of GEM_LIST) mapa.set(g.id, gemadoCatalogo(g));
+  for (const g of gemas) mapa.set(g.id, gemadaForja(g));
+  return [...mapa.values()];
+})();
 
 // Retorna true se a gema do sistema de fusão está em estado bruta.
 export function gemaIsBruta(id) {
@@ -1272,18 +1488,69 @@ export function gemaIsBruta(id) {
   return !!g && g.estado === 'bruta';
 }
 
-// Converte um objeto de efeitos (chave -> valor) em pares legíveis p/ exibição.
+// Converte um objeto de efeitos em pares legíveis p/ exibição.
+// Aceita o formato plano da forja ({ danoFogo: 55 }) e o formato do
+// catálogo por slot ({ arma: { desc, bonus }, acessorio: {...} }).
 export function efeitosParaLista(efeitos) {
   const list = [];
   for (const [k, v] of Object.entries(efeitos || {})) {
     if (k === 'debuff') {
-      list.push({ tipo: 'debuff', label: `❌ ${v === true ? k : `${k} ${v}`}` });
+      const label = v === true ? 'Efeito negativo' : typeof v === 'object' ? Object.keys(v).join(', ') : `${k} ${v}`;
+      list.push({ tipo: 'debuff', label: `❌ ${label}` });
+      continue;
+    }
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      const slot = SLOT_LABEL[k] || k;
+      if (v.desc) {
+        list.push({ tipo: 'buff', label: `✨ ${slot}: ${v.desc}` });
+        continue;
+      }
+      for (const [k2, v2] of Object.entries(v)) {
+        if (v2 && typeof v2 === 'object') continue;
+        if (typeof v2 === 'boolean') {
+          list.push({ tipo: k2 === 'debuff' ? 'debuff' : 'buff', label: `${k2 === 'debuff' ? '❌' : '✨'} ${slot} — ${k2}` });
+        } else {
+          list.push({ tipo: 'buff', label: `✨ ${slot} — ${k2}: +${v2}` });
+        }
+      }
       continue;
     }
     if (typeof v === 'boolean') list.push({ tipo: 'buff', label: `✨ ${k}` });
     else list.push({ tipo: 'buff', label: `✨ ${k}: +${v}` });
   }
   return list;
+}
+
+// Resultado determinístico para fusões sem receita explícita: sobe uma
+// raridade e escolhe uma gema real do catálogo (mesmo tipo quando possível).
+function resultadoGenerico(gemaA, gemaB) {
+  const ordemA = RARITY_ORDER[gemaA.raridadeId] ?? 1;
+  const ordemB = RARITY_ORDER[gemaB.raridadeId] ?? 1;
+  const alvo = Math.min(4, Math.max(ordemA, ordemB) + 1);
+  const tipo = tipoBase(gemaA.tipo);
+  const usados = new Set([gemaA.id, gemaB.id]);
+
+  let candidatos = GEM_LIST.filter(
+    (g) => RARITY_ORDER[g.raridade] === alvo && tipoBase(g.tipo) === tipo && !usados.has(g.id),
+  );
+  if (!candidatos.length) {
+    candidatos = GEM_LIST.filter((g) => RARITY_ORDER[g.raridade] === alvo && !usados.has(g.id));
+  }
+  if (!candidatos.length) candidatos = GEM_LIST.filter((g) => !usados.has(g.id));
+
+  const escolhida = candidatos.length ? candidatos[0] : null;
+  if (!escolhida) {
+    return null;
+  }
+  return {
+    id: escolhida.id,
+    nome: escolhida.nome,
+    raridade: RARITY_LABEL[escolhida.raridade],
+    raridadeId: escolhida.raridade,
+    custoManaTotal: (gemaA.custoFusaoMana || 20) + (gemaB.custoFusaoMana || 20),
+    efeitos: escolhida.efeitos || {},
+    descricao: `Fusão de ${gemaA.nome} + ${gemaB.nome}. ${escolhida.descricao || ''}`.trim(),
+  };
 }
 
 // ── LÓGICA DE FUSÃO ────────────────────────────────────────────
@@ -1305,12 +1572,7 @@ export function verificarFusao(gemaA, gemaB) {
     };
   }
 
-  // Compatibilidade: o id de uma deve estar em fusoesCompativeis da outra.
-  const compatA = (gemaA.fusoesCompativeis || []).includes(gemaB.id);
-  const compatB = (gemaB.fusoesCompativeis || []).includes(gemaA.id);
-  const compativel = compatA && compatB;
-
-  // Busca o resultado na tabela de receitas (ordem dos ingredientes indiferente).
+  // 1) Receita explícita da forja (Obsidiana Ardente, Rubi Abissal...).
   const receita = receitasFusao.find((r) => {
     const [x, y] = r.ingredientes;
     return (
@@ -1318,8 +1580,37 @@ export function verificarFusao(gemaA, gemaB) {
       (x === gemaB.id && y === gemaA.id)
     );
   });
+  if (receita) return { ok: true, resultado: receita.resultado };
 
-  if (!compativel || !receita) {
+  // 2) Receita declarada no catálogo (campo fusao_requisito).
+  const par = parKey(gemaA.id, gemaB.id);
+  const doCatalogo = GEM_LIST.find(
+    (g) => Array.isArray(g.fusao_requisito)
+      && g.fusao_requisito.length === 2
+      && parKey(g.fusao_requisito[0], g.fusao_requisito[1]) === par,
+  );
+  if (doCatalogo) {
+    return {
+      ok: true,
+      resultado: {
+        id: doCatalogo.id,
+        nome: doCatalogo.nome,
+        raridade: RARITY_LABEL[doCatalogo.raridade],
+        raridadeId: doCatalogo.raridade,
+        custoManaTotal: (gemaA.custoFusaoMana || 20) + (gemaB.custoFusaoMana || 20),
+        efeitos: doCatalogo.efeitos || {},
+        descricao: doCatalogo.descricao || '',
+      },
+    };
+  }
+
+  // 3) Compatibilidade: par declarado no catálogo, listas mútuas ou mesmo tipo.
+  const listado = PARES_COMPATIVEIS.has(par)
+    || (gemaA.fusoesCompativeis || []).includes(gemaB.id)
+    || (gemaB.fusoesCompativeis || []).includes(gemaA.id)
+    || tipoBase(gemaA.tipo) === tipoBase(gemaB.tipo);
+
+  if (!listado) {
     return {
       ok: false,
       instavel: true,
@@ -1327,7 +1618,11 @@ export function verificarFusao(gemaA, gemaB) {
     };
   }
 
-  return { ok: true, resultado: receita.resultado };
+  const resultado = resultadoGenerico(gemaA, gemaB);
+  if (!resultado) {
+    return { ok: false, instavel: true, motivo: 'Nenhuma gema compatível para resultar desta fusão.' };
+  }
+  return { ok: true, resultado };
 }
 
 // ────────────────────────────────────────────────────────────────

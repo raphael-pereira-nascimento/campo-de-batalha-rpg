@@ -17,9 +17,10 @@ import {
   melhorArma,
   armaParaAtaque,
   skillFromSpell,
-  GEMS,
   gemsAttrs,
 } from './data.js';
+import { GEMS } from './gems.js';
+import { getGemDef } from './forgeGems.js';
 import {
   manaRecuperada,
   pesoAtributo,
@@ -547,8 +548,8 @@ export class BattleManager {
       for (const [slot, item] of Object.entries(p.equipment)) {
         if (!item) continue;
         for (const gemId of item.socketedGems || []) {
-          const g = GEMS[gemId];
-          if (!g || g.estado === 'bruta') continue;
+          const g = getGemDef(gemId) || GEMS[gemId];
+          if (!g) continue;
           const fx = g.efeitos?.[slot];
           if (fx?.regen && p.alive) {
             const h = Math.max(1, fx.regen);
@@ -779,8 +780,8 @@ export class BattleManager {
       for (const [slot, item] of Object.entries(p.equipment)) {
         if (!item) continue;
         for (const gemId of item.socketedGems || []) {
-          const g = GEMS[gemId];
-          if (!g || g.estado === 'bruta') continue;
+          const g = getGemDef(gemId) || GEMS[gemId];
+          if (!g) continue;
           const fx = g.efeitos?.[slot];
           if (fx?.bonus) {
             if (fx.bonus.forca) mult *= 1.05;
@@ -798,8 +799,8 @@ export class BattleManager {
       for (const [slot, item] of Object.entries(p.equipment)) {
         if (!item) continue;
         for (const gemId of item.socketedGems || []) {
-          const g = GEMS[gemId];
-          if (!g || g.estado === 'bruta') continue;
+          const g = getGemDef(gemId) || GEMS[gemId];
+          if (!g) continue;
           const fx = g.efeitos?.[slot];
           if (fx?.bonus) {
             if (fx.bonus.inteligencia) mult *= 1.05;
@@ -1224,8 +1225,8 @@ export class BattleManager {
     if (p.equipment && !p.isMonster) {
       for (const { arma } of armasDeEquipamento(p.equipment)) {
         for (const gemId of arma?.socketedGems || []) {
-          const g = GEMS[gemId];
-          if (!g || g.estado === 'bruta') continue;
+          const g = getGemDef(gemId) || GEMS[gemId];
+          if (!g) continue;
           const fx = g.efeitos?.arma;
           if (fx?.status && t.alive && Math.random() < (fx.status.chance || 0.1)) {
             this._applyStatus(battle, t, fx.status, p);
@@ -1309,8 +1310,8 @@ export class BattleManager {
       if (p.equipment && !p.isMonster) {
         for (const { arma } of armasDeEquipamento(p.equipment)) {
           for (const gemId of arma?.socketedGems || []) {
-            const g = GEMS[gemId];
-            if (!g || g.estado === 'bruta') continue;
+            const g = getGemDef(gemId) || GEMS[gemId];
+            if (!g) continue;
             const fx = g.efeitos?.arma;
             if (fx?.status && t.alive && Math.random() < (fx.status.chance || 0.1)) {
               this._applyStatus(battle, t, fx.status, p);

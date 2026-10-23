@@ -1,9 +1,10 @@
 import { io } from 'socket.io-client';
 import { gameData } from './offline/gameData.js';
-import { isOffline, setServerStatus, saveOfflinePlayer, getOfflinePlayer, getOfflineCharacters, saveOfflineCharacter, getOfflineWallet, addOfflineCoins, getOfflineGems, addOfflineGem, removeOfflineGem, listOfflineCustom, saveOfflineCustom, removeOfflineCustom } from './offline/storage.js';
+import { isOffline, setServerStatus, saveOfflinePlayer, getOfflinePlayer, getOfflineCharacters, saveOfflineCharacter, getOfflineWallet, addOfflineCoins, getOfflineGems, addOfflineGem, removeOfflineGem, setOfflineGemEstado, listOfflineCustom, saveOfflineCustom, removeOfflineCustom } from './offline/storage.js';
 import { offlineBattle } from './offline/battle.js';
 import { MONSTERS } from './game/monsters.js';
-import { gemIsRaw } from './game/gems.js';
+import { gemIsRaw, getGemaById, GEM_LIST, GEMS, gemPrice, MINERA_VEIOS, polirPedra, receitasFusao } from './game/gems.js';
+import { precoEmCents } from './game/tools.js';
 import { EQUIPMENT, POTIONS, deriveStats, applyMaxMults, aplicarCrescimentoNivel, efeitosDeHabilidades, TAVERN_DRINKS, TAVERN_FOODS } from './game/data.js';
 import { DUNGEONS } from './game/dungeons.js';
 import {
@@ -33,21 +34,30 @@ let socket = null;
 // Sonda de conexão: chamada uma única vez na inicialização (main.jsx).
 // Se o backend não responder, o app inteiro opera em modo offline.
 // Duas tentativas porque o Render gratuito pode estar "acordando".
+// Funciona também com API na mesma origem (Express servindo o build ou o
+// proxy do Vite), sem precisar definir VITE_API_URL.
 export function initConnection() {
-  if (!API) return Promise.resolve(false);
   const ping = (ms) => {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), ms);
     return fetch(API + '/api/health', { signal: ctrl.signal })
-      .then((r) => r.ok)
+      .then(async (r) => {
+        if (!r.ok) return false;
+        const body = await r.json().catch(() => null);
+        // O servidor só é útil para persistência se o banco estiver de pé.
+        return !!body && body.db === 'up';
+      })
       .catch(() => false)
       .finally(() => clearTimeout(t));
   };
-  return ping(10000)
-    .then((ok) => (ok ? true : ping(20000)))
+  const dev = import.meta.env.DEV;
+  return ping(dev ? 4000 : 10000)
+    // Em produção (Render) uma segunda tentativa cobre o cold start; em dev o
+    // servidor é local, então não vale a pena travar a tela esperando.
+    .then((ok) => (ok || dev ? ok : ping(20000)))
     .then((ok) => {
       setServerStatus(ok ? 'up' : 'down');
-      console.info(`[conexao] servidor ${ok ? 'online' : 'indisponível �?" modo local ativado'}`);
+      console.info(`[conexao] servidor ${ok ? 'online' : 'indisponível — modo local ativado'}`);
       return ok;
     });
 }
@@ -263,6 +273,13 @@ export function applyOfflineRewards(charId, xpGained, wins = 0) {
   c.mp_current = Math.min(c.mp_current ?? stats.mpMax, stats.mpMax);
   c.attributes = attributes;
   localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
+
+  // Drop de gema (espelho do servidor): 10% por vitória. A gema já vem polida.
+  if (wins > 0 && Math.random() < 0.1) {
+    const pool = GEM_LIST.filter((g) => !gemIsRaw(g.id));
+    const gema = pool[Math.floor(Math.random() * pool.length)];
+    if (gema) addOfflineGem(charId, gema.id, 'polido');
+  }
 }
 
 /* �"?�"?�"? Socket (online or mock) �"?�"?�"? */
@@ -356,6 +373,8 @@ export const api = {
       };
       chars.push(character);
       localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
+      // Gema inicial (bruta) para apresentar a Forja ao novo personagem.
+      addOfflineGem(id, 'diamante', 'bruta');
       return Promise.resolve({ ok: true, character });
     }
     return auth('/api/characters', { method: 'POST', body: JSON.stringify(payload) });
@@ -748,59 +767,198 @@ export const api = {
 
   // ── Gemas ──────────────────────────────────────────────────────────────
 
-  getGemsCatalog: () => request('/api/gems/catalog'),
+  getGemsCatalog: () => {
+    if (isOffline()) {
+      // Catálogo embutido (mesma fonte do jogo) para a loja/mineração
+      // funcionarem sem servidor.
+      const gems = GEM_LIST.map((g) => ({
+        id: g.id,
+        nome: g.nome,
+        descricao: g.descricao,
+        tipo: g.tipo,
+        raridade: g.raridade,
+        estado: g.estado || 'polido',
+        bruta: gemIsRaw(g.id),
+        bioma: g.bioma,
+        dropWeight: g.dropWeight,
+        efeitos: g.efeitos,
+        preco: gemPrice(g),
+      }));
+      return Promise.resolve({ ok: true, gems, veios: MINERA_VEIOS });
+    }
+    return request('/api/gems/catalog');
+  },
   getCharacterGemsDetailed: (characterId) => {
     if (isOffline()) {
-      const gems = getOfflineGems(characterId) || [];
-      return Promise.resolve({ ok: true, gems: gems.map((g) => ({ gem_id: g, estado: gemIsRaw(g) ? 'bruta' : 'polido' })) });
+      return Promise.resolve({ ok: true, gems: getOfflineGems(characterId) || [] });
     }
     return auth(`/api/characters/${characterId}/gems/detailed`);
   },
   grantInitialGem: (characterId) => {
     if (isOffline()) {
       const gems = getOfflineGems(characterId) || [];
-      if (gems.length === 0) addOfflineGem(characterId, 'diamante');
+      if (gems.length === 0) addOfflineGem(characterId, 'diamante', 'bruta');
       return Promise.resolve({ ok: true });
     }
     return auth('/api/gems/initial', { method: 'POST', body: JSON.stringify({ characterId }) });
   },
   mineGem: (characterId, veioId) => {
     if (isOffline()) {
-      try {
-        const gemsMod = require ? require('./game/gems.js') : null;
-        if (gemsMod && gemsMod.mineGem) {
-          const res = gemsMod.mineGem(veioId);
-          addOfflineGem(characterId, res.gemId);
-          return Promise.resolve({ ok: true, gemId: res.gemId, veio: res.veio });
-        }
-      } catch (e) {}
-      addOfflineGem(characterId, 'diamante');
-      return Promise.resolve({ ok: true, gemId: 'diamante' });
+      const veio = MINERA_VEIOS.find((v) => v.id === veioId) || MINERA_VEIOS[0];
+      const chave = `cbr_offline_mining_${characterId}`;
+      const minas = JSON.parse(localStorage.getItem(chave) || '{}');
+      const cooldownMs = (veio.cooldownMin || 0) * 60_000;
+      const ultima = Number(minas[veio.id] || 0);
+      const passado = Date.now() - ultima;
+      if (cooldownMs > 0 && ultima && passado < cooldownMs) {
+        const restam = Math.ceil((cooldownMs - passado) / 1000);
+        return Promise.reject(
+          new Error(
+            `Este veio ainda está se recuperando. Aguarde ${Math.floor(restam / 60)}min ${restam % 60}s.`,
+          ),
+        );
+      }
+      const carteira = getOfflineWallet();
+      if (carteira < (veio.custoCents || 0)) {
+        return Promise.reject(
+          new Error(`Ouro insuficiente. Custo: ${veio.custoCents} moedas.`),
+        );
+      }
+
+      // Sorteio local: prefere gemas do bioma do veio; nunca devolve bruta.
+      const doBioma = GEM_LIST.filter(
+        (g) => !gemIsRaw(g.id) && g.bioma && veio.biomas.includes(g.bioma),
+      );
+      const pool = doBioma.length ? doBioma : GEM_LIST.filter((g) => !gemIsRaw(g.id));
+      const gema = pool[Math.floor(Math.random() * pool.length)] || GEM_LIST[0];
+
+      if ((veio.custoCents || 0) > 0) addOfflineCoins(-veio.custoCents);
+      addOfflineGem(characterId, gema.id, 'lapidada');
+      minas[veio.id] = Date.now();
+      localStorage.setItem(chave, JSON.stringify(minas));
+
+      return Promise.resolve({
+        ok: true,
+        gemId: gema.id,
+        estado: 'lapidada',
+        veio: veio.nome,
+        veioId: veio.id,
+        cooldownMin: veio.cooldownMin || 0,
+        walletCents: carteira - (veio.custoCents || 0),
+        offline: true,
+      });
     }
     return auth('/api/gems/mine', { method: 'POST', body: JSON.stringify({ characterId, veioId }) });
   },
   buyGem: (characterId, gemId) => {
     if (isOffline()) {
-      addOfflineGem(characterId, gemId);
-      return Promise.resolve({ ok: true, gemId });
+      const preco = gemPrice(GEMS[gemId]);
+      const carteira = getOfflineWallet();
+      if (carteira < preco) {
+        return Promise.reject(new Error(`Ouro insuficiente: a gema custa ${preco} e você tem ${carteira}.`));
+      }
+      addOfflineCoins(-preco);
+      addOfflineGem(characterId, gemId, 'lapidada');
+      return Promise.resolve({
+        ok: true,
+        gemId,
+        estado: 'lapidada',
+        preco,
+        walletCents: carteira - preco,
+        offline: true,
+      });
     }
     return auth('/api/gems/shop/buy', { method: 'POST', body: JSON.stringify({ characterId, gemId }) });
   },
   fuseGems: (characterId, gemA, gemB, resultado) => {
     if (isOffline()) {
-      return Promise.resolve({ ok: true, resultadoId: resultado?.id });
+      // Valida a receita localmente (mesma regra do servidor).
+      const par = [gemA.id, gemB.id].sort().join('|');
+      const receita = receitasFusao.find(
+        (r) => r.ingredientes.slice().sort().join('|') === par,
+      );
+      if (!receita) return Promise.reject(new Error('Combinação de fusão inválida.'));
+      const custoMana = Number(receita.resultado.custoManaTotal || 0);
+      const resultadoId = receita.resultado.id;
+      const chars = getOfflineCharacters();
+      const char = chars.find((c) => c.id === characterId);
+      if (char && Number(char.mp_current || 0) < custoMana) {
+        return Promise.reject(new Error(`Mana insuficiente: a fusão custa ${custoMana}.`));
+      }
+      removeOfflineGem(characterId, gemA.id, gemA.estado);
+      removeOfflineGem(characterId, gemB.id, gemB.estado);
+      addOfflineGem(characterId, resultadoId, 'polido');
+      if (char) {
+        char.mp_current = Math.max(0, Number(char.mp_current || 0) - custoMana);
+        localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
+      }
+      return Promise.resolve({ ok: true, resultadoId, custoMana, offline: true });
     }
-    return auth('/api/gems/fuse', { method: 'POST', body: JSON.stringify({ characterId, gemA, gemB, resultado }) });
+    return auth('/api/gems/fuse', { method: 'POST', body: JSON.stringify({ characterId, gemA, gemB }) });
   },
-  polishGem: (characterId, gemId, fromEstado, toEstado) => {
+  buyTool: (characterId, ferramenta) => {
     if (isOffline()) {
-      return Promise.resolve({ ok: true });
+      if (!characterId) return Promise.reject(new Error('Escolha um personagem.'));
+      const preco = precoEmCents(ferramenta.preco || {});
+      const carteira = getOfflineWallet();
+      if (carteira < preco) return Promise.reject(new Error('Ouro insuficiente.'));
+      const chars = getOfflineCharacters();
+      const c = chars.find((ch) => ch.id === characterId);
+      if (!c) return Promise.reject(new Error('Personagem não encontrado.'));
+      const item = {
+        id: ferramenta.id,
+        nome: ferramenta.nome,
+        tipo: 'ferramenta',
+        raridade: ferramenta.raridade,
+        peso: ferramenta.peso || 0,
+        espacos: ferramenta.espacos || 0,
+        usos: ferramenta.usos || 0,
+      };
+      c.inventory = [...(c.inventory || []), item];
+      localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
+      addOfflineCoins(-preco);
+      return Promise.resolve({ ok: true, item, walletCents: carteira - preco });
     }
-    return auth('/api/gems/polish', { method: 'POST', body: JSON.stringify({ characterId, gemId, fromEstado, toEstado }) });
+    return auth('/api/shop/buy-tool', {
+      method: 'POST',
+      body: JSON.stringify({ characterId, toolId: ferramenta.id }),
+    });
+  },
+  polishGem: (characterId, gemId, fromEstado) => {
+    if (isOffline()) {
+      // Sem servidor: aplica a mesma regra local e persiste no navegador.
+      const gems = getOfflineGems(characterId);
+      if (!gems.some((g) => g.gem_id === gemId && g.estado === fromEstado)) {
+        return Promise.reject(new Error('Gema não encontrada no inventário.'));
+      }
+      const chars = getOfflineCharacters();
+      const char = chars.find((c) => c.id === characterId);
+      const carteira = getOfflineWallet();
+      const mp = Number(char?.mp_current ?? 0);
+      const res = polirPedra({ id: gemId, estado: fromEstado }, carteira, {}, mp);
+      if (!res.ok) return Promise.reject(new Error(res.motivo || 'Não foi possível polir.'));
+
+      addOfflineCoins(-res.custoOuro);
+      if (char) {
+        char.mp_current = Math.max(0, mp - res.custoMana);
+        localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
+      }
+      setOfflineGemEstado(characterId, gemId, fromEstado, res.estadoNovo);
+      return Promise.resolve({
+        ok: true,
+        ...res,
+        estadoNovo: res.estadoNovo === 'destruida' ? null : res.estadoNovo,
+        destruida: res.estadoNovo === 'destruida',
+        walletCents: carteira - res.custoOuro,
+        mpCurrent: Math.max(0, mp - res.custoMana),
+        offline: true,
+      });
+    }
+    return auth('/api/gems/polish', { method: 'POST', body: JSON.stringify({ characterId, gemId, fromEstado }) });
   },
   getCharacterGems: (characterId) => {
     if (isOffline()) {
-      return Promise.resolve({ ok: true, gems: getOfflineGems(characterId) });
+      return Promise.resolve({ ok: true, gems: getOfflineGems(characterId).map((g) => g.gem_id) });
     }
     return auth(`/api/characters/${characterId}/gems`);
   },
@@ -816,12 +974,20 @@ export const api = {
       const socketedGems = item.socketedGems || [];
       if (socketedGems[slotIndex]) return Promise.reject(new Error('Slot ocupado.'));
       const gems = getOfflineGems(characterId);
-      const gemIdx = gems.indexOf(gemId);
-      if (gemIdx === -1) return Promise.reject(new Error('Gema não encontrada.'));
-      if (gemIsRaw(gemId)) return Promise.reject(new Error('�s��? Requer polimento antes de usar'));
-      removeOfflineGem(characterId, gemId);
+      const gema =
+        gems.find((g) => g.gem_id === gemId && g.estado !== 'bruta') ||
+        gems.find((g) => g.gem_id === gemId);
+      if (!gema) return Promise.reject(new Error('Gema não encontrada.'));
+      if (gema.estado === 'bruta' || gema.estado === 'destruida') {
+        return Promise.reject(new Error('💎 Requer polimento antes de usar'));
+      }
+      removeOfflineGem(characterId, gemId, gema.estado);
       socketedGems[slotIndex] = gemId;
-      c.equipment[equipSlot] = { ...item, socketedGems };
+      const socketedGemEstados = Array.isArray(item.socketedGemEstados)
+        ? [...item.socketedGemEstados]
+        : [];
+      socketedGemEstados[slotIndex] = gema.estado;
+      c.equipment[equipSlot] = { ...item, socketedGems, socketedGemEstados };
       localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
       return Promise.resolve({ ok: true, character: c });
     }
@@ -839,9 +1005,14 @@ export const api = {
       const socketedGems = item.socketedGems || [];
       const gemId = socketedGems[slotIndex];
       if (!gemId) return Promise.reject(new Error('Slot vazio.'));
-      addOfflineGem(characterId, gemId);
+      const estadoVolta = item.socketedGemEstados?.[slotIndex] || 'polido';
+      addOfflineGem(characterId, gemId, estadoVolta);
       socketedGems[slotIndex] = null;
-      c.equipment[equipSlot] = { ...item, socketedGems };
+      const socketedGemEstados = Array.isArray(item.socketedGemEstados)
+        ? [...item.socketedGemEstados]
+        : [];
+      socketedGemEstados[slotIndex] = null;
+      c.equipment[equipSlot] = { ...item, socketedGems, socketedGemEstados };
       localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
       return Promise.resolve({ ok: true, character: c });
     }

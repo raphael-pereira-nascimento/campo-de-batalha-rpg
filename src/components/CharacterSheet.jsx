@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { ATTRIBUTES, ATTRIBUTE_NAMES } from '../config.js';
-import { GEMS, GEM_RARITY, gemIsRaw } from '../game/gems.js';
+import { GEM_RARITY, getGemaById } from '../game/gems.js';
 import { cargaMaxima, VOO, armasDeEquipamento, categoriaDeArma, ARMAS_SLOTS, ARMA_CATEGORIA_INFO, ALVO_LABEL } from '../game/sistema.js';
 import { deriveStats, skillFromSpell } from '../game/data.js';
 import StatBar from './StatBar.jsx';
@@ -34,7 +34,7 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
 
   useEffect(() => {
     api
-      .getCharacterGems(character.id)
+      .getCharacterGemsDetailed(character.id)
       .then((d) => setCharacterGems(d.gems || []))
       .catch(() => {});
   }, [character.id]);
@@ -100,7 +100,7 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
     try {
       const d = await api.socketGem(character.id, `${equipSlot}_${slotIndex}`, gemId);
       if (d.character) onChanged(d.character);
-      const gems = await api.getCharacterGems(character.id);
+      const gems = await api.getCharacterGemsDetailed(character.id);
       setCharacterGems(gems.gems || []);
       setSocketModal(null);
     } catch (e) {
@@ -115,7 +115,7 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
     try {
       const d = await api.unsocketGem(character.id, `${equipSlot}_${slotIndex}`);
       if (d.character) onChanged(d.character);
-      const gems = await api.getCharacterGems(character.id);
+      const gems = await api.getCharacterGemsDetailed(character.id);
       setCharacterGems(gems.gems || []);
     } catch (e) {
       alert(e.message);
@@ -151,16 +151,21 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
           .join(', ') || 'sem bônus'
       : '';
 
+  // Estado real (no inventário do personagem) de uma gema: bruta/lapidada/polida.
+  const estadoDaGema = (gemId) =>
+    characterGems.find((g) => g.gem_id === gemId)?.estado || 'polido';
+
   // Deltas de atributos vindos das gemas socketadas (por slot de equipamento).
-  // Positivo = buff (verde), negativo = debuff (vermelho). Gemas brutas não contam.
+  // Positivo = buff (verde), negativo = debuff (vermelho). Se a gema chegou a
+  // ser encaixada, ela já passou pela validação de polimento no servidor.
   const gemAttrDeltas = () => {
     const acc = {};
     for (const equipSlot of ['arma', 'armadura']) {
       const item = character.equipment?.[equipSlot];
       if (!item) continue;
       for (const gemId of item.socketedGems || []) {
-        const gem = GEMS[gemId];
-        if (!gem || gemIsRaw(gemId)) continue;
+        const gem = getGemaById(gemId);
+        if (!gem) continue;
         const fx = gem.efeitos?.[equipSlot];
         if (!fx?.bonus) continue;
         for (const [k, v] of Object.entries(fx.bonus)) acc[k] = (acc[k] || 0) + v;
@@ -175,8 +180,8 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
     if (!item) return [];
     const out = [];
     for (const gemId of item.socketedGems || []) {
-      const gem = GEMS[gemId];
-      if (!gem || gemIsRaw(gemId)) continue;
+      const gem = getGemaById(gemId);
+      if (!gem) continue;
       const fx = gem.efeitos?.[equipSlot];
       if (fx?.desc) out.push({ gemId, desc: fx.desc, bonus: fx.bonus || {} });
     }
@@ -408,7 +413,7 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
                   <div className="socket-slots" style={{ marginTop: 4 }}>
                     {Array.from({ length: slots }, (_, i) => {
                       const gemId = socketedGems[i];
-                      const gem = gemId ? GEMS[gemId] : null;
+                      const gem = gemId ? getGemaById(gemId) : null;
                       const isDropTarget = dropSlot?.equipSlot === equipSlot && dropSlot?.slotIndex === i;
                       return (
                         <div
@@ -432,7 +437,7 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
                             setDropSlot(null);
                             if (gem) return;
                             const gid = e.dataTransfer.getData('text/gem-id') || dragGem;
-                            if (gid && !gemIsRaw(gid)) handleSocket(equipSlot, i, gid);
+                            if (gid && estadoDaGema(gid) !== 'bruta') handleSocket(equipSlot, i, gid);
                             else if (gid) alert('⚠️ Requer polimento antes de usar');
                             setDragGem(null);
                           }}
@@ -482,7 +487,7 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
                 {['arma', 'armadura'].map((slot) =>
                   gemSlotEffects(slot).map(({ gemId, desc }) => (
                     <div className="gem-effect" key={slot + gemId}>
-                      <span className="gem-effect-type">💎 {GEMS[gemId]?.nome}</span>
+                      <span className="gem-effect-type">💎 {getGemaById(gemId)?.nome}</span>
                       <span>{desc}</span>
                     </div>
                   ))
@@ -515,15 +520,21 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
               <p className="muted">Nenhuma gema disponível no inventário.</p>
             ) : (
               <div className="gem-select-grid">
-                {characterGems.map((gemId) => {
-                  const gem = GEMS[gemId];
+                {characterGems.map((row, idx) => {
+                  const gemId = row.gem_id;
+                  const gem = getGemaById(gemId);
                   if (!gem) return null;
-                  const rarity = GEM_RARITY[gem.raridade] || GEM_RARITY.comum;
-                  const raw = gemIsRaw(gemId);
+                  const rid = gem.raridadeId || gem.raridade;
+                  const rarity = GEM_RARITY[rid] || GEM_RARITY[gem.raridade] || GEM_RARITY.comum;
+                  const estado = row.estado || 'polido';
+                  const raw = estado === 'bruta';
+                  const estadoLabel =
+                    { bruta: '⛓ Bruta', lapidada: '🔷 Lapidada', polido: '✨ Polida', perfeita: '🌟 Perfeita' }[estado] ||
+                    estado;
                   const hasEffect = !!gem.efeitos?.[socketModal.equipSlot];
                   return (
                     <div
-                      key={gemId}
+                      key={row.id || `${gemId}-${idx}`}
                       className={`gem-select-card dark-fantasy ${raw ? 'gem-raw' : ''} ${!hasEffect ? 'gem-incompativel' : ''}`}
                       style={{ borderColor: raw ? '#6b5b3e' : rarity.cor }}
                       draggable={!raw && hasEffect}
@@ -553,7 +564,7 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
                           <div className="gem-rarity-label">{rarity.nome}</div>
                         </div>
                       </div>
-                      <div className="gem-biome">🌍 {gem.bioma}</div>
+                      <div className="gem-biome">🌍 {Array.isArray(gem.bioma) ? gem.bioma.join(', ') : gem.bioma || '—'}</div>
                       <div className="gem-ef-list">
                         {['arma', 'armadura', 'acessorio', 'golem'].map((slot) => {
                           const fx = gem.efeitos?.[slot];
@@ -566,10 +577,10 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
                           );
                         })}
                       </div>
-                      <div className="gem-fusao">◆ Fusões: {gem.fusao?.length ? gem.fusao.join(', ') : '—'}</div>
+                      <div className="gem-fusao">◆ Fusões: {(gem.fusao || gem.fusoesCompativeis || []).length ? (gem.fusao || gem.fusoesCompativeis).join(', ') : '—'}</div>
                       <div className="gem-select-foot">
                         <span className={`estado-badge ${raw ? 'estado-bruta' : 'estado-polida'}`}>
-                          {raw ? '⛓ Bruta' : '✨ Polida'}
+                          {estadoLabel}
                         </span>
                         {raw && <span className="gem-tooltip">⚠️ Requer polimento</span>}
                       </div>

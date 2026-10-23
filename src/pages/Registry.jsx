@@ -63,7 +63,8 @@ export default function Registry({ player, gameData, onBack }) {
   }, [tab]);
 
   const mine = data[tab] ? data[tab].filter((x) => x.creator_id === player.id) : [];
-  const world = data[tab] ? data[tab].filter((x) => x.is_public && x.creator_id !== player.id) : [];
+  // O catálogo do mundo mostra TODAS as criações públicas (inclusive as suas).
+  const world = data[tab] ? data[tab].filter((x) => x.is_public) : [];
   const list = scope === 'mine' ? mine : world;
 
   const onChanged = () => { setError(''); load(); };

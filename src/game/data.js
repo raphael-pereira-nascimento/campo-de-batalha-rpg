@@ -1,7 +1,7 @@
 // Dados do jogo: classes, atributos, magias, equipamentos e formulas.
 
 import { RACES } from './races.js';
-import { GEMS } from './gems.js';
+import { GEMS, getGemaById } from './gems.js';
 import {
   manaMaxFrom,
   manaRecuperada,
@@ -797,16 +797,18 @@ export function applyRaceBonus(raceId, attributes) {
   return res;
 }
 
-// Soma dos bônus de atributos das gemas socketadas (ignora gemas brutas).
+// Soma dos bônus de atributos das gemas socketadas. Uma gema só chega a ser
+// encaixada depois de passar pela validação de polimento, então aqui aplicamos
+// os efeitos de qualquer gema do catálogo (inclusive as da Forja).
 // Cada gema aplica efeitos conforme o slot do equipamento (arma/armadura/acessorio).
 export function gemsAttrs(equipment = {}, gems = GEMS) {
   const acc = {};
   for (const [slot, item] of Object.entries(equipment)) {
     if (!item) continue;
     for (const gemId of item.socketedGems || []) {
-      const gem = gems[gemId];
+      // As gemas da Forja têm prioridade (mesma resolução usada na ficha).
+      const gem = getGemaById(gemId) || gems[gemId];
       if (!gem) continue;
-      if (gem.estado === 'bruta') continue; // bruta não concede efeitos
       const fx = gem.efeitos?.[slot];
       if (!fx?.bonus) continue;
       for (const [k, v] of Object.entries(fx.bonus)) {
