@@ -3698,3 +3698,393 @@ button.danger {
   .dice-btn-roll, .dice-btn-execute { width: 100%; }
   .action-field-full select { height: auto; min-height: 100px; }
 }
+
+/* ========================================================================
+   LANDING / ONBOARDING
+   Deixa óbvio onde criar conta, o que fica salvo e quais são os próximos passos.
+   ======================================================================== */
+.home {
+  padding: 32px 20px;
+  align-items: center;
+}
+.home-shell {
+  width: min(1060px, 100%);
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 34px;
+  align-items: center;
+}
+.home-hero {
+  text-align: left;
+}
+.home-eyebrow {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: rgba(124, 92, 255, 0.14);
+  border: 1px solid rgba(124, 92, 255, 0.35);
+  padding: 5px 10px;
+  border-radius: 999px;
+  margin-bottom: 14px;
+}
+.home-hero h1 {
+  margin: 0 0 10px;
+  font-size: clamp(30px, 4.2vw, 46px);
+  line-height: 1.08;
+}
+.home-hero .subtitle {
+  font-size: 16px;
+  line-height: 1.5;
+  margin-bottom: 22px;
+}
+.home-features {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 24px;
+}
+.home-feature {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.home-feature-icon {
+  font-size: 22px;
+  line-height: 1;
+  flex: none;
+}
+.home-feature strong {
+  font-size: 14px;
+}
+.home-feature p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.home-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+.home-steps li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.home-steps strong {
+  font-size: 14px;
+}
+.home-steps p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.home-auth {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 28px;
+  width: 100%;
+  text-align: left;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.home-auth-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.home-auth-head h2 {
+  margin: 0 0 4px;
+  font-size: 22px;
+}
+.home-auth-head .small {
+  margin: 0;
+}
+.online-note {
+  background: rgba(61, 220, 132, 0.1);
+  border: 1px solid rgba(61, 220, 132, 0.45);
+  color: #b9f5d2;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 18px;
+}
+.home-auth .offline-warning {
+  margin-bottom: 18px;
+}
+.home-auth .home-tabs {
+  margin-bottom: 12px;
+}
+.home-auth code {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 12px;
+}
+@media (max-width: 860px) {
+  .home {
+    padding: 20px 14px;
+  }
+  .home-shell {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .home-auth {
+    order: -1;
+    padding: 22px;
+  }
+  .home-hero h1 {
+    font-size: 30px;
+  }
+  .home-features {
+    margin-bottom: 18px;
+  }
+}
+
+/* ========================================================================
+   NAVEGAÇÃO SECUNDÁRIA (Characters)
+   ======================================================================== */
+.topbar-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.topbar-brand h1 {
+  margin: 0;
+}
+.topbar-primary {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.subnav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 24px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(10, 12, 26, 0.55);
+  position: relative;
+  z-index: 9;
+}
+.subnav button {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 7px 11px;
+  font-size: 13px;
+  border-radius: 9px;
+}
+.subnav button:hover:not(:disabled) {
+  border-color: var(--accent);
+  filter: none;
+}
+.subnav button.primary-link {
+  background: rgba(124, 92, 255, 0.18);
+  border-color: rgba(124, 92, 255, 0.55);
+}
+.account-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 18px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.account-banner strong {
+  color: var(--text);
+}
+.onboard-card {
+  max-width: 720px;
+  margin: 0 auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 28px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.35);
+  text-align: left;
+}
+.onboard-card h2 {
+  margin-top: 0;
+}
+.onboard-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+.onboard-actions button {
+  flex: 0 1 auto;
+}
+.onboard-extra {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+  margin-top: 22px;
+}
+.onboard-extra-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  text-align: left;
+}
+.onboard-extra-card strong {
+  display: block;
+  margin-bottom: 4px;
+}
+.onboard-extra-card p {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.onboard-extra-card button {
+  font-size: 13px;
+  padding: 7px 10px;
+}
+@media (max-width: 720px) {
+  .subnav {
+    padding: 10px 14px;
+  }
+  .topbar-primary {
+    justify-content: flex-start;
+  }
+  .onboard-card {
+    padding: 20px;
+  }
+}
+
+/* ========================================================================
+   REGISTRO DO MUNDO — busca, filtros e cópia
+   ======================================================================== */
+.registry-intro {
+  background: rgba(124, 92, 255, 0.08);
+  border: 1px solid rgba(124, 92, 255, 0.3);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.registry-intro strong {
+  color: var(--text);
+}
+.registry-search-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.registry-search {
+  flex: 1 1 240px;
+  min-width: 180px;
+}
+.registry-empty {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 22px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.registry-empty strong {
+  color: var(--text);
+}
+.registry-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+@media (max-width: 720px) {
+  .registry-actions {
+    justify-content: flex-start;
+  }
+}
+
+/* ========================================================================
+   FORJA — combinações prontas e atalhos
+   ======================================================================== */
+.forge-quick-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.forge-quick-links button {
+  font-size: 13px;
+  padding: 7px 11px;
+}
+.forge-recipes {
+  margin-top: 18px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.forge-recipes h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+.forge-recipe-list {
+  display: grid;
+  gap: 8px;
+}
+.forge-recipe {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 8px 10px;
+  font-size: 13px;
+  background: rgba(0, 0, 0, 0.18);
+}
+.forge-recipe strong {
+  color: var(--text);
+}
+.forge-recipe .muted {
+  font-size: 12px;
+}
+.forge-recipe button {
+  font-size: 12px;
+  padding: 6px 9px;
+}
+@media (max-width: 720px) {
+  .forge-recipe {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+.forge-ok {
+  color: #3ddc84;
+  font-weight: 700;
+  font-size: 13px;
+}
+

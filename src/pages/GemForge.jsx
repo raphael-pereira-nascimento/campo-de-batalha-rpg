@@ -91,7 +91,7 @@ function GemaSlot({ label, gema, pedras, onPick, onClear, onDrop }) {
   );
 }
 
-export default function GemForge({ onBack, player, characters = [], onRefresh, walletCents = 0 }) {
+export default function GemForge({ onBack, player, characters = [], onRefresh, walletCents = 0, onOpenToolShop, onEnterLobby }) {
   const [characterId, setCharacterId] = useState(() => characters?.[0]?.id || null);
   const [inventario, setInventario] = useState([]);
   const [carregandoInv, setCarregandoInv] = useState(false);
@@ -111,6 +111,11 @@ export default function GemForge({ onBack, player, characters = [], onRefresh, w
     [characters, characterId],
   );
   const mana = Number(personagem?.mp_current ?? 0);
+
+  const receitasEspeciais = [
+    { a: 'obsidiana', b: 'agataDeFogo', resultado: 'obsidiana_ardente' },
+    { a: 'rubi', b: 'pedraDeSangue', resultado: 'rubi_abissal' },
+  ];
 
   useEffect(() => {
     setOuro(Number(walletCents) || 0);
@@ -162,6 +167,29 @@ export default function GemForge({ onBack, player, characters = [], onRefresh, w
       };
     });
   }, [inventario, characterId]);
+
+  // Combinações estáveis que já existem no inventário do personagem.
+  // Ajuda o jogador a descobrir o que pode fundir sem testar às cegas.
+  const combinacoes = useMemo(() => {
+    const validas = pedras.filter((p) => p.estado && !['bruta', 'destruida'].includes(p.estado));
+    const vistas = new Set();
+    const out = [];
+    for (let i = 0; i < validas.length; i += 1) {
+      for (let j = i + 1; j < validas.length; j += 1) {
+        const a = validas[i];
+        const b = validas[j];
+        if (!a || !b || a.id === b.id) continue;
+        const chave = [a.id, b.id].sort().join('|');
+        if (vistas.has(chave)) continue;
+        const check = verificarFusao(a, b);
+        if (check.ok) {
+          vistas.add(chave);
+          out.push({ a, b, resultado: check.resultado, chave });
+        }
+      }
+    }
+    return out;
+  }, [pedras]);
 
   const acharPedra = (id, estado) => {
     const base = getGemaById(id);
@@ -290,8 +318,18 @@ export default function GemForge({ onBack, player, characters = [], onRefresh, w
           <p>
             Combine duas pedras <strong>polidas e compatíveis</strong> na forja mágica.
             O custo da fusão é pago em <strong>Mana</strong>; o polimento custa
-            <strong> ouro e mana</strong> de verdade.
+            <strong> ouro e mana</strong> de verdade. Gemas do mesmo tipo também podem
+            ser fundidas — não só as receitas especiais.
           </p>
+          <div className="forge-quick-links">
+            {onOpenToolShop && (
+              <button className="ghost" onClick={onOpenToolShop}>🛠️ Comprar ou minerar gemas</button>
+            )}
+            {onEnterLobby && (
+              <button className="ghost" onClick={onEnterLobby}>⚔️ Ganhar gemas em batalhas</button>
+            )}
+            <button className="ghost" onClick={onBack}>👤 Voltar às fichas para equipar</button>
+          </div>
         </div>
 
         {/* Seleção de personagem: cada personagem tem seu próprio inventário. */}
@@ -325,10 +363,21 @@ export default function GemForge({ onBack, player, characters = [], onRefresh, w
           {carregandoInv ? (
             <p className="muted">Carregando inventário...</p>
           ) : pedras.length === 0 ? (
-            <p className="muted">
-              Nenhuma gema ainda. Ganhe gemas em batalhas, minere na Loja de Ferramentas
-              ou compre na Loja de Gemas.
-            </p>
+            <div className="registry-empty">
+              <p style={{ marginTop: 0 }}><strong>Nenhuma gema ainda.</strong></p>
+              <p>
+                Ganhe gemas em batalhas, minere na Loja de Ferramentas ou compre na Loja de
+                Gemas. Depois volte aqui para polir, fundir e equipar.
+              </p>
+              <div className="forge-quick-links" style={{ justifyContent: 'center' }}>
+                {onOpenToolShop && (
+                  <button className="ghost" onClick={onOpenToolShop}>🛠️ Ir para a Loja e mineração</button>
+                )}
+                {onEnterLobby && (
+                  <button className="ghost" onClick={onEnterLobby}>⚔️ Entrar no Campo de Batalha</button>
+                )}
+              </div>
+            </div>
           ) : (
             <div className="forge-gem-pool">
               {pedras.map((g) => (
@@ -451,6 +500,72 @@ export default function GemForge({ onBack, player, characters = [], onRefresh, w
             </button>
           </div>
         )}
+
+        {/* Combinações que já existem no inventário: o jogador não precisa
+            adivinhar quais pedras são compatíveis. */}
+        <div className="forge-recipes">
+          <h3>🧪 Combinações prontas no seu inventário ({combinacoes.length})</h3>
+          {combinacoes.length === 0 ? (
+            <p className="muted" style={{ margin: 0 }}>
+              Nenhuma combinação estável no momento. Polir as gemas (clique nelas), conseguir
+              mais pedras na Loja/mineração ou usar gemas do mesmo tipo também libera fusões.
+            </p>
+          ) : (
+            <div className="forge-recipe-list">
+              {combinacoes.slice(0, 8).map((c) => (
+                <div className="forge-recipe" key={c.chave}>
+                  <span>
+                    <strong>{c.a.nome}</strong> + <strong>{c.b.nome}</strong> →{' '}
+                    <strong style={{ color: RARITY_GLOW[c.resultado.raridade] || 'var(--text)' }}>
+                      {c.resultado.nome}
+                    </strong>{' '}
+                    <span className="muted">· ⚡ {c.resultado.custoManaTotal} mana</span>
+                  </span>
+                  <button
+                    className="ghost"
+                    onClick={() => {
+                      setGemaAId(c.a.id);
+                      setGemaAEstado(c.a.estado);
+                      setGemaBId(c.b.id);
+                      setGemaBEstado(c.b.estado);
+                    }}
+                  >
+                    Carregar na forja
+                  </button>
+                </div>
+              ))}
+              {combinacoes.length > 8 && (
+                <p className="muted" style={{ margin: 0 }}>
+                  + {combinacoes.length - 8} outras combinações disponíveis.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="forge-recipes">
+          <h3>📜 Receitas especiais</h3>
+          <div className="forge-recipe-list">
+            {receitasEspeciais.map((r) => {
+              const a = getGemaById(r.a);
+              const b = getGemaById(r.b);
+              const res = getGemaById(r.resultado);
+              const temA = pedras.some((p) => p.id === r.a && !['bruta', 'destruida'].includes(p.estado));
+              const temB = pedras.some((p) => p.id === r.b && !['bruta', 'destruida'].includes(p.estado));
+              return (
+                <div className="forge-recipe" key={r.resultado}>
+                  <span>
+                    <strong>{a?.nome || r.a}</strong> + <strong>{b?.nome || r.b}</strong> →{' '}
+                    <strong>{res?.nome || r.resultado}</strong>
+                  </span>
+                  <span className={temA && temB ? 'forge-ok' : 'muted'}>
+                    {temA && temB ? '✅ Você tem as duas!' : 'Faltam gemas (ou precisam ser polidas)'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
         {toast && <div className="toast">{toast}</div>}
       </div>

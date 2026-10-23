@@ -4,6 +4,9 @@
   "private": true,
   "description": "Batalhas de RPG estilo Final Fantasy/Pokémon em tempo real para até 20 jogadores",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "setup": "npm install --prefix server && npm install",
     "dev": "concurrently -n server,client -c blue,green \"npm:dev:server\" \"npm:dev:client\"",

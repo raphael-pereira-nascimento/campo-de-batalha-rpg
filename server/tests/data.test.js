@@ -17,6 +17,7 @@ import {
 } from '../src/game/data.js';
 import { gemIsRaw } from '../src/game/gems.js';
 import { acharReceitaFusao, FUSOES } from '../src/game/forgeGems.js';
+import { verificarFusaoServer } from '../src/game/fusion.js';
 import { DANO_MULT } from '../src/game/sistema.js';
 
 const anao = { id: 'anao', bonus: { forca: 1, resistencia: 1 } };
@@ -431,5 +432,53 @@ describe('Forja - receitas validadas no servidor', () => {
   it('rejeita combinacoes fora das receitas', () => {
     expect(acharReceitaFusao('jaspe', 'diamante')).toBeNull();
     expect(acharReceitaFusao('rubi', 'rubi')).toBeNull();
+  });
+});
+
+describe('Fusão no servidor — receitas + pares compatíveis', () => {
+  it('resolve a receita explícita Obsidiana + Ágata de Fogo', () => {
+    const r = verificarFusaoServer(
+      { id: 'obsidiana', estado: 'polido' },
+      { id: 'agataDeFogo', estado: 'polido' },
+    );
+    expect(r.ok).toBe(true);
+    expect(r.resultado.id).toBe('obsidiana_ardente');
+    expect(r.resultado.custoManaTotal).toBe(50);
+  });
+
+  it('resolve fusão genérica de gemas do mesmo tipo', () => {
+    const r = verificarFusaoServer(
+      { id: 'jaspe', estado: 'lapidada' },
+      { id: 'agata_listrada', estado: 'lapidada' },
+    );
+    expect(r.ok).toBe(true);
+    expect(r.resultado.id).toBe('hematita');
+    expect(r.resultado.custoManaTotal).toBe(20);
+  });
+
+  it('rejeita gemas brutas antes de qualquer receita', () => {
+    const r = verificarFusaoServer(
+      { id: 'obsidiana', estado: 'bruta' },
+      { id: 'agataDeFogo', estado: 'polido' },
+    );
+    expect(r.ok).toBe(false);
+    expect(r.bruta).toBe(true);
+  });
+
+  it('marca como instável uma combinação sem receita e de tipos diferentes', () => {
+    const r = verificarFusaoServer(
+      { id: 'jaspe', estado: 'polido' },
+      { id: 'rubi', estado: 'polido' },
+    );
+    expect(r.ok).toBe(false);
+    expect(r.instavel).toBe(true);
+  });
+
+  it('rejeita a mesma gema duas vezes', () => {
+    const r = verificarFusaoServer(
+      { id: 'rubi', estado: 'polido' },
+      { id: 'rubi', estado: 'polido' },
+    );
+    expect(r.ok).toBe(false);
   });
 });

@@ -40,50 +40,88 @@ export default function Characters({ player, characters, gameData, customClasses
   return (
     <div className="page">
       <header className="topbar">
-        <div>
+        <div className="topbar-brand">
           <h1>⚔️ Campo de Batalha</h1>
           <span className="player-name">Jogador: {player.name}</span>
-          <div style={{ marginTop: 6 }}>
-            <ConnectionBadge />
-          </div>
+          <ConnectionBadge />
         </div>
-        <div className="topbar-actions">
-          <button onClick={() => setCreating(true)}>+ Nova Ficha</button>
-          <button className="ghost" onClick={() => setPasteModal(true)}>📋 Colar ficha</button>
-          <button className="ghost" onClick={() => fileRef.current && fileRef.current.click()}>📥 Importar</button>
-          <input type="file" accept=".json,application/json" ref={fileRef} onChange={handleImport} style={{ display: 'none' }} />
-          <button className="ghost" onClick={onOpenCompendium}>⚔️ Arsenal</button>
-          <button className="ghost" onClick={onOpenRules}>📖 Regras</button>
-          <button className="ghost" onClick={onOpenGemForge}>🔮 Forja de Gemas</button>
-          <button className="ghost" onClick={onOpenToolShop}>🛠️ Loja de Ferramentas</button>
-          <button className="ghost" onClick={onOpenTavern}>🍺 O Último Copo</button>
-          <button className="ghost" onClick={onOpenRegistry}>
-            📜 Registro do Mundo
-          </button>
+        <div className="topbar-primary">
+          <button onClick={() => setCreating(true)}>➕ Nova ficha</button>
           <button onClick={onEnterLobby}>⚔️ Campo de Batalha</button>
-          <button className="ghost" onClick={onOpenDungeons}>🗺️ Dungeons</button>
-          <button className="ghost" onClick={onOpenTableBattle}>📋 Mesa de Batalha</button>
-          <button className="ghost" onClick={onLogout}>
-            Sair
-          </button>
         </div>
       </header>
 
+      <nav className="subnav" aria-label="Atalhos do jogo">
+        <button className="primary-link" onClick={onOpenRegistry}>📜 Registro do Mundo</button>
+        <button className="primary-link" onClick={onOpenGemForge}>🔮 Forja de Gemas</button>
+        <button onClick={onOpenToolShop}>🛠️ Loja e mineração</button>
+        <button onClick={onOpenDungeons}>🗺️ Dungeons</button>
+        <button onClick={onOpenTavern}>🍺 Taverna</button>
+        <button onClick={onOpenCompendium}>⚔️ Arsenal</button>
+        <button onClick={onOpenRules}>📖 Regras</button>
+        <button onClick={onOpenTableBattle}>📋 Mesa de Batalha</button>
+        <button onClick={() => setPasteModal(true)}>📋 Colar ficha</button>
+        <button onClick={() => fileRef.current && fileRef.current.click()}>📥 Importar</button>
+        <button onClick={onLogout}>Sair</button>
+      </nav>
+      <input type="file" accept=".json,application/json" ref={fileRef} onChange={handleImport} style={{ display: 'none' }} />
+
       <div className="content">
+        <div className="account-banner">
+          {isOffline() ? (
+            <>
+              <span>💾</span>
+              <span>
+                <strong>Modo offline:</strong> sua conta, fichas e criações ficam salvas apenas
+                neste navegador. Use “⬇️ Exportar ficha” para guardar backups.
+              </span>
+            </>
+          ) : (
+            <>
+              <span>☁️</span>
+              <span>
+                <strong>Salvo no servidor:</strong> sua conta, fichas e criações ficam disponíveis
+                em qualquer dispositivo.
+              </span>
+            </>
+          )}
+        </div>
+
         {importError && <div className="error">{importError}</div>}
         {characters.length === 0 && !creating && (
           <div className="empty">
-            <p style={{ fontSize: 18, color: 'var(--text)' }}>Bem-vindo, {player.name}! 👋</p>
-            <p>Siga estes passos para começar a jogar:</p>
-            <ol className="onboard-steps">
-              <li><span className="step-num">1</span> Crie a <strong>ficha do seu personagem</strong> (raça, classe, golpes e equipamento).</li>
-              <li><span className="step-num">2</span> Entre no <strong>Campo de Batalha</strong> para lutar sozinho, em equipe ou contra o Mestre.</li>
-              <li><span className="step-num">3</span> Explore as <strong>Dungeons</strong>, forje <strong>gemas</strong> e registre criações no <strong>Registro do Mundo</strong>.</li>
-            </ol>
-            <button onClick={() => setCreating(true)}>➕ Criar Ficha</button>
-            <p className="muted" style={{ marginTop: 16, fontSize: 13 }}>
-              Já tem uma ficha pronta? Use <strong>📥 Importar</strong> ou <strong>📋 Colar ficha</strong> no topo.
-            </p>
+            <div className="onboard-card">
+              <span className="home-eyebrow">Comece aqui</span>
+              <h2>Bem-vindo, {player.name}! 👋</h2>
+              <p className="muted" style={{ marginTop: 0 }}>
+                Sua conta já está pronta. Agora monte seu primeiro personagem — leva poucos minutos.
+              </p>
+              <ol className="onboard-steps">
+                <li><span className="step-num">1</span> Crie a <strong>ficha do seu personagem</strong> (raça, classe, atributos, golpes e equipamento).</li>
+                <li><span className="step-num">2</span> Entre no <strong>Campo de Batalha</strong> para lutar sozinho, em equipe ou contra o Mestre.</li>
+                <li><span className="step-num">3</span> Explore as <strong>Dungeons</strong>, equipe e funda <strong>gemas</strong> e publique criações no <strong>Registro do Mundo</strong>.</li>
+              </ol>
+              <div className="onboard-actions">
+                <button onClick={() => setCreating(true)}>➕ Criar minha primeira ficha</button>
+                <button className="ghost" onClick={onOpenRegistry}>📜 Explorar o Registro do Mundo</button>
+                <button className="ghost" onClick={onOpenGemForge}>🔮 Ver a Forja de Gemas</button>
+              </div>
+              <div className="onboard-extra">
+                <div className="onboard-extra-card">
+                  <strong>📥 Já tem uma ficha?</strong>
+                  <p>Importe um arquivo JSON ou cole um link compartilhado por outro jogador.</p>
+                  <div className="onboard-actions" style={{ marginTop: 0 }}>
+                    <button className="ghost" onClick={() => fileRef.current && fileRef.current.click()}>Importar</button>
+                    <button className="ghost" onClick={() => setPasteModal(true)}>Colar ficha</button>
+                  </div>
+                </div>
+                <div className="onboard-extra-card">
+                  <strong>💎 Quer gemas?</strong>
+                  <p>Minere na Loja, compre gemas ou ganhe drops nas batalhas. Depois equipe e funda na Forja.</p>
+                  <button className="ghost" onClick={onOpenToolShop}>Abrir Loja e mineração</button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

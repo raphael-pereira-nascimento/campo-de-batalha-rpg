@@ -2,7 +2,7 @@
 
 Jogo de batalha estilo Final Fantasy / Pokémon em tempo real, suportando até 20 jogadores simultaneamente. Combina batalhas táticas por turnos com sistema de progressão, conteúdo customizado pelos jogadores e uma interface moderna baseada em web.
 
-Jogue **online** (com backend + PostgreSQL) ou **offline** (100% no browser, sem servidor).
+Jogue **online** (com backend + banco local PGlite ou PostgreSQL) ou **offline** (100% no browser, sem servidor).
 
 ## Funcionalidades
 
@@ -28,46 +28,61 @@ Jogue **online** (com backend + PostgreSQL) ou **offline** (100% no browser, sem
 | Frontend | React 18 + Vite |
 | Backend | Node.js + Express |
 | Realtime | Socket.IO |
-| Database | PostgreSQL |
+| Database | PostgreSQL (produção) ou PGlite local (zero configuração) |
 | Testes | Vitest (unit) + Smoke Test (e2e) |
 
 ## Pré-requisitos
 
-- [Node.js](https://nodejs.org/) >= 18
-- [PostgreSQL](https://www.postgresql.org/) >= 14 (apenas para modo online)
+- [Node.js](https://nodejs.org/) **20 LTS** (recomendado; mínimo 18)
+- [PostgreSQL](https://www.postgresql.org/) >= 14 — **apenas para produção**. Para jogar localmente, o servidor cria um banco PGlite automaticamente.
 
 ## Instalação
 
 ```bash
 git clone <url-do-repositorio>
 cd campo-de-batalha-rpg
-npm install
+npm run setup
 ```
 
 ## Executar o Projeto
 
 ```bash
-# Modo offline (sem servidor) — apenas frontend
+# Inicia servidor + cliente juntos.
+# Sem DATABASE_URL, o servidor usa PGlite local (server/.data/pglite):
+# contas, fichas, gemas e criações ficam salvas de verdade, sem configurar nada.
 npm run dev
-
-# Modo online (server + client simultaneamente)
-npm run dev
-
-# Produção (Windows)
-start-server.bat
 ```
 
-> **Modo offline**: Basta rodar `npm run dev` sem configurar `VITE_API_URL`. O jogo detecta automaticamente e roda 100% no browser com `localStorage`.
+- **Online local (padrão):** `npm run dev` sobe o Express em `http://localhost:3000` e o Vite em `http://localhost:5173`. O jogo salva tudo no banco local PGlite.
+- **Offline (navegador):** se o servidor não estiver disponível, o jogo detecta e passa a salvar em `localStorage`. Nesse modo os dados ficam só naquele navegador.
+- **Produção (Windows):** `start-server.bat` mantém o servidor rodando com auto-restart.
 
-## Configuração do Banco de Dados (modo online)
+> O selo no topo da tela mostra **● Online (salvo no servidor)** ou **● Offline (salvo só neste navegador)**. Use “⬇️ Exportar” nas fichas para guardar backups.
+
+## Configuração do Banco de Dados
+
+### Local, zero configuração (PGlite)
+
+Não faça nada: sem `DATABASE_URL`, o servidor usa `server/.data/pglite`. As migrações rodam automaticamente no boot. Para inicializar manualmente:
 
 ```bash
-# Configurar DATABASE_URL no .env na raiz do projeto
+npm run init-db --prefix server
+```
+
+### PostgreSQL (produção)
+
+```bash
+# 1. Configure DATABASE_URL (em server/.env ou variável de ambiente)
 # DATABASE_URL=postgresql://usuario:senha@localhost:5432/campo_batalha_rpg
 
-# Criar as tabelas e migrar dados
-npm run init-db
+# 2. Crie as tabelas
+npm run init-db --prefix server
+
+# 3. Suba o servidor
+npm start
 ```
+
+No Render, basta definir `DATABASE_URL`; o `render.yaml` já aponta para o PostgreSQL gerenciado.
 
 ## Estrutura do Projeto
 
@@ -103,8 +118,8 @@ campo-de-batalha-rpg/
 │   └── src/
 │       ├── index.js          # Express server + rotas REST
 │       ├── sockets.js        # Socket.IO (lobby, batalha, auth)
-│       ├── db/               # PostgreSQL
-│       │   ├── index.js          # Pool de conexão
+│       ├── db/               # Banco de dados (PGlite local / PostgreSQL)
+│       │   ├── index.js          # Seleciona PGlite ou PostgreSQL e expõe query/initDb
 │       │   ├── init.js           # Migrator CLI
 │       │   ├── backup.js         # Backup CLI
 │       │   └── migrations/       # SQL migrations
@@ -112,6 +127,9 @@ campo-de-batalha-rpg/
 │       │   ├── data.js
 │       │   ├── races.js
 │       │   ├── monsters.js
+│       │   ├── gems.js           # Catálogo de gemas
+│       │   ├── forgeGems.js      # Gemas exclusivas da forja
+│       │   ├── fusion.js         # Validação de fusão (receitas + pares compatíveis)
 │       │   └── battleManager.js
 │       ├── services/         # Lógica de negócio
 │       │   ├── characters.js
@@ -120,25 +138,29 @@ campo-de-batalha-rpg/
 │       ├── middleware/
 │       │   └── auth.js       # Middleware de autenticação
 │       └── utils.js
-├── .env                     # Variáveis de ambiente (DATABASE_URL)
+├── .env                     # Variáveis de ambiente (DATABASE_URL opcional)
 ├── package.json             # Scripts e dependências
 ├── arquitetura.md           # Documentação da arquitetura
 ├── render.yaml              # Deploy automático no Render
 └── start-server.bat         # Script de produção (Windows)
 ```
 
+O banco local PGlite fica em `server/.data/pglite/` (ignorado pelo Git). Para resetar o banco local, pare o servidor e apague essa pasta.
+
 ## Comandos
 
 | Comando | Descrição |
 |---------|-----------|
-| `npm run dev` | Frontend em desenvolvimento (funciona offline) |
+| `npm run setup` | Instala dependências do cliente e do servidor |
+| `npm run dev` | Servidor + cliente juntos (online local com PGlite) |
+| `npm run dev:client` | Apenas o frontend (offline se o servidor não estiver ligado) |
 | `npm run build` | Build de produção |
-| `npm run start` | Servidor em produção |
-| `npm test` | Todos os testes (46 unit + 28 e2e) |
+| `npm start` | Servidor em produção |
+| `npm test` | Todos os testes (unit + e2e) |
 | `npm run test:unit` | Testes unitários (vitest) |
 | `npm run test:e2e` | Smoke test (E2E) |
-| `npm run init-db` | Cria/migra as tabelas do banco |
-| `npm run backup` | Backup do banco PostgreSQL |
+| `npm run init-db --prefix server` | Cria/migra as tabelas (PGlite ou PostgreSQL) |
+| `npm run backup --prefix server` | Backup do banco PostgreSQL |
 
 ## Deploy Online (Render + GitHub Pages)
 

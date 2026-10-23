@@ -3,7 +3,7 @@ import { gameData } from './offline/gameData.js';
 import { isOffline, setServerStatus, saveOfflinePlayer, getOfflinePlayer, getOfflineCharacters, saveOfflineCharacter, getOfflineWallet, addOfflineCoins, getOfflineGems, addOfflineGem, removeOfflineGem, setOfflineGemEstado, listOfflineCustom, saveOfflineCustom, removeOfflineCustom } from './offline/storage.js';
 import { offlineBattle } from './offline/battle.js';
 import { MONSTERS } from './game/monsters.js';
-import { gemIsRaw, getGemaById, GEM_LIST, GEMS, gemPrice, MINERA_VEIOS, polirPedra, receitasFusao } from './game/gems.js';
+import { gemIsRaw, getGemaById, GEM_LIST, GEMS, gemPrice, MINERA_VEIOS, polirPedra, verificarFusao } from './game/gems.js';
 import { precoEmCents } from './game/tools.js';
 import { EQUIPMENT, POTIONS, deriveStats, applyMaxMults, aplicarCrescimentoNivel, efeitosDeHabilidades, TAVERN_DRINKS, TAVERN_FOODS } from './game/data.js';
 import { DUNGEONS } from './game/dungeons.js';
@@ -384,7 +384,7 @@ export const api = {
       const chars = getOfflineCharacters();
       return Promise.resolve({ ok: true, character: chars.find((c) => c.id === id) || null });
     }
-    return request(`/api/characters/${id}`);
+    return auth(`/api/characters/${id}`);
   },
   // Sobe 1 nível gastando level × 100 de XP (mesma regra do servidor).
   levelUpCharacter: (id) => {
@@ -486,7 +486,7 @@ export const api = {
       }
       return Promise.resolve({ ok: true, character: c });
     }
-    return request(`/api/characters/${id}/equip`, { method: 'POST', body: JSON.stringify({ slot, itemId }) });
+    return auth(`/api/characters/${id}/equip`, { method: 'POST', body: JSON.stringify({ slot, itemId }) });
   },
   getGameData: () => {
     if (isOffline()) {
@@ -619,7 +619,7 @@ export const api = {
       if (opts?.mine) classes = classes.filter((c) => c.creator_id === player?.id);
       return Promise.resolve({ ok: true, classes });
     }
-    return request('/api/custom-classes' + (opts?.mine ? '?mine=1' : ''));
+    return auth('/api/custom-classes' + (opts?.mine ? '?mine=1' : ''));
   },
   createCustomClass: (payload) => {
     if (isOffline()) {
@@ -649,7 +649,7 @@ export const api = {
       if (opts?.mine) monsters = monsters.filter((m) => m.creator_id === player?.id);
       return Promise.resolve({ ok: true, monsters });
     }
-    return request('/api/custom-monsters' + (opts?.mine ? '?mine=1' : ''));
+    return auth('/api/custom-monsters' + (opts?.mine ? '?mine=1' : ''));
   },
   createCustomMonster: (payload) => {
     if (isOffline()) {
@@ -679,7 +679,7 @@ export const api = {
       if (opts?.mine) races = races.filter((r) => r.creator_id === player?.id);
       return Promise.resolve({ ok: true, races });
     }
-    return request('/api/custom-races' + (opts?.mine ? '?mine=1' : ''));
+    return auth('/api/custom-races' + (opts?.mine ? '?mine=1' : ''));
   },
   createCustomRace: (payload) => {
     if (isOffline()) {
@@ -709,7 +709,7 @@ export const api = {
       if (opts?.mine) equipment = equipment.filter((e) => e.creator_id === player?.id);
       return Promise.resolve({ ok: true, equipment });
     }
-    return request('/api/custom-equipment' + (opts?.mine ? '?mine=1' : ''));
+    return auth('/api/custom-equipment' + (opts?.mine ? '?mine=1' : ''));
   },
   createCustomEquipment: (payload) => {
     if (isOffline()) {
@@ -739,7 +739,7 @@ export const api = {
       if (opts?.mine) skills = skills.filter((s) => s.creator_id === player?.id);
       return Promise.resolve({ ok: true, skills });
     }
-    return request('/api/custom-skills' + (opts?.mine ? '?mine=1' : ''));
+    return auth('/api/custom-skills' + (opts?.mine ? '?mine=1' : ''));
   },
   createCustomSkill: (payload) => {
     if (isOffline()) {
@@ -872,16 +872,28 @@ export const api = {
   },
   fuseGems: (characterId, gemA, gemB, resultado) => {
     if (isOffline()) {
-      // Valida a receita localmente (mesma regra do servidor).
-      const par = [gemA.id, gemB.id].sort().join('|');
-      const receita = receitasFusao.find(
-        (r) => r.ingredientes.slice().sort().join('|') === par,
+      // Usa a MESMA regra da Forja (receitas explícitas + pares compatíveis +
+      // mesmo tipo), para qualquer gema do inventário poder ser fundida.
+      const a = getGemaById(gemA.id);
+      const b = getGemaById(gemB.id);
+      if (!a || !b) return Promise.reject(new Error('Gema desconhecida.'));
+      const check = verificarFusao(
+        { ...a, estado: gemA.estado },
+        { ...b, estado: gemB.estado },
       );
-      if (!receita) return Promise.reject(new Error('Combinação de fusão inválida.'));
-      const custoMana = Number(receita.resultado.custoManaTotal || 0);
-      const resultadoId = receita.resultado.id;
+      if (!check.ok) {
+        return Promise.reject(new Error(check.motivo || 'Combinação de fusão inválida.'));
+      }
+      const custoMana = Number(check.resultado.custoManaTotal || 0);
+      const resultadoId = check.resultado.id;
       const chars = getOfflineCharacters();
       const char = chars.find((c) => c.id === characterId);
+      const inventario = getOfflineGems(characterId) || [];
+      const temA = inventario.some((g) => g.gem_id === gemA.id && g.estado === gemA.estado);
+      const temB = inventario.some((g) => g.gem_id === gemB.id && g.estado === gemB.estado);
+      if (!temA || !temB) {
+        return Promise.reject(new Error('Gemas não encontradas no inventário.'));
+      }
       if (char && Number(char.mp_current || 0) < custoMana) {
         return Promise.reject(new Error(`Mana insuficiente: a fusão custa ${custoMana}.`));
       }

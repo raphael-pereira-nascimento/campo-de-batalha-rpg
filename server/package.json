@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "main": "src/index.js",
   "scripts": {
     "dev": "node --watch src/index.js",
@@ -12,6 +15,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.11",
     "campo-de-batalha-rpg": "file:..",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { initDb, testConnection, query } from '../db/index.js';
+import { initDb, testConnection, query, closeDb } from '../db/index.js';
 import { RACES } from '../game/races.js';
 import { CLASSES, SPELLS } from '../game/data.js';
 
@@ -82,9 +82,11 @@ try {
   const { rows } = await query('SELECT count(*)::int AS n FROM characters');
   console.log(`[db] Conexão OK. Personagens cadastrados: ${rows[0].n}`);
   if (migrated > 0) console.log(`[db] Fichas migradas para o novo modelo: ${migrated}`);
+  await closeDb();
   process.exit(0);
 } catch (err) {
   console.error('[db] Falha ao inicializar:', err.message);
-  console.error('Verifique se o PostgreSQL está rodando e a DATABASE_URL.');
+  console.error('Defina DATABASE_URL (PostgreSQL) ou remova a variável para usar o banco local PGlite.');
+  await closeDb().catch(() => {});
   process.exit(1);
 }

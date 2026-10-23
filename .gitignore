@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# Banco local PGlite (modo online sem PostgreSQL)
+server/.data/
 .env
 *.log
 server/backups/

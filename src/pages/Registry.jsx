@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api.js';
+import { api, isOffline } from '../api.js';
 import { ATTRIBUTES, ATTRIBUTE_NAMES, SKILL_TYPES } from '../config.js';
 import { ALVO_LABEL } from '../game/sistema.js';
 import AlvoSelect from '../components/AlvoSelect.jsx';
@@ -30,6 +30,7 @@ export default function Registry({ player, gameData, onBack }) {
   const [data, setData] = useState({ classes: [], monsters: [], races: [], equipment: [], skills: [] });
   const [ranking, setRanking] = useState([]);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
 
   const load = async () => {
     try {
@@ -66,8 +67,54 @@ export default function Registry({ player, gameData, onBack }) {
   // O catálogo do mundo mostra TODAS as criações públicas (inclusive as suas).
   const world = data[tab] ? data[tab].filter((x) => x.is_public) : [];
   const list = scope === 'mine' ? mine : world;
+  const termo = search.trim().toLowerCase();
+  const filtered = termo
+    ? list.filter((item) => {
+        const texto = [
+          item.name,
+          item.nome,
+          item.creator_name,
+          item.funcao,
+          item.passiva,
+          item.forcas,
+          item.fraquezas,
+          item.descricao,
+          item.maleficio,
+          item.tipo,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return texto.includes(termo);
+      })
+    : list;
 
   const onChanged = () => { setError(''); load(); };
+
+  // Copia uma criação pública do mundo para "Minhas criações", como uma cópia
+  // privada que o jogador pode editar sem alterar a criação original.
+  const copyToMine = async (item) => {
+    setError('');
+    try {
+      const payload = { ...item };
+      for (const key of ['id', 'creator_id', 'creator_name', 'created_at', 'updated_at']) {
+        delete payload[key];
+      }
+      payload.is_public = false;
+      if (payload.name) payload.name = `${payload.name} (cópia)`;
+      if (payload.nome) payload.nome = `${payload.nome} (cópia)`;
+      const body = { creatorId: player.id, ...payload };
+      if (tab === 'classes') await api.createCustomClass(body);
+      else if (tab === 'monsters') await api.createCustomMonster(body);
+      else if (tab === 'races') await api.createCustomRace(body);
+      else if (tab === 'equipment') await api.createCustomEquipment(body);
+      else if (tab === 'skills') await api.createCustomSkill(body);
+      setScope('mine');
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
 
   const registries = {
     classes: ClassRegistry,
@@ -110,10 +157,14 @@ export default function Registry({ player, gameData, onBack }) {
 
         {tab !== 'ranking' && (
           <>
-            <p className="muted small" style={{ marginBottom: 10 }}>
-              Suas criações ficam salvas na sua conta e aparecem em qualquer dispositivo. Marque
-              <strong> “Tornar público”</strong> para compartilhar no catálogo do mundo.
-            </p>
+            <div className="registry-intro">
+              <strong>Como funciona:</strong> tudo que você cria aqui fica salvo na sua conta.
+              Marque <strong>“Tornar público”</strong> para aparecer no catálogo do mundo e poder
+              ser copiado por outros jogadores. As criações privadas só aparecem para você.
+              {isOffline() && (
+                <> No modo offline, as criações ficam apenas neste navegador e não aparecem para outras contas.</>
+              )}
+            </div>
             <div className="scope-toggle">
               <button className={scope === 'mine' ? 'active' : ''} onClick={() => setScope('mine')}>
                 Minhas criações ({mine.length})
@@ -122,12 +173,28 @@ export default function Registry({ player, gameData, onBack }) {
                 🌍 Do mundo ({world.length})
               </button>
             </div>
+            <div className="registry-search-row">
+              <input
+                className="registry-search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="🔎 Buscar por nome, autor ou descrição..."
+                maxLength={80}
+              />
+              {search && (
+                <button className="ghost" onClick={() => setSearch('')}>
+                  Limpar busca
+                </button>
+              )}
+            </div>
             <Active
               player={player}
-              items={list}
+              items={filtered}
               scope={scope}
+              searchTerm={search.trim()}
               gameData={gameData}
               onChanged={onChanged}
+              onCopy={copyToMine}
               setError={setError}
             />
           </>
@@ -176,7 +243,7 @@ function PublicToggle({ form, setForm }) {
   );
 }
 
-function ClassRegistry({ player, items, scope, gameData, onChanged, setError }) {
+function ClassRegistry({ player, items, scope, searchTerm, gameData, onChanged, setError, onCopy }) {
   const [form, setForm] = useState(EMPTY.classes);
   const [editingId, setEditingId] = useState(null);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -251,16 +318,29 @@ function ClassRegistry({ player, items, scope, gameData, onChanged, setError }) 
                   <button className="ghost danger" onClick={() => remove(c.id)}>Excluir</button>
                 </div>
               )}
+              {readOnly && (
+                <div className="registry-actions">
+                  <button className="ghost" onClick={() => onCopy(c)}>📋 Copiar para minhas criações</button>
+                </div>
+              )}
             </div>
           ))}
-          {items.length === 0 && <p className="muted">Nada por aqui ainda.</p>}
+          {items.length === 0 && (
+            <div className="registry-empty">
+              {searchTerm
+                ? <>Nenhuma classe encontrada para “{searchTerm}”.</>
+                : scope === 'world'
+                  ? <>O catálogo do mundo ainda não tem classes. Publique uma criação sua marcando <strong>“Tornar público”</strong>.</>
+                  : <>Você ainda não criou nenhuma classe. Use o formulário ao lado para começar.</>}
+            </div>
+          )}
         </div>
       </section>
     </div>
   );
 }
 
-function MonsterRegistry({ player, items, scope, gameData, onChanged, setError }) {
+function MonsterRegistry({ player, items, scope, searchTerm, gameData, onChanged, setError, onCopy }) {
   const [form, setForm] = useState(EMPTY.monsters);
   const [editingId, setEditingId] = useState(null);
   const ELEMENTOS = ['fisico', 'fogo', 'agua', 'terra', 'ar', 'luz', 'trevas'];
@@ -370,16 +450,29 @@ function MonsterRegistry({ player, items, scope, gameData, onChanged, setError }
                   <button className="ghost danger" onClick={() => remove(m.id)}>Excluir</button>
                 </div>
               )}
+              {readOnly && (
+                <div className="registry-actions">
+                  <button className="ghost" onClick={() => onCopy(m)}>📋 Copiar para minhas criações</button>
+                </div>
+              )}
             </div>
           ))}
-          {items.length === 0 && <p className="muted">Nada por aqui ainda.</p>}
+          {items.length === 0 && (
+            <div className="registry-empty">
+              {searchTerm
+                ? <>Nenhum monstro encontrado para “{searchTerm}”.</>
+                : scope === 'world'
+                  ? <>O catálogo do mundo ainda não tem monstros. Publique uma criação sua marcando <strong>“Tornar público”</strong>.</>
+                  : <>Você ainda não criou nenhum monstro. Use o formulário ao lado para começar.</>}
+            </div>
+          )}
         </div>
       </section>
     </div>
   );
 }
 
-function RaceRegistry({ player, items, scope, onChanged, setError }) {
+function RaceRegistry({ player, items, scope, searchTerm, onChanged, setError, onCopy }) {
   const [form, setForm] = useState(EMPTY.races);
   const [editingId, setEditingId] = useState(null);
   const readOnly = scope === 'world';
@@ -452,16 +545,29 @@ function RaceRegistry({ player, items, scope, onChanged, setError }) {
                   <button className="ghost danger" onClick={() => remove(r.id)}>Excluir</button>
                 </div>
               )}
+              {readOnly && (
+                <div className="registry-actions">
+                  <button className="ghost" onClick={() => onCopy(r)}>📋 Copiar para minhas criações</button>
+                </div>
+              )}
             </div>
           ))}
-          {items.length === 0 && <p className="muted">Nada por aqui ainda.</p>}
+          {items.length === 0 && (
+            <div className="registry-empty">
+              {searchTerm
+                ? <>Nenhuma raça encontrada para “{searchTerm}”.</>
+                : scope === 'world'
+                  ? <>O catálogo do mundo ainda não tem raças. Publique uma criação sua marcando <strong>“Tornar público”</strong>.</>
+                  : <>Você ainda não criou nenhuma raça. Use o formulário ao lado para começar.</>}
+            </div>
+          )}
         </div>
       </section>
     </div>
   );
 }
 
-function EquipmentRegistry({ player, items, scope, onChanged, setError }) {
+function EquipmentRegistry({ player, items, scope, searchTerm, onChanged, setError, onCopy }) {
   const [form, setForm] = useState(EMPTY.equipment);
   const [editingId, setEditingId] = useState(null);
   const readOnly = scope === 'world';
@@ -551,16 +657,29 @@ function EquipmentRegistry({ player, items, scope, onChanged, setError }) {
                   <button className="ghost danger" onClick={() => remove(it.id)}>Excluir</button>
                 </div>
               )}
+              {readOnly && (
+                <div className="registry-actions">
+                  <button className="ghost" onClick={() => onCopy(it)}>📋 Copiar para minhas criações</button>
+                </div>
+              )}
             </div>
           ))}
-          {items.length === 0 && <p className="muted">Nada por aqui ainda.</p>}
+          {items.length === 0 && (
+            <div className="registry-empty">
+              {searchTerm
+                ? <>Nenhum equipamento encontrado para “{searchTerm}”.</>
+                : scope === 'world'
+                  ? <>O catálogo do mundo ainda não tem equipamentos. Publique uma criação sua marcando <strong>“Tornar público”</strong>.</>
+                  : <>Você ainda não criou nenhum equipamento. Use o formulário ao lado para começar.</>}
+            </div>
+          )}
         </div>
       </section>
     </div>
   );
 }
 
-function SkillRegistry({ player, items, scope, onChanged, setError }) {
+function SkillRegistry({ player, items, scope, searchTerm, onChanged, setError, onCopy }) {
   const [form, setForm] = useState(EMPTY.skills);
   const [editingId, setEditingId] = useState(null);
   const readOnly = scope === 'world';
@@ -643,9 +762,22 @@ function SkillRegistry({ player, items, scope, onChanged, setError }) {
                   <button className="ghost danger" onClick={() => remove(s.id)}>Excluir</button>
                 </div>
               )}
+              {readOnly && (
+                <div className="registry-actions">
+                  <button className="ghost" onClick={() => onCopy(s)}>📋 Copiar para minhas criações</button>
+                </div>
+              )}
             </div>
           ))}
-          {items.length === 0 && <p className="muted">Nada por aqui ainda.</p>}
+          {items.length === 0 && (
+            <div className="registry-empty">
+              {searchTerm
+                ? <>Nenhum golpe encontrado para “{searchTerm}”.</>
+                : scope === 'world'
+                  ? <>O catálogo do mundo ainda não tem golpes. Publique uma criação sua marcando <strong>“Tornar público”</strong>.</>
+                  : <>Você ainda não criou nenhum golpe. Use o formulário ao lado para começar.</>}
+            </div>
+          )}
         </div>
       </section>
     </div>

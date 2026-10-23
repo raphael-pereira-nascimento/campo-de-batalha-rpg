@@ -6,7 +6,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { setupSockets } from './sockets.js';
-import { testConnection } from './db/index.js';
+import { testConnection, initDb, isLocalDb, closeDb } from './db/index.js';
 import { requireAuth, optionalAuth } from './middleware/auth.js';
 import { query } from './db/index.js';
 import {
@@ -39,9 +39,18 @@ import {
   NIVEIS_POLIMENTO,
   polirPedra,
 } from './game/gems.js';
-import { acharReceitaFusao } from './game/forgeGems.js';
+import { verificarFusaoServer } from './game/fusion.js';
 import { TOOLS } from './game/tools.js';
 import { RACES } from './game/races.js';
+import {
+  CLASSES,
+  SPELLS,
+  EQUIPMENT,
+  POTIONS,
+  STATUS_DEFS,
+  TAVERN_DRINKS,
+  TAVERN_FOODS,
+} from './game/data.js';
 import { MONSTERS } from './game/monsters.js';
 import { DUNGEONS } from './game/dungeons.js';
 import { ECLIPSE_PERIODO } from './game/eclipse.js';
@@ -209,15 +218,13 @@ app.post('/api/shop/buy-tool', requireAuth, async (req, res) => {
 });
 
 // ── Taverna: bebidas e comidas (consumíveis de batalha) ──
-app.get('/api/tavern', async (_req, res) => {
-  const { TAVERN_FOODS } = await import('./game/data.js');
+app.get('/api/tavern', (_req, res) => {
   res.json({ ok: true, items: Object.assign({}, TAVERN_DRINKS, TAVERN_FOODS) });
 });
 
 app.post('/api/tavern/buy', requireAuth, async (req, res) => {
   try {
     const { itemId, characterId } = req.body;
-    const { TAVERN_FOODS } = await import('./game/data.js');
     const item = TAVERN_DRINKS[itemId] || TAVERN_FOODS[itemId] || null;
     if (!item) throw new Error('Item inválido.');
     const { rows } = await query(
@@ -471,11 +478,12 @@ app.post('/api/gems/fuse', requireAuth, async (req, res) => {
       throw new Error('Pedras brutas precisam ser polidas antes de serem fundidas.');
     }
 
-    // O servidor valida a receita (não confia no resultado enviado pelo cliente).
-    const receita = acharReceitaFusao(gemA.id, gemB.id);
-    if (!receita) throw new Error('Combinação de fusão inválida.');
-    const alvo = getGemById(receita.resultadoId);
-    if (!alvo) throw new Error('Gema resultante inválida.');
+    // O servidor valida a combinação e resolve o resultado (não confia no cliente).
+    const check = verificarFusaoServer(gemA, gemB);
+    if (!check.ok) throw new Error(check.motivo || 'Combinação de fusão inválida.');
+    const resultadoId = check.resultado.id;
+    const custoMana = Number(check.resultado.custoManaTotal || 0);
+    if (!resultadoId) throw new Error('Gema resultante inválida.');
 
     const gems = await getCharacterGemsDetailed(characterId);
     const linhaA = gems.find((g) => g.gem_id === gemA.id && g.estado === gemA.estado);
@@ -483,23 +491,23 @@ app.post('/api/gems/fuse', requireAuth, async (req, res) => {
     if (!linhaA || !linhaB) throw new Error('Gemas não encontradas no inventário.');
 
     const mpAtual = Number(char.mp_current || 0);
-    if (mpAtual < receita.custoMana) {
-      throw new Error(`Mana insuficiente: a fusão custa ${receita.custoMana}.`);
+    if (mpAtual < custoMana) {
+      throw new Error(`Mana insuficiente: a fusão custa ${custoMana}.`);
     }
 
     // Consome exatamente as linhas usadas (ids), evitando apagar outra gema igual.
     await query('DELETE FROM character_gems WHERE id = ANY($1::uuid[])', [[linhaA.id, linhaB.id]]);
     await query('UPDATE characters SET mp_current = GREATEST(0, mp_current - $1) WHERE id = $2', [
-      receita.custoMana,
+      custoMana,
       characterId,
     ]);
-    const nova = await addGemToInventory(characterId, receita.resultadoId, 'polido');
+    const nova = await addGemToInventory(characterId, resultadoId, 'polido');
     res.json({
       ok: true,
-      resultadoId: receita.resultadoId,
+      resultadoId,
       gem: nova,
-      custoMana: receita.custoMana,
-      mpCurrent: Math.max(0, mpAtual - receita.custoMana),
+      custoMana,
+      mpCurrent: Math.max(0, mpAtual - custoMana),
     });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
@@ -790,16 +798,44 @@ Para desenvolver com recarga automática use <code>npm run dev</code> e abra <co
 const httpServer = http.createServer(app);
 const { io } = setupSockets(httpServer);
 
-httpServer.listen(PORT, async () => {
-  console.log(`⚔️  Servidor do Campo de Batalha rodando em http://localhost:${PORT}`);
-  try {
-    await testConnection();
-    console.log('[db] PostgreSQL conectado.');
-  } catch (err) {
-    console.error('[db] AVISO: não consegui conectar no PostgreSQL.');
-    console.error('  -> ' + err.message);
-    console.error('  -> Configure DATABASE_URL e rode `npm run init-db --prefix server`.');
+async function startServer() {
+  // Banco local (sem DATABASE_URL): aplica as migrações antes de aceitar
+  // requisições, para o primeiro cadastro já funcionar.
+  if (isLocalDb()) {
+    try {
+      await initDb();
+      console.log('[db] Banco local (PGlite) pronto — contas, fichas e criações salvas em server/.data/pglite.');
+    } catch (err) {
+      console.error('[db] Falha ao inicializar o banco local:', err.message);
+      process.exit(1);
+    }
   }
-});
+
+  httpServer.listen(PORT, async () => {
+    console.log(`⚔️  Servidor do Campo de Batalha rodando em http://localhost:${PORT}`);
+    try {
+      await testConnection();
+      console.log(isLocalDb() ? '[db] Banco local conectado.' : '[db] PostgreSQL conectado.');
+    } catch (err) {
+      console.error('[db] AVISO: não consegui conectar no banco de dados.');
+      console.error('  -> ' + err.message);
+      console.error('  -> Defina DATABASE_URL ou rode `npm run init-db --prefix server`.');
+    }
+  });
+}
+
+startServer();
+
+// Fecha o banco com segurança (garante que o PGlite grave no disco).
+for (const sinal of ['SIGINT', 'SIGTERM']) {
+  process.on(sinal, async () => {
+    try {
+      await closeDb();
+    } catch {
+      /* segue encerrando */
+    }
+    process.exit(0);
+  });
+}
 
 export { app, io };

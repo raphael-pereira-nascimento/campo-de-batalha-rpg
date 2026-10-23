@@ -259,6 +259,8 @@ export default function App({ initialView } = {}) {
         characters={characters}
         onRefresh={refreshCharacters}
         walletCents={walletCents}
+        onOpenToolShop={() => setView('toolShop')}
+        onEnterLobby={() => setView('lobby')}
       />
     </Suspense>;
   }
