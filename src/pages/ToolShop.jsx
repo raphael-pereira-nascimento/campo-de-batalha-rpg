@@ -8,7 +8,7 @@ import {
   formatPreco,
   formatCoins,
 } from '../game/tools.js';
-import { getGemaById } from '../game/gems.js';
+import { getGemaById, NIVEIS_POLIMENTO } from '../game/gems.js';
 import { api } from '../api.js';
 
 const ICONE_TRACKER = { peso: '🏋️', espacos: '🎒', usos: '🔧' };
@@ -28,19 +28,26 @@ export default function ToolShop({
   player,
   onRefresh,
   onWalletChange,
+  initialTab = 'tools',
+  initialCharacterId = null,
 }) {
   const [local, setLocal] = useState(localAtual);
   const [carteira, setCarteira] = useState(typeof jogador?.carteira === 'number' ? jogador.carteira : 0);
   const [inventario, setInventario] = useState(jogador?.inventario || []);
   const [toast, setToast] = useState(null);
-  const [tab, setTab] = useState('tools');
+  const [tab, setTab] = useState(initialTab);
   const [gemasLoja, setGemasLoja] = useState([]);
   const [minerar, setMinerar] = useState({ veios: [] });
   const [mining, setMining] = useState(false);
-  const [characterId, setCharacterId] = useState(() => character?.id || characters?.[0]?.id || null);
+  const [characterId, setCharacterId] = useState(
+    () => initialCharacterId || character?.id || characters?.[0]?.id || null,
+  );
   const [cooldowns, setCooldowns] = useState({});
   const [agora, setAgora] = useState(Date.now());
   const [filtroRaridade, setFiltroRaridade] = useState('todas');
+  const [miningLog, setMiningLog] = useState([]);
+  const [gemasPersonagem, setGemasPersonagem] = useState([]);
+  const [gemsVersion, setGemsVersion] = useState(0);
 
   const limitePeso = jogador?.limitePeso ?? 40;
   const limiteEspacos = jogador?.limiteEspacos ?? 20;
@@ -54,6 +61,68 @@ export default function ToolShop({
   useEffect(() => {
     if (!characterId && characters.length) setCharacterId(characters[0].id);
   }, [characters, characterId]);
+
+  // Aba inicial: permite abrir a página direto em "Minerar" a partir da ficha.
+  useEffect(() => {
+    if (initialTab) setTab(initialTab);
+  }, [initialTab]);
+
+  // Personagem inicial: o botão "Minerar" de cada ficha abre a mineração já
+  // com aquele personagem selecionado.
+  useEffect(() => {
+    if (initialCharacterId) setCharacterId(initialCharacterId);
+  }, [initialCharacterId]);
+
+  // O histórico de descobertas é da sessão e do personagem selecionado.
+  useEffect(() => {
+    setMiningLog([]);
+  }, [characterId]);
+
+  // Restaura os cooldowns reais ao trocar de personagem ou recarregar a página.
+  useEffect(() => {
+    if (!characterId) {
+      setCooldowns({});
+      return undefined;
+    }
+    let alive = true;
+    api
+      .getMiningCooldowns?.(characterId)
+      .then((d) => {
+        if (!alive) return;
+        const agoraMs = Date.now();
+        const mapa = {};
+        for (const c of d?.cooldowns || []) {
+          if (c.restanteSeg > 0) mapa[c.veioId] = agoraMs + c.restanteSeg * 1000;
+        }
+        setCooldowns(mapa);
+      })
+      .catch(() => {
+        if (alive) setCooldowns({});
+      });
+    return () => {
+      alive = false;
+    };
+  }, [characterId]);
+
+  // Inventário de gemas do personagem selecionado (para o resumo da mineração).
+  useEffect(() => {
+    if (!characterId) {
+      setGemasPersonagem([]);
+      return undefined;
+    }
+    let alive = true;
+    api
+      .getCharacterGemsDetailed?.(characterId)
+      .then((d) => {
+        if (alive) setGemasPersonagem(d?.gems || []);
+      })
+      .catch(() => {
+        if (alive) setGemasPersonagem([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [characterId, gemsVersion]);
 
   // Inventário exibido = inventário real do personagem selecionado.
   useEffect(() => {
@@ -99,6 +168,24 @@ export default function ToolShop({
     return filtroRaridade === 'todas' ? lista : lista.filter((g) => g.raridade === filtroRaridade);
   }, [gemasLoja, filtroRaridade]);
 
+  const personagemAtual = characters.find((c) => c.id === characterId);
+
+  const gemasAgrupadas = useMemo(() => {
+    const mapa = new Map();
+    for (const g of gemasPersonagem) {
+      const estado = g.estado || 'polido';
+      const chave = `${g.gem_id}:${estado}`;
+      const atual = mapa.get(chave) || { gemId: g.gem_id, estado, qtd: 0 };
+      atual.qtd += 1;
+      mapa.set(chave, atual);
+    }
+    return [...mapa.values()].sort((a, b) => a.gemId.localeCompare(b.gemId));
+  }, [gemasPersonagem]);
+
+  const nomeEstado = (estado) => NIVEIS_POLIMENTO[estado]?.nome || estado;
+  const formatarHora = (ts) =>
+    new Date(ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
   const comprarGema = async (g) => {
     if (!characterId) return alerta('Escolha um personagem no topo da página.', 'erro');
     try {
@@ -126,6 +213,11 @@ export default function ToolShop({
       const nome = getGemaById(res.gemId)?.nome || res.gemId;
       alerta(`⛏️ Você encontrou ${nome}!`, 'sucesso');
       atualizarCarteira(res?.walletCents);
+      setMiningLog((log) => [
+        { gemId: res.gemId, nome, estado: res.estado, veio: veio.nome, at: Date.now() },
+        ...log,
+      ].slice(0, 8));
+      setGemsVersion((v) => v + 1);
       if (res?.cooldownMin) {
         setCooldowns((c) => ({ ...c, [veio.id]: Date.now() + res.cooldownMin * 60_000 }));
       }
@@ -260,11 +352,25 @@ export default function ToolShop({
 
         {tab === 'mine' && (
           <section className="panel">
-            <h2>⛏️ Mineração</h2>
+            <h2>⛏️ Mineração{personagemAtual ? ` — ${personagemAtual.name}` : ''}</h2>
             <p className="muted">
-              Escolha um veio e minere. Cada veio tem um cooldown próprio (por personagem).
-              As gemas encontradas já saem utilizáveis.
+              Escolha um veio e minere. Cada personagem tem cooldowns próprios por veio.
+              As gemas encontradas já saem utilizáveis e entram no inventário do personagem.
             </p>
+
+            <div className="mining-summary">
+              <span>🧙 Personagem: <strong>{personagemAtual?.name || 'Nenhum'}</strong></span>
+              <span>💎 Gemas: <strong>{gemasPersonagem.length}</strong></span>
+              <span>💰 Carteira: <strong>{formatCoins(carteira)}</strong></span>
+            </div>
+
+            {miningLog[0] && (
+              <div className="mining-last">
+                ⛏️ Última descoberta: <strong>{miningLog[0].nome}</strong>{' '}
+                <span className="muted">({nomeEstado(miningLog[0].estado)})</span> no veio {miningLog[0].veio}.
+              </div>
+            )}
+
             <div className="shop-grid">
               {(minerar.veios || []).map((v) => {
                 const restante = restanteCooldown(v);
@@ -286,13 +392,58 @@ export default function ToolShop({
                           ? `Aguarde ${Math.floor(restante / 60)}:${String(restante % 60).padStart(2, '0')}`
                           : mining
                             ? 'Minerando...'
-                            : 'Minerar'}
+                            : !characterId
+                              ? 'Escolha um personagem'
+                              : carteira < (v.custoCents || 0)
+                                ? 'Ouro insuficiente'
+                                : 'Minerar'}
                       </button>
                     </footer>
                   </article>
                 );
               })}
             </div>
+
+            <div className="mining-bottom">
+              <div className="mining-block">
+                <h3>📜 Últimas descobertas</h3>
+                {miningLog.length === 0 ? (
+                  <p className="muted small">Minere para registrar suas descobertas nesta sessão.</p>
+                ) : (
+                  <ul className="mining-list">
+                    {miningLog.map((item, i) => (
+                      <li key={`${item.gemId}-${item.at}-${i}`}>
+                        <span>
+                          💎 {item.nome}{' '}
+                          <span className="muted small">({nomeEstado(item.estado)})</span>
+                        </span>
+                        <span className="mining-list-meta">{item.veio} · {formatarHora(item.at)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="mining-block">
+                <h3>💎 Gemas de {personagemAtual?.name || 'seu personagem'}</h3>
+                {gemasAgrupadas.length === 0 ? (
+                  <p className="muted small">Nenhuma gema ainda. Minere ou compre na Loja de Gemas.</p>
+                ) : (
+                  <ul className="mining-list">
+                    {gemasAgrupadas.map((g) => (
+                      <li key={`${g.gemId}-${g.estado}`}>
+                        <span>💎 {getGemaById(g.gemId)?.nome || g.gemId}</span>
+                        <span className="mining-list-meta">{nomeEstado(g.estado)} ×{g.qtd}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="muted small">
+                  As gemas mineradas já saem utilizáveis. Use a Forja para fundir e polir.
+                </p>
+              </div>
+            </div>
+
             <p className="muted small">
               Dica: masmorras e batalhas também podem derrubar gemas automaticamente.
             </p>

@@ -42,6 +42,9 @@ export default function App({ initialView } = {}) {
   const [battleOrigin, setBattleOrigin] = useState('lobby');
   const [offlineMode, setOfflineMode] = useState(isOffline());
   const [walletCents, setWalletCents] = useState(0);
+  // Aba/personagem com que a Loja abre. Permite que o botão "Minerar" de uma
+  // ficha abra direto a mineração daquele personagem.
+  const [toolShopConfig, setToolShopConfig] = useState({ tab: 'tools', characterId: null });
 
   useEffect(() => {
     api
@@ -121,10 +124,16 @@ export default function App({ initialView } = {}) {
     setView('home');
   };
 
-  const abrirToolShop = async () => {
+  const abrirToolShop = async (opts = {}) => {
     await refreshWallet();
+    setToolShopConfig({
+      tab: opts.tab || 'tools',
+      characterId: opts.characterId || null,
+    });
     setView('toolShop');
   };
+
+  const abrirMineracao = (characterId) => abrirToolShop({ tab: 'mine', characterId });
 
   const abrirForja = async () => {
     await refreshWallet();
@@ -224,7 +233,8 @@ export default function App({ initialView } = {}) {
         onOpenCompendium={() => setView('compendium')}
         onOpenRules={() => setView('rules')}
         onOpenGemForge={abrirForja}
-        onOpenToolShop={abrirToolShop}
+        onOpenToolShop={() => abrirToolShop()}
+        onOpenMining={abrirMineracao}
         onOpenTavern={abrirTaverna}
         onOpenTableBattle={() => setView('tableBattle')}
         onOpenDungeons={() => setView('dungeons')}
@@ -259,7 +269,8 @@ export default function App({ initialView } = {}) {
         characters={characters}
         onRefresh={refreshCharacters}
         walletCents={walletCents}
-        onOpenToolShop={() => setView('toolShop')}
+        onOpenToolShop={() => abrirToolShop()}
+        onOpenMining={abrirMineracao}
         onEnterLobby={() => setView('lobby')}
       />
     </Suspense>;
@@ -278,6 +289,8 @@ export default function App({ initialView } = {}) {
         localAtual="Porto Ferro"
         characters={characters}
         player={player}
+        initialTab={toolShopConfig.tab}
+        initialCharacterId={toolShopConfig.characterId}
         onComprar={handleToolBuy}
         onWalletChange={setWalletCents}
         onRefresh={refreshCharacters}

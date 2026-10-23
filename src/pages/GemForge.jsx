@@ -91,7 +91,7 @@ function GemaSlot({ label, gema, pedras, onPick, onClear, onDrop }) {
   );
 }
 
-export default function GemForge({ onBack, player, characters = [], onRefresh, walletCents = 0, onOpenToolShop, onEnterLobby }) {
+export default function GemForge({ onBack, player, characters = [], onRefresh, walletCents = 0, onOpenToolShop, onOpenMining, onEnterLobby }) {
   const [characterId, setCharacterId] = useState(() => characters?.[0]?.id || null);
   const [inventario, setInventario] = useState([]);
   const [carregandoInv, setCarregandoInv] = useState(false);
@@ -322,8 +322,11 @@ export default function GemForge({ onBack, player, characters = [], onRefresh, w
             ser fundidas — não só as receitas especiais.
           </p>
           <div className="forge-quick-links">
+            {onOpenMining && characters.length > 0 && (
+              <button className="ghost" onClick={() => onOpenMining(characterId)}>⛏️ Minerar gemas</button>
+            )}
             {onOpenToolShop && (
-              <button className="ghost" onClick={onOpenToolShop}>🛠️ Comprar ou minerar gemas</button>
+              <button className="ghost" onClick={onOpenToolShop}>🛠️ Comprar gemas</button>
             )}
             {onEnterLobby && (
               <button className="ghost" onClick={onEnterLobby}>⚔️ Ganhar gemas em batalhas</button>
@@ -370,8 +373,11 @@ export default function GemForge({ onBack, player, characters = [], onRefresh, w
                 Gemas. Depois volte aqui para polir, fundir e equipar.
               </p>
               <div className="forge-quick-links" style={{ justifyContent: 'center' }}>
+                {onOpenMining && characters.length > 0 && (
+                  <button className="ghost" onClick={() => onOpenMining(characterId)}>⛏️ Minerar gemas</button>
+                )}
                 {onOpenToolShop && (
-                  <button className="ghost" onClick={onOpenToolShop}>🛠️ Ir para a Loja e mineração</button>
+                  <button className="ghost" onClick={onOpenToolShop}>🛠️ Ir à Loja</button>
                 )}
                 {onEnterLobby && (
                   <button className="ghost" onClick={onEnterLobby}>⚔️ Entrar no Campo de Batalha</button>

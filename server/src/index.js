@@ -441,6 +441,35 @@ app.post('/api/gems/mine', requireAuth, async (req, res) => {
   }
 });
 
+// Cooldowns de mineração por personagem/veio. O cliente usa isso para restaurar
+// os botões "Aguarde..." depois de recarregar a página ou trocar de personagem.
+app.get('/api/characters/:id/mining', requireAuth, async (req, res) => {
+  try {
+    const char = await getCharacter(req.params.id);
+    if (!char) throw new Error('Personagem não encontrado.');
+    if (char.player_id !== req.player.id) throw new Error('Este personagem não é seu.');
+
+    const { rows } = await query(
+      'SELECT veio_id, last_mined_at FROM character_mining WHERE character_id = $1',
+      [req.params.id],
+    );
+    const agora = Date.now();
+    const cooldowns = rows.map((row) => {
+      const veio = MINERA_VEIOS.find((v) => v.id === row.veio_id);
+      const cooldownMs = (veio?.cooldownMin || 0) * 60_000;
+      const passado = agora - new Date(row.last_mined_at).getTime();
+      return {
+        veioId: row.veio_id,
+        lastMinedAt: row.last_mined_at,
+        restanteSeg: Math.max(0, Math.ceil((cooldownMs - passado) / 1000)),
+      };
+    });
+    res.json({ ok: true, cooldowns });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
 app.post('/api/gems/shop/buy', requireAuth, async (req, res) => {
   try {
     const { characterId, gemId } = req.body || {};

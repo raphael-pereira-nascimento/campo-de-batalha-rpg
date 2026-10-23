@@ -837,6 +837,25 @@ export const api = {
     }
     return auth('/api/gems/initial', { method: 'POST', body: JSON.stringify({ characterId }) });
   },
+  getMiningCooldowns: (characterId) => {
+    if (isOffline()) {
+      const chave = `cbr_offline_mining_${characterId}`;
+      const minas = JSON.parse(localStorage.getItem(chave) || '{}');
+      const agora = Date.now();
+      const cooldowns = MINERA_VEIOS.map((veio) => {
+        const ultima = Number(minas[veio.id] || 0);
+        const cooldownMs = (veio.cooldownMin || 0) * 60_000;
+        const restante = ultima ? Math.max(0, cooldownMs - (agora - ultima)) : 0;
+        return {
+          veioId: veio.id,
+          lastMinedAt: ultima || null,
+          restanteSeg: Math.ceil(restante / 1000),
+        };
+      });
+      return Promise.resolve({ ok: true, cooldowns });
+    }
+    return auth(`/api/characters/${characterId}/mining`);
+  },
   mineGem: (characterId, veioId) => {
     if (isOffline()) {
       const veio = MINERA_VEIOS.find((v) => v.id === veioId) || MINERA_VEIOS[0];

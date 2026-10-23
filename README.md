@@ -196,6 +196,15 @@ npm run build
 | GET | `/api/shop` | - | Itens da loja |
 | POST | `/api/shop/buy` | ✓ | Comprar item |
 | GET | `/api/gamedata` | - | Dados do jogo |
+| GET | `/api/gems/catalog` | - | Catálogo de gemas e veios de mineração |
+| GET | `/api/characters/:id/gems/detailed` | ✓ | Inventário de gemas do personagem |
+| GET | `/api/characters/:id/mining` | ✓ | Cooldowns de mineração por veio |
+| POST | `/api/gems/mine` | ✓ | Minerar um veio |
+| POST | `/api/gems/shop/buy` | ✓ | Comprar gema |
+| POST | `/api/gems/fuse` | ✓ | Fundir gemas |
+| POST | `/api/gems/polish` | ✓ | Polir gema |
+| POST | `/api/characters/:id/socket` | ✓ | Encaixar gema em equipamento |
+| DELETE | `/api/characters/:id/socket` | ✓ | Remover gema de equipamento |
 | GET/POST/PUT/DELETE | `/api/custom-*` | ✓ | CRUD conteúdo customizado |
 
 ## Eventos Socket.IO

@@ -6,7 +6,7 @@ import { exportarFicha, importarFicha } from '../utils/fichaFile.js';
 import { api, isOffline } from '../api.js';
 import { shareCharacter, resolveSharedCharacter } from '../utils/shareCharacter.js';
 
-export default function Characters({ player, characters, gameData, customClasses = [], onRefresh, onEnterLobby, onOpenRegistry, onOpenCompendium, onOpenRules, onOpenGemForge, onOpenToolShop, onOpenTavern, onOpenTableBattle, onOpenDungeons, onLogout }) {
+export default function Characters({ player, characters, gameData, customClasses = [], onRefresh, onEnterLobby, onOpenRegistry, onOpenCompendium, onOpenRules, onOpenGemForge, onOpenToolShop, onOpenMining, onOpenTavern, onOpenTableBattle, onOpenDungeons, onLogout }) {
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState(null);
   const [importError, setImportError] = useState('');
@@ -54,7 +54,10 @@ export default function Characters({ player, characters, gameData, customClasses
       <nav className="subnav" aria-label="Atalhos do jogo">
         <button className="primary-link" onClick={onOpenRegistry}>📜 Registro do Mundo</button>
         <button className="primary-link" onClick={onOpenGemForge}>🔮 Forja de Gemas</button>
-        <button onClick={onOpenToolShop}>🛠️ Loja e mineração</button>
+        {characters.length > 0 && (
+          <button className="primary-link" onClick={() => onOpenMining?.(characters[0].id)}>⛏️ Mineração</button>
+        )}
+        <button onClick={onOpenToolShop}>🛠️ Loja e ferramentas</button>
         <button onClick={onOpenDungeons}>🗺️ Dungeons</button>
         <button onClick={onOpenTavern}>🍺 Taverna</button>
         <button onClick={onOpenCompendium}>⚔️ Arsenal</button>
@@ -99,7 +102,7 @@ export default function Characters({ player, characters, gameData, customClasses
               <ol className="onboard-steps">
                 <li><span className="step-num">1</span> Crie a <strong>ficha do seu personagem</strong> (raça, classe, atributos, golpes e equipamento).</li>
                 <li><span className="step-num">2</span> Entre no <strong>Campo de Batalha</strong> para lutar sozinho, em equipe ou contra o Mestre.</li>
-                <li><span className="step-num">3</span> Explore as <strong>Dungeons</strong>, equipe e funda <strong>gemas</strong> e publique criações no <strong>Registro do Mundo</strong>.</li>
+                <li><span className="step-num">3</span> Explore as <strong>Dungeons</strong>, minere <strong>gemas</strong>, equipe e funda na <strong>Forja</strong> e publique criações no <strong>Registro do Mundo</strong>.</li>
               </ol>
               <div className="onboard-actions">
                 <button onClick={() => setCreating(true)}>➕ Criar minha primeira ficha</button>
@@ -117,8 +120,8 @@ export default function Characters({ player, characters, gameData, customClasses
                 </div>
                 <div className="onboard-extra-card">
                   <strong>💎 Quer gemas?</strong>
-                  <p>Minere na Loja, compre gemas ou ganhe drops nas batalhas. Depois equipe e funda na Forja.</p>
-                  <button className="ghost" onClick={onOpenToolShop}>Abrir Loja e mineração</button>
+                  <p>Depois de criar a ficha, use o botão <strong>⛏️ Minerar</strong> no cartão do personagem. Cada personagem tem seus próprios cooldowns de mineração.</p>
+                  <button className="ghost" onClick={() => setCreating(true)}>➕ Criar ficha para minerar</button>
                 </div>
               </div>
             </div>
@@ -130,6 +133,7 @@ export default function Characters({ player, characters, gameData, customClasses
             <div key={c.id} className={selected === c.id ? 'char-card selected' : 'char-card'}>
               <CharacterSheet character={c} gameData={gameData} onChanged={onRefresh} />
               <div className="card-actions">
+                <button className="mine-action" onClick={() => onOpenMining?.(c.id)}>⛏️ Minerar</button>
                 <button className="ghost" onClick={() => exportarFicha(c)}>⬇️ Exportar ficha</button>
                 <button className="ghost" onClick={async () => {
                   try {
