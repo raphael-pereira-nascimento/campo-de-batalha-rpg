@@ -81,8 +81,8 @@ function effFor(attrs, races, classes, equipment) {
   const eff = { ...attrs };
   for (const [k, v] of Object.entries(raceBonusTotal(races))) eff[k] = (eff[k] || 0) + v;
   for (const [k, v] of Object.entries(classBonusTotal(classes))) eff[k] = (eff[k] || 0) + v;
-  // Equipamento: todas as armas do arsenal (até 3) + armadura.
-  const itens = [...armasDeEquipamento(equipment).map((e) => e.arma), equipment.armadura].filter(Boolean);
+  // Equipamento: todas as armas do arsenal (até 3) + armadura + acessório.
+  const itens = [...armasDeEquipamento(equipment).map((e) => e.arma), equipment.armadura, equipment.acessorio].filter(Boolean);
   for (const item of itens) {
     for (const [k, v] of Object.entries(item.bonus || {})) eff[k] = (eff[k] || 0) + v;
     for (const [k, v] of Object.entries(item.penalidade || {})) eff[k] = (eff[k] || 0) - Math.abs(v);
@@ -105,6 +105,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
   const [equipment, setEquipment] = useState({
     armas: { perto: null, distancia: null, utilitaria: null },
     armadura: null,
+    acessorio: null,
   });
   const [attrs, setAttrs] = useState(emptyAttrs());
   const [habilidades, setHabilidades] = useState([]);
@@ -192,6 +193,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
           arma:
             equipment.armas?.perto || equipment.armas?.distancia || equipment.armas?.utilitaria || null,
           armadura: equipment.armadura || null,
+          acessorio: equipment.acessorio || null,
         },
         habilidades,
       });
@@ -1419,6 +1421,7 @@ function Summary({ name, gender, races, classes, passiva, skills, ultimate, espe
         </p>
       ))}
       {equipment.armadura && <p className="muted small">🛡️ {equipment.armadura.nome}</p>}
+      {equipment.acessorio && <p className="muted small">💍 {equipment.acessorio.nome}</p>}
       <div className="form-meta">
         <span>Vida: <strong>{stats.hpMax}</strong></span>
         <span>Mana: <strong>{stats.mpMax}</strong></span>

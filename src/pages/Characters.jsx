@@ -6,7 +6,7 @@ import { exportarFicha, importarFicha } from '../utils/fichaFile.js';
 import { api, isOffline } from '../api.js';
 import { shareCharacter, resolveSharedCharacter } from '../utils/shareCharacter.js';
 
-export default function Characters({ player, characters, gameData, customClasses = [], onRefresh, onEnterLobby, onOpenRegistry, onOpenCompendium, onOpenRules, onOpenGemForge, onOpenToolShop, onOpenMining, onOpenTavern, onOpenTableBattle, onOpenDungeons, onLogout }) {
+export default function Characters({ player, characters, gameData, customClasses = [], onRefresh, onEnterLobby, onOpenRegistry, onOpenCompendium, onOpenRules, onOpenGemForge, onOpenToolShop, onOpenEquipmentShop, onOpenMining, onOpenTavern, onOpenTableBattle, onOpenDungeons, onLogout }) {
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState(null);
   const [importError, setImportError] = useState('');
@@ -57,7 +57,8 @@ export default function Characters({ player, characters, gameData, customClasses
         {characters.length > 0 && (
           <button className="primary-link" onClick={() => onOpenMining?.(characters[0].id)}>⛏️ Mineração</button>
         )}
-        <button onClick={onOpenToolShop}>🛠️ Loja e ferramentas</button>
+        <button onClick={() => onOpenEquipmentShop?.()}>🛒 Loja e equipamentos</button>
+        <button onClick={onOpenToolShop}>🛠️ Ferramentas</button>
         <button onClick={onOpenDungeons}>🗺️ Dungeons</button>
         <button onClick={onOpenTavern}>🍺 Taverna</button>
         <button onClick={onOpenCompendium}>⚔️ Arsenal</button>
@@ -131,9 +132,15 @@ export default function Characters({ player, characters, gameData, customClasses
         <div className="char-grid">
           {characters.map((c) => (
             <div key={c.id} className={selected === c.id ? 'char-card selected' : 'char-card'}>
-              <CharacterSheet character={c} gameData={gameData} onChanged={onRefresh} />
+              <CharacterSheet
+                character={c}
+                gameData={gameData}
+                onChanged={onRefresh}
+                onOpenShop={() => onOpenEquipmentShop?.(c.id)}
+              />
               <div className="card-actions">
                 <button className="mine-action" onClick={() => onOpenMining?.(c.id)}>⛏️ Minerar</button>
+                <button className="ghost" onClick={() => onOpenEquipmentShop?.(c.id)}>🛒 Equipamentos</button>
                 <button className="ghost" onClick={() => exportarFicha(c)}>⬇️ Exportar ficha</button>
                 <button className="ghost" onClick={async () => {
                   try {

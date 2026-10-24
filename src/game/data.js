@@ -224,49 +224,62 @@ export const ALCANCE_TYPES = {
 export const EQUIPMENT = {
   armas: {
     // ── Corpo a corpo (⚔️) ─────────────────────────
-    espada_curta: { nome: 'Espada Curta', tipo: 'arma', categoria: 'perto', danoBase: 4, bonus: { forca: 1 }, socketSlots: 1, alcance: 'corpo', recarga: 0, descricao: 'Lâmina curta e ágil, ideal para combate apertado.' },
-    espada_longa: { nome: 'Espada Longa', tipo: 'arma', categoria: 'perto', danoBase: 7, bonus: { forca: 2 }, socketSlots: 2, alcance: 'corpo', recarga: 0, descricao: 'Versátil e equilibrada, a clássica espada medieval.' },
-    machado_de_guerra: { nome: 'Machado de Guerra', tipo: 'arma', categoria: 'perto', danoBase: 9, bonus: { forca: 3 }, socketSlots: 3, alcance: 'corpo', recarga: 0, descricao: 'Pesado e devastador, machados cortam armaduras com facilidade.' },
-    adaga_dupla: { nome: 'Adaga Dupla', tipo: 'arma', categoria: 'perto', danoBase: 4, bonus: { destreza: 3 }, socketSlots: 1, alcance: 'corpo', recarga: 0, descricao: 'Lâminas gêmeas para o assassino implacável.' },
-    martelo_sagrado: { nome: 'Martelo Sagrado', tipo: 'arma', categoria: 'perto', danoBase: 6, bonus: { inteligencia: 1, resistencia: 1 }, socketSlots: 3, alcance: 'corpo', recarga: 0, descricao: 'Arma de clérigos, esmaga com fé inabalável.' },
-    adaga_ritual: { nome: 'Adaga Ritual', tipo: 'arma', categoria: 'perto', danoBase: 5, bonus: { reflexos: 2 }, socketSlots: 1, alcance: 'corpo', recarga: 0, descricao: 'Usada em rituais, corta com precisão sobrenatural.' },
-    espada_baioneta: { nome: 'Espada Baioneta', tipo: 'arma_fogo', categoria: 'perto', elemento: 'fogo', danoBase: 5, bonus: { forca: 1, destreza: 1 }, socketSlots: 1, alcance: 'corpo', recarga: 0, descricao: 'Mosquete com baioneta — funciona como lança em combate corpo a corpo.' },
+    espada_curta: { preco: 120, nome: 'Espada Curta', tipo: 'arma', categoria: 'perto', danoBase: 4, bonus: { forca: 1 }, socketSlots: 1, alcance: 'corpo', recarga: 0, descricao: 'Lâmina curta e ágil, ideal para combate apertado.' },
+    espada_longa: { preco: 650, nome: 'Espada Longa', tipo: 'arma', categoria: 'perto', danoBase: 7, bonus: { forca: 2 }, socketSlots: 2, alcance: 'corpo', recarga: 0, descricao: 'Versátil e equilibrada, a clássica espada medieval.' },
+    machado_de_guerra: { preco: 1400, nome: 'Machado de Guerra', tipo: 'arma', categoria: 'perto', danoBase: 9, bonus: { forca: 3 }, socketSlots: 3, alcance: 'corpo', recarga: 0, descricao: 'Pesado e devastador, machados cortam armaduras com facilidade.' },
+    adaga_dupla: { preco: 500, nome: 'Adaga Dupla', tipo: 'arma', categoria: 'perto', danoBase: 4, bonus: { destreza: 3 }, socketSlots: 1, alcance: 'corpo', recarga: 0, descricao: 'Lâminas gêmeas para o assassino implacável.' },
+    martelo_sagrado: { preco: 1100, nome: 'Martelo Sagrado', tipo: 'arma', categoria: 'perto', danoBase: 6, bonus: { inteligencia: 1, resistencia: 1 }, socketSlots: 3, alcance: 'corpo', recarga: 0, descricao: 'Arma de clérigos, esmaga com fé inabalável.' },
+    adaga_ritual: { preco: 700, nome: 'Adaga Ritual', tipo: 'arma', categoria: 'perto', danoBase: 5, bonus: { reflexos: 2 }, socketSlots: 1, alcance: 'corpo', recarga: 0, descricao: 'Usada em rituais, corta com precisão sobrenatural.' },
+    espada_baioneta: { preco: 1600, nome: 'Espada Baioneta', tipo: 'arma_fogo', categoria: 'perto', elemento: 'fogo', danoBase: 5, bonus: { forca: 1, destreza: 1 }, socketSlots: 1, alcance: 'corpo', recarga: 0, descricao: 'Mosquete com baioneta — funciona como lança em combate corpo a corpo.' },
 
     // ── À distância (🏹) ────────────────────────────
-    arco_simples: { nome: 'Arco Simples', tipo: 'arma', categoria: 'distancia', danoBase: 5, bonus: { destreza: 2 }, socketSlots: 2, alcance: 'longo', recarga: 0, descricao: 'Confiável e silencioso, perfeito para emboscadas.' },
-    arco_longo: { nome: 'Arco Longo', tipo: 'arma', categoria: 'distancia', danoBase: 8, bonus: { destreza: 3 }, socketSlots: 2, alcance: 'longo', recarga: 0, descricao: 'Alcance superior, letal à distância.' },
-    lanca_sagrada: { nome: 'Lança Sagrada', tipo: 'arma', categoria: 'distancia', danoBase: 8, bonus: { forca: 2, resistencia: 1 }, socketSlots: 2, alcance: 'medio', recarga: 0, descricao: 'Alcance superior — perfura inimigos antes que cheguem perto.' },
-    cajado_arcano: { nome: 'Cajado Arcano', tipo: 'arma', categoria: 'distancia', danoBase: 3, bonus: { inteligencia: 2 }, socketSlots: 2, alcance: 'longo', recarga: 0, descricao: 'Canaliza energia arcanosa através de um cristal precioso.' },
-    orbe_magico: { nome: 'Orbe Mágico', tipo: 'arma', categoria: 'distancia', danoBase: 2, bonus: { inteligencia: 3 }, socketSlots: 1, alcance: 'longo', recarga: 0, descricao: 'Esfera flutuante que amplifica magia pura.' },
-    pistola: { nome: 'Pistola', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 5, bonus: { destreza: 1 }, socketSlots: 1, alcance: 'longo', recarga: 1, descricao: 'Rápida e barata, mas a mais fraca das armas de fogo.' },
-    mosquete: { nome: 'Mosquete', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 9, bonus: { forca: 1 }, socketSlots: 2, alcance: 'longo', recarga: 2, descricao: 'O clássico — lento mas devastador.' },
-    bacamarte: { nome: 'Bacamarte', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 7, bonus: { forca: 1 }, socketSlots: 1, alcance: 'medio', recarga: 2, alvo: 'cone', alvos: 3, descricao: 'Dispara chumbos em cone, eficaz contra grupos.' },
-    rifle_de_caca: { nome: 'Rifle de Caça', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 10, bonus: { destreza: 2 }, socketSlots: 2, alcance: 'longo', recarga: 2, descricao: 'Precisão cirúrgica e o maior dano entre as armas de fogo — cara e rara.' },
-    besta_pesada: { nome: 'Besta Pesada', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 6, bonus: { forca: 1 }, socketSlots: 2, alcance: 'longo', recarga: 2, descricao: 'Mais lenta que arco mas ignora parcialmente defesa.' },
-    cajado_de_fogo: { nome: 'Cajado de Fogo', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 4, bonus: { inteligencia: 2 }, socketSlots: 2, alcance: 'longo', recarga: 1, descricao: 'Cajado arcano que dispara projéteis de fogo incandescentes.' },
-    arco_composto: { nome: 'Arco Composto', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 7, bonus: { destreza: 2 }, socketSlots: 2, alcance: 'longo', recarga: 0, descricao: 'Arco reforçado com lâmina — multiclasse de precisão.' },
-    canhao_de_mao: { nome: 'Canhão de Mão', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 11, bonus: { forca: 1 }, socketSlots: 2, alcance: 'medio', recarga: 3, alvo: 'explosao', alvos: 3, splash: 0.5, descricao: 'Disparo explosivo: atinge o alvo principal e os vizinhos com estilhaços. Devastador, de recarga longuíssima.' },
+    arco_simples: { preco: 140, nome: 'Arco Simples', tipo: 'arma', categoria: 'distancia', danoBase: 5, bonus: { destreza: 2 }, socketSlots: 2, alcance: 'longo', recarga: 0, descricao: 'Confiável e silencioso, perfeito para emboscadas.' },
+    arco_longo: { preco: 750, nome: 'Arco Longo', tipo: 'arma', categoria: 'distancia', danoBase: 8, bonus: { destreza: 3 }, socketSlots: 2, alcance: 'longo', recarga: 0, descricao: 'Alcance superior, letal à distância.' },
+    lanca_sagrada: { preco: 900, nome: 'Lança Sagrada', tipo: 'arma', categoria: 'distancia', danoBase: 8, bonus: { forca: 2, resistencia: 1 }, socketSlots: 2, alcance: 'medio', recarga: 0, descricao: 'Alcance superior — perfura inimigos antes que cheguem perto.' },
+    cajado_arcano: { preco: 800, nome: 'Cajado Arcano', tipo: 'arma', categoria: 'distancia', danoBase: 3, bonus: { inteligencia: 2 }, socketSlots: 2, alcance: 'longo', recarga: 0, descricao: 'Canaliza energia arcanosa através de um cristal precioso.' },
+    orbe_magico: { preco: 950, nome: 'Orbe Mágico', tipo: 'arma', categoria: 'distancia', danoBase: 2, bonus: { inteligencia: 3 }, socketSlots: 1, alcance: 'longo', recarga: 0, descricao: 'Esfera flutuante que amplifica magia pura.' },
+    pistola: { preco: 300, nome: 'Pistola', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 5, bonus: { destreza: 1 }, socketSlots: 1, alcance: 'longo', recarga: 1, descricao: 'Rápida e barata, mas a mais fraca das armas de fogo.' },
+    mosquete: { preco: 1000, nome: 'Mosquete', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 9, bonus: { forca: 1 }, socketSlots: 2, alcance: 'longo', recarga: 2, descricao: 'O clássico — lento mas devastador.' },
+    bacamarte: { preco: 800, nome: 'Bacamarte', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 7, bonus: { forca: 1 }, socketSlots: 1, alcance: 'medio', recarga: 2, alvo: 'cone', alvos: 3, descricao: 'Dispara chumbos em cone, eficaz contra grupos.' },
+    rifle_de_caca: { preco: 2500, nome: 'Rifle de Caça', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 10, bonus: { destreza: 2 }, socketSlots: 2, alcance: 'longo', recarga: 2, descricao: 'Precisão cirúrgica e o maior dano entre as armas de fogo — cara e rara.' },
+    besta_pesada: { preco: 900, nome: 'Besta Pesada', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 6, bonus: { forca: 1 }, socketSlots: 2, alcance: 'longo', recarga: 2, descricao: 'Mais lenta que arco mas ignora parcialmente defesa.' },
+    cajado_de_fogo: { preco: 1200, nome: 'Cajado de Fogo', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 4, bonus: { inteligencia: 2 }, socketSlots: 2, alcance: 'longo', recarga: 1, descricao: 'Cajado arcano que dispara projéteis de fogo incandescentes.' },
+    arco_composto: { preco: 1300, nome: 'Arco Composto', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 7, bonus: { destreza: 2 }, socketSlots: 2, alcance: 'longo', recarga: 0, descricao: 'Arco reforçado com lâmina — multiclasse de precisão.' },
+    canhao_de_mao: { preco: 3500, nome: 'Canhão de Mão', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 11, bonus: { forca: 1 }, socketSlots: 2, alcance: 'medio', recarga: 3, alvo: 'explosao', alvos: 3, splash: 0.5, descricao: 'Disparo explosivo: atinge o alvo principal e os vizinhos com estilhaços. Devastador, de recarga longuíssima.' },
     // Valores PROVISÓRIOS. `recarga` = turnos de espera do personagem após cada
     // disparo (armas de fogo); use 0 para armas que não recarregam.
-    pistola_de_latao: { nome: 'Pistola de Latão', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 6, bonus: { destreza: 2 }, socketSlots: 1, alcance: 'longo', recarga: 1, descricao: 'Cano de latão polido — precisa e rápida de recarregar.' },
-    pistola_da_marinha: { nome: 'Pistola da Marinha', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 7, bonus: { forca: 1, destreza: 1 }, socketSlots: 2, alcance: 'medio', recarga: 1, descricao: 'Feita para o sal e a pólvora: robusta e certeira de perto.' },
-    nock_gun: { nome: 'Nock Gun', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 8, bonus: { forca: 2 }, socketSlots: 2, alcance: 'medio', recarga: 3, alvo: 'cone', alvos: 4, descricao: 'Sete canos disparados de uma vez: uma saraivada devastadora contra o grupo (recarga longa).' },
+    pistola_de_latao: { preco: 450, nome: 'Pistola de Latão', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 6, bonus: { destreza: 2 }, socketSlots: 1, alcance: 'longo', recarga: 1, descricao: 'Cano de latão polido — precisa e rápida de recarregar.' },
+    pistola_da_marinha: { preco: 850, nome: 'Pistola da Marinha', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 7, bonus: { forca: 1, destreza: 1 }, socketSlots: 2, alcance: 'medio', recarga: 1, descricao: 'Feita para o sal e a pólvora: robusta e certeira de perto.' },
+    nock_gun: { preco: 2200, nome: 'Nock Gun', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 8, bonus: { forca: 2 }, socketSlots: 2, alcance: 'medio', recarga: 3, alvo: 'cone', alvos: 4, descricao: 'Sete canos disparados de uma vez: uma saraivada devastadora contra o grupo (recarga longa).' },
 
     // ── Utilitárias (🧰) — possuem limites de uso por batalha ──
     // Valores de dano/usos/efeito são PROVISÓRIOS: ajuste tudo neste bloco.
-    rede_encantada: { nome: 'Rede Encantada', tipo: 'arma', categoria: 'utilitaria', danoBase: 2, usosMax: 3, efeito: { tipo: 'lentidao', turnos: 2 }, socketSlots: 0, alcance: 'medio', recarga: 0, descricao: 'Emaranha o alvo por 2 turnos, reduzindo precisão e esquiva.' },
-    frasco_incendiario: { nome: 'Frasco Incendiário', tipo: 'arma', categoria: 'utilitaria', elemento: 'fogo', danoBase: 3, usosMax: 2, efeito: { tipo: 'queimadura', dano: 80, turnos: 3 }, socketSlots: 0, alcance: 'medio', recarga: 1, descricao: 'Incendeia o alvo, causando Queimadura por 3 turnos.' },
-    veneno_de_caca: { nome: 'Veneno de Caça', tipo: 'arma', categoria: 'utilitaria', danoBase: 2, usosMax: 3, efeito: { tipo: 'veneno', dano: 60, turnos: 3 }, socketSlots: 0, alcance: 'medio', recarga: 1, descricao: 'Envenena o alvo, causando dano por 3 turnos.' },
-    gaz_de_cegueira: { nome: 'Gás de Cegueira', tipo: 'arma', categoria: 'utilitaria', danoBase: 1, usosMax: 2, efeito: { tipo: 'cegueira', turnos: 2 }, socketSlots: 0, alcance: 'medio', recarga: 2, descricao: 'Cega o alvo por 2 turnos, reduzindo muito a chance de acerto.' },
+    rede_encantada: { preco: 250, nome: 'Rede Encantada', tipo: 'arma', categoria: 'utilitaria', danoBase: 2, usosMax: 3, efeito: { tipo: 'lentidao', turnos: 2 }, socketSlots: 0, alcance: 'medio', recarga: 0, descricao: 'Emaranha o alvo por 2 turnos, reduzindo precisão e esquiva.' },
+    frasco_incendiario: { preco: 200, nome: 'Frasco Incendiário', tipo: 'arma', categoria: 'utilitaria', elemento: 'fogo', danoBase: 3, usosMax: 2, efeito: { tipo: 'queimadura', dano: 80, turnos: 3 }, socketSlots: 0, alcance: 'medio', recarga: 1, descricao: 'Incendeia o alvo, causando Queimadura por 3 turnos.' },
+    veneno_de_caca: { preco: 300, nome: 'Veneno de Caça', tipo: 'arma', categoria: 'utilitaria', danoBase: 2, usosMax: 3, efeito: { tipo: 'veneno', dano: 60, turnos: 3 }, socketSlots: 0, alcance: 'medio', recarga: 1, descricao: 'Envenena o alvo, causando dano por 3 turnos.' },
+    gaz_de_cegueira: { preco: 350, nome: 'Gás de Cegueira', tipo: 'arma', categoria: 'utilitaria', danoBase: 1, usosMax: 2, efeito: { tipo: 'cegueira', turnos: 2 }, socketSlots: 0, alcance: 'medio', recarga: 2, descricao: 'Cega o alvo por 2 turnos, reduzindo muito a chance de acerto.' },
   },
   armaduras: {
-    roupa_de_aventureiro: { nome: 'Roupa de Aventureiro', tipo: 'armadura', defesa: 2, socketSlots: 1, descricao: 'Proteção básica, leve e flexível.' },
-    couro: { nome: 'Armadura de Couro', tipo: 'armadura', defesa: 4, socketSlots: 2, descricao: 'Boa proteção sem sacrificar mobilidade.' },
-    cota_de_malha: { nome: 'Cota de Malha', tipo: 'armadura', defesa: 6, socketSlots: 3, penalidade: { reflexos: -1 }, descricao: 'Malha de anéis entrelaços — robusta e confiável.' },
-    armadura_de_placas: { nome: 'Armadura de Placas', tipo: 'armadura', defesa: 9, socketSlots: 4, penalidade: { reflexos: -1, destreza: -1 }, descricao: 'Fortaleza ambulante — pesada mas praticamente impenetrável.' },
-    manto_arcano: { nome: 'Manto Arcano', tipo: 'armadura', defesa: 3, socketSlots: 2, bonus: { inteligencia: 1 }, descricao: 'Tecido encantado que canaliza mana e protege o conjurador.' },
-    vestes_sagradas: { nome: 'Vestes Sagradas', tipo: 'armadura', defesa: 3, socketSlots: 2, bonus: { inteligencia: 1 }, descricao: 'Roupas rituais imbuídas de fé divina.' },
-    armadura_leve: { nome: 'Armadura Leve', tipo: 'armadura', defesa: 5, socketSlots: 2, bonus: { reflexos: 1 }, descricao: 'Proteção reforçada com mobilidade.' },
+    roupa_de_aventureiro: { preco: 80, nome: 'Roupa de Aventureiro', tipo: 'armadura', defesa: 2, socketSlots: 1, descricao: 'Proteção básica, leve e flexível.' },
+    couro: { preco: 300, nome: 'Armadura de Couro', tipo: 'armadura', defesa: 4, socketSlots: 2, descricao: 'Boa proteção sem sacrificar mobilidade.' },
+    cota_de_malha: { preco: 800, nome: 'Cota de Malha', tipo: 'armadura', defesa: 6, socketSlots: 3, penalidade: { reflexos: -1 }, descricao: 'Malha de anéis entrelaços — robusta e confiável.' },
+    armadura_de_placas: { preco: 2400, nome: 'Armadura de Placas', tipo: 'armadura', defesa: 9, socketSlots: 4, penalidade: { reflexos: -1, destreza: -1 }, descricao: 'Fortaleza ambulante — pesada mas praticamente impenetrável.' },
+    manto_arcano: { preco: 650, nome: 'Manto Arcano', tipo: 'armadura', defesa: 3, socketSlots: 2, bonus: { inteligencia: 1 }, descricao: 'Tecido encantado que canaliza mana e protege o conjurador.' },
+    vestes_sagradas: { preco: 650, nome: 'Vestes Sagradas', tipo: 'armadura', defesa: 3, socketSlots: 2, bonus: { inteligencia: 1 }, descricao: 'Roupas rituais imbuídas de fé divina.' },
+    armadura_leve: { preco: 550, nome: 'Armadura Leve', tipo: 'armadura', defesa: 5, socketSlots: 2, bonus: { reflexos: 1 }, descricao: 'Proteção reforçada com mobilidade.' },
+  },
+  acessorios: {
+    anel_de_forca: { nome: 'Anel de Força', tipo: 'acessorio', categoria: 'acessorio', preco: 350, icone: '💍', bonus: { forca: 1 }, socketSlots: 1, descricao: 'Um anel simples que canaliza a força bruta de quem o usa.' },
+    anel_do_vento: { nome: 'Anel do Vento', tipo: 'acessorio', categoria: 'acessorio', preco: 750, icone: '💍', bonus: { reflexos: 2 }, socketSlots: 1, descricao: 'Pequeno redemoinho preso em metal; aguça os reflexos do portador.' },
+    brinco_de_destreza: { nome: 'Brinco de Destreza', tipo: 'acessorio', categoria: 'acessorio', preco: 400, icone: '💠', bonus: { destreza: 1 }, socketSlots: 1, descricao: 'Leve como uma pluma, melhora a coordenação dos movimentos.' },
+    amuleto_de_vitalidade: { nome: 'Amuleto de Vitalidade', tipo: 'acessorio', categoria: 'acessorio', preco: 900, icone: '📿', bonus: { resistencia: 2 }, socketSlots: 1, descricao: 'Pedra âmbar que fortalece o corpo e a resistência do usuário.' },
+    luvas_de_precisao: { nome: 'Luvas de Precisão', tipo: 'acessorio', categoria: 'acessorio', preco: 850, icone: '🧤', bonus: { destreza: 2 }, socketSlots: 1, descricao: 'Luvas de couro fino que estabilizam a mão na hora do golpe.' },
+    cinto_do_colosso: { nome: 'Cinto do Colosso', tipo: 'acessorio', categoria: 'acessorio', preco: 1000, icone: '🥋', bonus: { forca: 2 }, penalidade: { reflexos: -1 }, socketSlots: 1, descricao: 'Cinto pesado de couro e ferro; dá força, mas limita a agilidade.' },
+    bracelete_arcano: { nome: 'Bracelete Arcano', tipo: 'acessorio', categoria: 'acessorio', preco: 700, icone: '🧿', bonus: { inteligencia: 1, resistencia: 1 }, socketSlots: 1, descricao: 'Runas gravadas em prata ajudam a canalizar e suportar magia.' },
+    talisma_arcano: { nome: 'Talismã Arcano', tipo: 'acessorio', categoria: 'acessorio', preco: 1200, icone: '🔮', bonus: { inteligencia: 2 }, socketSlots: 2, descricao: 'Cristal suspenso que amplia o poder arcano do portador.' },
+    coroa_do_sabio: { nome: 'Coroa do Sábio', tipo: 'acessorio', categoria: 'acessorio', preco: 2600, icone: '👑', bonus: { inteligencia: 3 }, socketSlots: 2, descricao: 'Coroa de metal antigo; dizem que sussurra segredos ao portador.' },
+    medalhao_do_guardiao: { nome: 'Medalhão do Guardião', tipo: 'acessorio', categoria: 'acessorio', preco: 2600, icone: '🛡️', bonus: { resistencia: 3 }, socketSlots: 2, descricao: 'Símbolo de um guardião ancestral, reforça a defesa do corpo.' },
+    pingente_da_sorte: { nome: 'Pingente da Sorte', tipo: 'acessorio', categoria: 'acessorio', preco: 3000, icone: '🍀', bonus: { forca: 1, destreza: 1, reflexos: 1 }, socketSlots: 1, descricao: 'Um trevo de quatro folhas banhado a ouro; sorte em todas as frentes.' },
   },
 };
 
@@ -829,9 +842,9 @@ export function effectiveAttributes(attributes, equipment = {}, races = null, cl
     for (const [k, v] of Object.entries(rb)) eff[k] = (eff[k] || 0) + v;
   }
   for (const [k, v] of Object.entries(classBonusTotal(classes))) eff[k] = (eff[k] || 0) + v;
-  // Equipamento: armas equipadas (até 3) + armadura somam bônus/malefícios.
+  // Equipamento: armas equipadas (até 3) + armadura + acessório somam bônus/malefícios.
   // A arma legada equipment.arma entra via armasDeEquipamento sem duplicar.
-  for (const item of armasDeEquipamento(equipment).map((e) => e.arma).concat([equipment.armadura]).filter(Boolean)) {
+  for (const item of armasDeEquipamento(equipment).map((e) => e.arma).concat([equipment.armadura, equipment.acessorio]).filter(Boolean)) {
     if (!item) continue;
     if (item.bonus) {
       for (const [k, v] of Object.entries(item.bonus)) eff[k] = (eff[k] || 0) + v;

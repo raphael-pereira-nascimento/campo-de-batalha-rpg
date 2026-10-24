@@ -85,6 +85,35 @@ describe('effectiveAttributes', () => {
     const eff = effectiveAttributes(attrs, { armadura: { penalidade: { destreza: 5 } } });
     expect(eff.destreza).toBe(1);
   });
+
+  it('aplica bônus e penalidade do acessório equipado', () => {
+    const attrs = { forca: 5, inteligencia: 3, resistencia: 4, destreza: 3, reflexos: 3 };
+    const eff = effectiveAttributes(attrs, {
+      acessorio: { id: 'cinto_do_colosso', bonus: { forca: 2 }, penalidade: { reflexos: -1 } },
+    });
+    expect(eff.forca).toBe(7);
+    expect(eff.reflexos).toBe(2);
+  });
+});
+
+describe('catálogo de equipamentos da loja', () => {
+  it('armas, armaduras e acessórios têm preço em cobre', () => {
+    for (const grupo of ['armas', 'armaduras', 'acessorios']) {
+      for (const [id, item] of Object.entries(EQUIPMENT[grupo])) {
+        expect(Number(item.preco), grupo + '.' + id).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('possui acessórios equipáveis com bônus', () => {
+    const acessorios = Object.values(EQUIPMENT.acessorios);
+    expect(acessorios.length).toBeGreaterThanOrEqual(8);
+    for (const item of acessorios) {
+      expect(item.tipo).toBe('acessorio');
+      expect(Object.keys(item.bonus || {}).length).toBeGreaterThan(0);
+      expect(item.socketSlots).toBeGreaterThanOrEqual(1);
+    }
+  });
 });
 
 describe('deriveStats — vida/mana pela classe primária', () => {

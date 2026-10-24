@@ -9,6 +9,8 @@ import {
   formatCoins,
 } from '../game/tools.js';
 import { getGemaById, NIVEIS_POLIMENTO } from '../game/gems.js';
+import { EQUIPMENT } from '../game/data.js';
+import { ATTRIBUTES, ATTRIBUTE_NAMES } from '../config.js';
 import { api } from '../api.js';
 
 const ICONE_TRACKER = { peso: '🏋️', espacos: '🎒', usos: '🔧' };
@@ -16,6 +18,89 @@ const RARITY_ORDER = { comum: 0, incomum: 1, rara: 2, epica: 3, lendaria: 4 };
 
 function rotuloRaridade(r) {
   return { comum: 'Comum', incomum: 'Incomum', rara: 'Rara', epica: 'Épica', lendaria: 'Lendária' }[r] || r;
+}
+
+// Catálogo plano da loja de equipamentos. Preços em cobre (ℛ).
+const EQUIPAMENTOS = [
+  ...Object.entries(EQUIPMENT.armas).map(([id, it]) => ({
+    id,
+    ...it,
+    grupo: it.categoria || 'perto',
+  })),
+  ...Object.entries(EQUIPMENT.armaduras).map(([id, it]) => ({
+    id,
+    ...it,
+    grupo: 'armaduras',
+  })),
+  ...Object.entries(EQUIPMENT.acessorios || {}).map(([id, it]) => ({
+    id,
+    ...it,
+    grupo: 'acessorios',
+  })),
+];
+
+const EQUIP_CATEGORIAS = [
+  { id: 'todos', nome: 'Todos', icone: '✨' },
+  { id: 'perto', nome: 'Corpo a corpo', icone: '⚔️' },
+  { id: 'distancia', nome: 'À distância', icone: '🏹' },
+  { id: 'utilitaria', nome: 'Utilitárias', icone: '🧰' },
+  { id: 'armaduras', nome: 'Armaduras', icone: '🛡️' },
+  { id: 'acessorios', nome: 'Acessórios', icone: '💍' },
+];
+
+function raridadePorPreco(preco) {
+  if (preco >= 3000) return 'lendaria';
+  if (preco >= 1500) return 'epica';
+  if (preco >= 700) return 'rara';
+  if (preco >= 300) return 'incomum';
+  return 'comum';
+}
+
+function iconeEquipamento(item) {
+  if (item.icone) return item.icone;
+  if (item.tipo === 'armadura') return '🛡️';
+  if (item.tipo === 'acessorio') return '💍';
+  const grupo = item.grupo || item.categoria;
+  if (grupo === 'distancia') return '🏹';
+  if (grupo === 'utilitaria') return '🧰';
+  return '⚔️';
+}
+
+function grupoEquipamento(item) {
+  return {
+    perto: 'Corpo a corpo',
+    distancia: 'À distância',
+    utilitaria: 'Utilitária',
+    armaduras: 'Armadura',
+    acessorios: 'Acessório',
+  }[item.grupo] || item.grupo;
+}
+
+function resumoEquipamento(item) {
+  const linhas = [];
+  if (item.danoBase != null) linhas.push(`⚔️ Dano ${item.danoBase}`);
+  if (item.defesa != null) linhas.push(`🛡️ Defesa ${item.defesa}`);
+  for (const k of ATTRIBUTES) {
+    const v = Number(item.bonus?.[k] || 0);
+    if (v) linhas.push(`${v > 0 ? '+' : ''}${v} ${ATTRIBUTE_NAMES[k]}`);
+  }
+  for (const k of ATTRIBUTES) {
+    const v = Number(item.penalidade?.[k] || 0);
+    if (v) linhas.push(`-${Math.abs(v)} ${ATTRIBUTE_NAMES[k]}`);
+  }
+  if (item.socketSlots) {
+    linhas.push(`💎 ${item.socketSlots} slot${item.socketSlots > 1 ? 's' : ''} de gema`);
+  }
+  if (item.usosMax) linhas.push(`🔧 ${item.usosMax} usos`);
+  if (item.recarga) linhas.push(`⏳ Recarga ${item.recarga}`);
+  if (item.alcance) linhas.push(`🎯 ${item.alcance}`);
+  return linhas;
+}
+
+function contarEquipamentos(grupo) {
+  return grupo === 'todos'
+    ? EQUIPAMENTOS.length
+    : EQUIPAMENTOS.filter((it) => it.grupo === grupo).length;
 }
 
 export default function ToolShop({
@@ -45,6 +130,8 @@ export default function ToolShop({
   const [cooldowns, setCooldowns] = useState({});
   const [agora, setAgora] = useState(Date.now());
   const [filtroRaridade, setFiltroRaridade] = useState('todas');
+  const [equipCategory, setEquipCategory] = useState('todos');
+  const [equipSort, setEquipSort] = useState('preco');
   const [miningLog, setMiningLog] = useState([]);
   const [gemasPersonagem, setGemasPersonagem] = useState([]);
   const [gemsVersion, setGemsVersion] = useState(0);
@@ -170,6 +257,67 @@ export default function ToolShop({
 
   const personagemAtual = characters.find((c) => c.id === characterId);
 
+  const equipamentosFiltrados = useMemo(() => {
+    const lista = EQUIPAMENTOS.filter(
+      (it) => equipCategory === 'todos' || it.grupo === equipCategory,
+    );
+    return lista.slice().sort((a, b) => {
+      if (equipSort === 'nome') return a.nome.localeCompare(b.nome);
+      if (equipSort === 'dano') return (b.danoBase || 0) - (a.danoBase || 0);
+      if (equipSort === 'defesa') return (b.defesa || 0) - (a.defesa || 0);
+      return (a.preco || 0) - (b.preco || 0) || a.nome.localeCompare(b.nome);
+    });
+  }, [equipCategory, equipSort]);
+
+  const equipamentosPossuidosList = (() => {
+    if (!personagemAtual) return [];
+    const mapa = new Map();
+    for (const it of personagemAtual.inventory || []) {
+      if (it && ['arma', 'arma_fogo', 'armadura', 'acessorio'].includes(it.tipo)) {
+        mapa.set(it.id, it);
+      }
+    }
+    const eq = personagemAtual.equipment || {};
+    for (const it of [eq.arma, eq.armadura, eq.acessorio, ...Object.values(eq.armas || {})]) {
+      if (it?.id && !mapa.has(it.id)) mapa.set(it.id, it);
+    }
+    return [...mapa.values()];
+  })();
+
+  const equipamentoPossuido = (item) =>
+    equipamentosPossuidosList.some((it) => it.id === item.id);
+
+  const equipamentoEquipado = (item) => {
+    const eq = personagemAtual?.equipment || {};
+    if (item.tipo === 'armadura') return eq.armadura?.id === item.id;
+    if (item.tipo === 'acessorio') return eq.acessorio?.id === item.id;
+    return eq.armas?.[item.categoria]?.id === item.id || eq.arma?.id === item.id;
+  };
+
+  const comprarEquipamento = async (item) => {
+    if (!characterId) {
+      alerta('Escolha um personagem no topo da página.', 'erro');
+      return;
+    }
+    if (equipamentoPossuido(item)) {
+      alerta('Você já possui este equipamento.', 'erro');
+      return;
+    }
+    if (carteira < (item.preco || 0)) {
+      alerta(`❌ Ouro insuficiente para comprar ${item.nome}.`, 'erro');
+      return;
+    }
+    try {
+      const res = await api.buyEquipment?.(characterId, item);
+      atualizarCarteira(res?.walletCents);
+      setInventario((inv) => [...inv, res?.item || item]);
+      alerta(`✅ ${item.nome} comprado! Equipe na ficha do personagem.`, 'sucesso');
+      if (onRefresh) await onRefresh();
+    } catch (e) {
+      alerta(`❌ ${e.message}`, 'erro');
+    }
+  };
+
   const gemasAgrupadas = useMemo(() => {
     const mapa = new Map();
     for (const g of gemasPersonagem) {
@@ -274,8 +422,8 @@ export default function ToolShop({
     <div className="page tools-shop-page">
       <header className="topbar">
         <div>
-          <h1>🛠️ Loja</h1>
-          <span className="player-name">Ferramentas, Gemas e Mineração</span>
+          <h1>🛒 Loja</h1>
+          <span className="player-name">Equipamentos, Ferramentas, Gemas e Mineração</span>
         </div>
         <div className="topbar-actions">
           <span className="wallet-chip" title="Sua carteira">💰 {formatCoins(carteira)}</span>
@@ -300,15 +448,138 @@ export default function ToolShop({
             ))}
           </select>
           {!characterId && (
-            <span className="muted small">Crie um personagem para comprar gemas e minerar.</span>
+            <span className="muted small">Crie um personagem para comprar equipamentos, gemas e minerar.</span>
           )}
         </div>
 
         <div className="shop-tabs">
+          <button className={tab === 'equipment' ? 'active' : ''} onClick={() => setTab('equipment')}>⚔️ Equipamentos</button>
           <button className={tab === 'tools' ? 'active' : ''} onClick={() => setTab('tools')}>🛠️ Ferramentas</button>
           <button className={tab === 'gems' ? 'active' : ''} onClick={() => setTab('gems')}>💎 Loja de Gemas</button>
           <button className={tab === 'mine' ? 'active' : ''} onClick={() => setTab('mine')}>⛏️ Minerar</button>
         </div>
+
+        {tab === 'equipment' && (
+          <section className="panel equipment-shop">
+            <div className="equipment-shop-head">
+              <div>
+                <h2>⚔️ Equipamentos</h2>
+                <p className="muted">
+                  Armas, armaduras e acessórios. A compra vai para o inventário do
+                  personagem selecionado — depois é só equipar na ficha.
+                </p>
+              </div>
+              <div className="equipment-shop-controls">
+                <label htmlFor="equip-sort">Ordenar por</label>
+                <select id="equip-sort" value={equipSort} onChange={(e) => setEquipSort(e.target.value)}>
+                  <option value="preco">Menor preço</option>
+                  <option value="nome">Nome</option>
+                  <option value="dano">Maior dano</option>
+                  <option value="defesa">Maior defesa</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="equipment-summary">
+              <span>🧙 <strong>{personagemAtual?.name || 'Nenhum personagem'}</strong></span>
+              <span>💰 <strong>{formatCoins(carteira)}</strong></span>
+              <span>🎒 <strong>{equipamentosPossuidosList.length}</strong> equipamento(s)</span>
+            </div>
+
+            <div className="equip-category-tabs">
+              {EQUIP_CATEGORIAS.map((cat) => (
+                <button
+                  key={cat.id}
+                  className={equipCategory === cat.id ? 'active' : ''}
+                  onClick={() => setEquipCategory(cat.id)}
+                >
+                  <span>{cat.icone} {cat.nome}</span>
+                  <span className="equip-count">{contarEquipamentos(cat.id)}</span>
+                </button>
+              ))}
+            </div>
+
+            {equipamentosFiltrados.length === 0 ? (
+              <p className="muted">Nenhum equipamento nesta categoria.</p>
+            ) : (
+              <div className="shop-grid equipment-grid">
+                {equipamentosFiltrados.map((item) => {
+                  const possui = equipamentoPossuido(item);
+                  const equipado = equipamentoEquipado(item);
+                  const preco = Number(item.preco || 0);
+                  const semMoedas = carteira < preco;
+                  const raridade = raridadePorPreco(preco);
+                  return (
+                    <article
+                      className={`shop-card equipment-card ${equipado ? 'equipped' : possui ? 'owned' : ''}`}
+                      key={item.id}
+                    >
+                      <header>
+                        <div className="equipment-card-title">
+                          <span className="equipment-icon">{iconeEquipamento(item)}</span>
+                          <div>
+                            <h3>{item.nome}</h3>
+                            <span className="muted small">{grupoEquipamento(item)}</span>
+                          </div>
+                        </div>
+                        <span className="rarity" data-rarity={raridade}>{rotuloRaridade(raridade)}</span>
+                      </header>
+                      <p className="desc">{item.descricao}</p>
+                      <div className="equipment-stats">
+                        {resumoEquipamento(item).map((linha, i) => (
+                          <span key={i}>{linha}</span>
+                        ))}
+                      </div>
+                      <footer>
+                        <span className="price">💰 {formatCoins(preco)}</span>
+                        {equipado ? (
+                          <span className="equipment-badge equipped">✅ Equipado</span>
+                        ) : possui ? (
+                          <span className="equipment-badge owned">🎒 No inventário</span>
+                        ) : (
+                          <button
+                            onClick={() => comprarEquipamento(item)}
+                            disabled={!characterId || semMoedas}
+                          >
+                            {!characterId
+                              ? 'Escolha um personagem'
+                              : semMoedas
+                                ? 'Ouro insuficiente'
+                                : 'Comprar'}
+                          </button>
+                        )}
+                      </footer>
+                      {!possui && semMoedas && (
+                        <p className="tool-limit">Faltam {formatCoins(preco - carteira)}</p>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+
+            {personagemAtual && (
+              <div className="tool-inventory equipment-inventory">
+                <h3>🎒 Equipamentos de {personagemAtual.name}</h3>
+                {equipamentosPossuidosList.length === 0 ? (
+                  <p className="muted small">Nenhum equipamento comprado ainda.</p>
+                ) : (
+                  <div className="tool-inventory-list">
+                    {equipamentosPossuidosList.map((it) => (
+                      <span className="tool-inventory-chip" key={it.id}>
+                        {iconeEquipamento(it)} {it.nome}
+                        {equipamentoEquipado(it) ? ' ✅' : ''}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <p className="muted small">
+                  Para usar um item, abra a ficha do personagem e escolha o slot correspondente.
+                </p>
+              </div>
+            )}
+          </section>
+        )}
 
         {tab === 'gems' && (
           <section className="panel">

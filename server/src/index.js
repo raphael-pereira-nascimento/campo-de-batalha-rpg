@@ -123,7 +123,7 @@ app.get('/api/wallet', requireAuth, async (req, res) => {
 });
 
 app.get('/api/shop', (_req, res) => {
-  res.json({ ok: true, items: SHOP_ITEMS });
+  res.json({ ok: true, items: SHOP_ITEMS, equipment: EQUIPMENT });
 });
 
 app.post('/api/shop/buy', requireAuth, async (req, res) => {
@@ -216,6 +216,80 @@ app.post('/api/shop/buy-tool', requireAuth, async (req, res) => {
     ]);
 
     res.json({ ok: true, item, walletCents: carteira - tool.precoCents });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+// ── Equipamentos: armas, armaduras e acessórios ──
+function findEquipmentCatalogItem(itemId) {
+  const id = String(itemId || '');
+  for (const grupo of ['armas', 'armaduras', 'acessorios']) {
+    const item = EQUIPMENT[grupo]?.[id];
+    if (item) return { id, grupo, item };
+  }
+  return null;
+}
+
+function equipmentHasItem(equipment, itemId) {
+  if (!equipment) return false;
+  if (equipment.arma?.id === itemId) return true;
+  if (equipment.armadura?.id === itemId) return true;
+  if (equipment.acessorio?.id === itemId) return true;
+  return Object.values(equipment.armas || {}).some((arma) => arma?.id === itemId);
+}
+
+app.post('/api/shop/buy-equipment', requireAuth, async (req, res) => {
+  try {
+    const { characterId, itemId } = req.body || {};
+    if (!characterId) throw new Error('Escolha um personagem para receber o equipamento.');
+    const found = findEquipmentCatalogItem(itemId);
+    if (!found) throw new Error('Equipamento inválido.');
+    const { id, item } = found;
+    const preco = Number(item.preco || 0);
+    if (preco <= 0) throw new Error('Equipamento sem preço definido.');
+
+    const { rows: charRows } = await query(
+      'SELECT inventory, equipment FROM characters WHERE id = $1 AND player_id = $2 FOR UPDATE',
+      [characterId, req.player.id],
+    );
+    if (!charRows.length) throw new Error('Personagem não encontrado.');
+
+    const inventory = typeof charRows[0].inventory === 'string'
+      ? JSON.parse(charRows[0].inventory)
+      : (charRows[0].inventory || []);
+    const equipment = typeof charRows[0].equipment === 'string'
+      ? JSON.parse(charRows[0].equipment)
+      : (charRows[0].equipment || {});
+    if (
+      inventory.some((it) => it.id === id) ||
+      equipmentHasItem(equipment, id)
+    ) {
+      throw new Error('Você já possui este equipamento.');
+    }
+
+    const { rows } = await query(
+      'SELECT wallet_cents FROM players WHERE id = $1 FOR UPDATE',
+      [req.player.id],
+    );
+    if (!rows.length) throw new Error('Jogador não encontrado.');
+    const carteira = Number(rows[0].wallet_cents || 0);
+    if (carteira < preco) {
+      throw new Error(`Ouro insuficiente: o equipamento custa ${preco} e você tem ${carteira}.`);
+    }
+
+    const purchased = { id, ...item };
+    inventory.push(purchased);
+    await query('UPDATE players SET wallet_cents = wallet_cents - $1 WHERE id = $2', [
+      preco,
+      req.player.id,
+    ]);
+    await query('UPDATE characters SET inventory = $1 WHERE id = $2', [
+      JSON.stringify(inventory),
+      characterId,
+    ]);
+
+    res.json({ ok: true, item: purchased, walletCents: carteira - preco });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }

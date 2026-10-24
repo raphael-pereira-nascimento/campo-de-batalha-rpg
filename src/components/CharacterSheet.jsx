@@ -17,7 +17,7 @@ const CLASS_ICONS = {
 
 const SKILL_TYPE_ICONS = { fisico: '⚔️', magia: '✨', cura: '💚', buff: '🔮', defesa: '🛡️' };
 
-export default function CharacterSheet({ character, gameData, onChanged, statuses }) {
+export default function CharacterSheet({ character, gameData, onChanged, statuses, onOpenShop }) {
   const [busy, setBusy] = useState(null);
   const [customEquipment, setCustomEquipment] = useState([]);
   const [characterGems, setCharacterGems] = useState([]);
@@ -126,32 +126,60 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
     }
   };
 
-  const armasDaCategoria = (categoria) => [
-    ...Object.entries(gameData.equipment.armas)
-      .filter(([, it]) => (it.categoria || categoriaDeArma(it)) === categoria)
-      .map(([id, it]) => ({ id, label: `${it.nome} (dano ${it.danoBase}${it.usosMax ? ` · ${it.usosMax} usos` : ''})` })),
-    ...customEquipment
-      .filter((e) => e.tipo === 'arma')
-      .map((e) => ({ id: e.id, label: `${e.nome} (dano ${e.dano_base}) ✨` })),
-  ];
-  const armaduras = [
-    ...Object.entries(gameData.equipment.armaduras).map(([id, it]) => ({ id, label: `${it.nome} (def ${it.defesa})` })),
-    ...customEquipment
-      .filter((e) => e.tipo === 'armadura')
-      .map((e) => ({ id: e.id, label: `${e.nome} (def ${e.defesa}) ✨` })),
-  ];
-  // Arma atual de uma categoria (suporta fichas antigas sem `armas`).
-  const armaAtual = (categoria) =>
-    character.equipment?.armas?.[categoria]?.id ||
-    (categoria === 'perto' ? character.equipment?.arma?.id || '' : '') ||
-    '';
-
   const equipSummary = (item) =>
     item
       ? ATTRIBUTES.filter((k) => item.bonus?.[k] || item.penalidade?.[k])
           .map((k) => `${ATTRIBUTE_NAMES[k]} ${item.bonus?.[k] > 0 ? '+' : ''}${item.bonus?.[k] || 0}${item.penalidade?.[k] ? ` / -${Math.abs(item.penalidade[k])}` : ''}`)
           .join(', ') || 'sem bônus'
       : '';
+
+  // Só é possível equipar itens comprados (inventário) ou já equipados em
+  // fichas antigas. Armas de fogo usam tipo 'arma_fogo'.
+  const idsEquipamentosPossuidos = new Set(
+    (character.inventory || [])
+      .filter((it) => it && ['arma', 'arma_fogo', 'armadura', 'acessorio'].includes(it.tipo))
+      .map((it) => it.id),
+  );
+
+  // Arma primária de fichas antigas: usa a categoria gravada no próprio item.
+  const armaPrimaria = character.equipment?.arma;
+  const categoriaPrimaria = armaPrimaria
+    ? armaPrimaria.categoria || (armaPrimaria.alcance === 'corpo' ? 'perto' : 'distancia')
+    : null;
+  const armaAtual = (categoria) =>
+    character.equipment?.armas?.[categoria]?.id ||
+    (categoriaPrimaria === categoria ? armaPrimaria.id : '') ||
+    '';
+
+  const armasDaCategoria = (categoria) => {
+    const atualId = armaAtual(categoria) || null;
+    return [
+      ...Object.entries(gameData.equipment.armas)
+        .filter(([, it]) => (it.categoria || categoriaDeArma(it)) === categoria)
+        .filter(([id]) => idsEquipamentosPossuidos.has(id) || id === atualId)
+        .map(([id, it]) => ({ id, label: `${it.nome} (dano ${it.danoBase}${it.usosMax ? ` · ${it.usosMax} usos` : ''})` })),
+      ...customEquipment
+        .filter((e) => e.tipo === 'arma')
+        .filter((e) => (e.categoria || (e.alcance === 'corpo' ? 'perto' : 'distancia')) === categoria)
+        .map((e) => ({ id: e.id, label: `${e.nome} (dano ${e.dano_base}) ✨` })),
+    ];
+  };
+  const armaduras = [
+    ...Object.entries(gameData.equipment.armaduras)
+      .filter(([id]) => idsEquipamentosPossuidos.has(id) || character.equipment?.armadura?.id === id)
+      .map(([id, it]) => ({ id, label: `${it.nome} (def ${it.defesa})` })),
+    ...customEquipment
+      .filter((e) => e.tipo === 'armadura')
+      .map((e) => ({ id: e.id, label: `${e.nome} (def ${e.defesa}) ✨` })),
+  ];
+  const acessorios = [
+    ...Object.entries(gameData.equipment.acessorios || {})
+      .filter(([id]) => idsEquipamentosPossuidos.has(id) || character.equipment?.acessorio?.id === id)
+      .map(([id, it]) => ({ id, label: `${it.nome} (${equipSummary(it)})` })),
+    ...customEquipment
+      .filter((e) => e.tipo === 'acessorio')
+      .map((e) => ({ id: e.id, label: `${e.nome} (${equipSummary(e)}) ✨` })),
+  ];
 
   // Estado real (no inventário do personagem) de uma gema: bruta/lapidada/polida.
   const estadoDaGema = (gemId) =>
@@ -162,7 +190,7 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
   // ser encaixada, ela já passou pela validação de polimento no servidor.
   const gemAttrDeltas = () => {
     const acc = {};
-    for (const equipSlot of ['arma', 'armadura']) {
+    for (const equipSlot of ['arma', 'armadura', 'acessorio']) {
       const item = character.equipment?.[equipSlot];
       if (!item) continue;
       for (const gemId of item.socketedGems || []) {
@@ -375,8 +403,31 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
               ))}
             </select>
           </label>
+          <label>
+            💍 Acessório
+            <select
+              value={(character.equipment?.acessorio?.id) || ''}
+              disabled={busy === 'acessorio'}
+              onChange={(e) => equip('acessorio', e.target.value)}
+            >
+              <option value="">— Nenhum —</option>
+              {acessorios.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-        {(armasDeEquipamento(character.equipment).length || character.equipment?.armadura) && (
+        <div className="equip-shop-hint">
+          <span className="muted small">
+            Só aparecem equipamentos comprados ou já equipados. Compre novos itens na Loja.
+          </span>
+          {onOpenShop && (
+            <button className="ghost small" onClick={onOpenShop}>🛒 Comprar equipamentos</button>
+          )}
+        </div>
+        {(armasDeEquipamento(character.equipment).length || character.equipment?.armadura || character.equipment?.acessorio) && (
           <div className="spell-list">
             {armasDeEquipamento(character.equipment).map(({ slot, arma }) => (
               <div className="spell-chip" key={slot}>
@@ -396,12 +447,18 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
                 <small>def {character.equipment.armadura.defesa} · {equipSummary(character.equipment.armadura)}{character.equipment.armadura.maleficio ? ` · ⚠️ ${character.equipment.armadura.maleficio}` : ''}</small>
               </div>
             )}
+            {character.equipment?.acessorio && (
+              <div className="spell-chip">
+                <span>💍 {character.equipment.acessorio.nome}</span>
+                <small>{equipSummary(character.equipment.acessorio)}{character.equipment.acessorio.maleficio ? ` · ⚠️ ${character.equipment.acessorio.maleficio}` : ''}</small>
+              </div>
+            )}
           </div>
         )}
 
-        {(character.equipment?.arma || character.equipment?.armadura) && (
+        {(character.equipment?.arma || character.equipment?.armadura || character.equipment?.acessorio) && (
           <div style={{ marginTop: 8 }}>
-            {['arma', 'armadura'].map((equipSlot) => {
+            {['arma', 'armadura', 'acessorio'].map((equipSlot) => {
               const item = character.equipment?.[equipSlot];
               if (!item) return null;
               const slots = item.socketSlots || 0;
@@ -410,7 +467,7 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
               return (
                 <div key={equipSlot} style={{ marginBottom: 8 }}>
                   <small style={{ color: 'var(--muted)', fontSize: 11 }}>
-                    Slots — {item.nome} ({equipSlot === 'arma' ? item.danoBase ? 'Arma' : 'Arma' : 'Armadura'})
+                    Slots — {item.nome} ({equipSlot === 'arma' ? 'Arma' : equipSlot === 'acessorio' ? 'Acessório' : 'Armadura'})
                   </small>
                   <div className="socket-slots" style={{ marginTop: 4 }}>
                     {Array.from({ length: slots }, (_, i) => {
@@ -486,7 +543,7 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
                 ))}
               </div>
               <div className="gem-effects">
-                {['arma', 'armadura'].map((slot) =>
+                {['arma', 'armadura', 'acessorio'].map((slot) =>
                   gemSlotEffects(slot).map(({ gemId, desc }) => (
                     <div className="gem-effect" key={slot + gemId}>
                       <span className="gem-effect-type">💎 {getGemaById(gemId)?.nome}</span>

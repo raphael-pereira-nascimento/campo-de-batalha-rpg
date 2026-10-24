@@ -3496,6 +3496,160 @@ button.danger {
   .mining-list li { flex-direction: column; align-items: flex-start; gap: 3px; }
 }
 
+/* Loja de equipamentos (armas, armaduras e acessórios) */
+.equipment-shop-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.equipment-shop-head h2 { margin: 0 0 6px; font-size: 18px; }
+.equipment-shop-head p { margin: 0; max-width: 680px; }
+.equipment-shop-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.equipment-shop-controls select {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 8px 10px;
+  border-radius: 9px;
+  font-size: 13px;
+}
+.equipment-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 16px;
+}
+.equipment-summary span {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.equipment-summary strong { color: var(--fg); }
+.equip-category-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.equip-category-tabs button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 8px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: color 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+.equip-category-tabs button:hover { color: var(--fg); border-color: #5a4a8a; }
+.equip-category-tabs button.active {
+  background: linear-gradient(135deg, #6d5cff, #9a4dff);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 0 18px rgba(124, 92, 255, 0.22);
+}
+.equip-count {
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.equipment-card { position: relative; }
+.equipment-card.owned { border-color: rgba(120, 220, 160, 0.45); }
+.equipment-card.equipped {
+  border-color: rgba(120, 220, 160, 0.8);
+  box-shadow: 0 0 18px rgba(80, 220, 150, 0.12);
+}
+.equipment-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.equipment-card-title h3 { margin: 0; font-size: 15px; }
+.equipment-icon {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.3);
+}
+.equipment-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.equipment-stats span {
+  font-size: 11.5px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 3px 7px;
+  color: var(--fg);
+}
+.equipment-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 10px;
+  border-radius: 9px;
+  white-space: nowrap;
+}
+.equipment-badge.owned {
+  background: rgba(124, 92, 255, 0.14);
+  border: 1px solid rgba(124, 92, 255, 0.45);
+  color: #cfc4ff;
+}
+.equipment-badge.equipped {
+  background: rgba(80, 220, 150, 0.12);
+  border: 1px solid rgba(80, 220, 150, 0.5);
+  color: #9ff0c0;
+}
+.equipment-inventory { margin-top: 24px; }
+.equip-shop-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+.equip-shop-hint .small { margin: 0; }
+
+.rarity[data-rarity='comum'] { color: #c9c9d6; border-color: #4a4a5a; }
+.rarity[data-rarity='incomum'] { color: #7ee0a1; border-color: rgba(126, 224, 161, 0.5); }
+.rarity[data-rarity='rara'] { color: #73b7ff; border-color: rgba(115, 183, 255, 0.5); }
+.rarity[data-rarity='epica'] { color: #c58bff; border-color: rgba(197, 139, 255, 0.5); }
+.rarity[data-rarity='lendaria'] { color: #ffd166; border-color: rgba(255, 209, 102, 0.55); }
+
+@media (max-width: 700px) {
+  .equipment-shop-head { flex-direction: column; align-items: stretch; }
+  .equipment-shop-controls { justify-content: space-between; }
+  .equipment-card-title { align-items: flex-start; }
+  .equip-shop-hint { align-items: flex-start; flex-direction: column; }
+}
+
 /* ═══════════════════ Taverna ═══════════════════ */
 .tavern-head {
   display: flex;

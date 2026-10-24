@@ -289,6 +289,7 @@ export function buildCharacterData(playerId, { name, gender, attributes, races, 
     arma: armaPrimaria ? { ...armaPrimaria } : null,
     armas,
     armadura: equipment?.armadura ? { ...equipment.armadura } : null,
+    acessorio: equipment?.acessorio ? { ...equipment.acessorio } : null,
   };
 
   const stats = applyMaxMults(
@@ -423,6 +424,11 @@ export async function equipItem(characterId, slot, itemId) {
   if (!char) throw new Error('Personagem não encontrado.');
 
   const categoria = SLOT_ARMA[slot] || (slot === 'arma' ? 'perto' : null);
+  const isAcessorio = slot === 'acessorio';
+  const isArmadura = slot === 'armadura';
+  if (!categoria && !isAcessorio && !isArmadura) {
+    throw new Error('Slot de equipamento inválido.');
+  }
   let item = null;
   if (itemId) {
     if (categoria) {
@@ -453,7 +459,26 @@ export async function equipItem(characterId, slot, itemId) {
           };
         }
       }
+    } else if (isAcessorio) {
+      itemId = String(itemId);
+      const preset = EQUIPMENT.acessorios?.[itemId];
+      item = preset ? { id: itemId, ...preset } : null;
+      if (!item) {
+        const custom = await getCustomEquipment(itemId);
+        if (custom && custom.tipo === 'acessorio') {
+          item = {
+            id: custom.id,
+            nome: custom.nome,
+            tipo: 'acessorio',
+            bonus: custom.bonus || {},
+            penalidade: custom.penalidade || {},
+            maleficio: custom.maleficio || '',
+            socketSlots: custom.socket_slots ?? custom.socketSlots ?? 0,
+          };
+        }
+      }
     } else {
+      itemId = String(itemId);
       const preset = EQUIPMENT.armaduras[itemId];
       item = preset ? { id: itemId, ...preset } : null;
       if (!item) {
@@ -481,7 +506,9 @@ export async function equipItem(characterId, slot, itemId) {
   const oldPrimary = char.equipment?.arma;
   let oldItem = categoria
     ? oldCategoryItem || (categoria === 'perto' ? oldPrimary : null)
-    : char.equipment?.armadura;
+    : isAcessorio
+      ? char.equipment?.acessorio
+      : char.equipment?.armadura;
   // Fichas antigas podem ter as gemas apenas no objeto `arma` (primário),
   // enquanto `armas.<categoria>` ficou sem elas. Nesse caso, o primário é a
   // fonte da verdade.
@@ -510,6 +537,19 @@ export async function equipItem(characterId, slot, itemId) {
     }
   }
 
+  // Fichas antigas (e equipamentos escolhidos na criação) podem ter o item
+  // equipado sem uma cópia no inventário. Ao trocar ou remover, devolve o item
+  // ao inventário para que ele não desapareça e possa ser equipado de novo.
+  const inventory = Array.isArray(char.inventory) ? [...char.inventory] : [];
+  if (
+    oldItem?.id &&
+    (!item || item.id !== oldItem.id) &&
+    !inventory.some((it) => it.id === oldItem.id)
+  ) {
+    const { socketedGems: _sg, socketedGemEstados: _sge, ...oldCopy } = oldItem;
+    inventory.push(oldCopy);
+  }
+
   let equipment;
   if (categoria) {
     const armas = { ...((char.equipment && char.equipment.armas) || {}) };
@@ -532,6 +572,8 @@ export async function equipItem(characterId, slot, itemId) {
     armas[categoria] = item;
     const armaPrimaria = armas.perto || armas.distancia || armas.utilitaria;
     equipment = { ...(char.equipment || {}), armas, arma: armaPrimaria ? { ...armaPrimaria } : null };
+  } else if (isAcessorio) {
+    equipment = { ...(char.equipment || {}), acessorio: item };
   } else {
     equipment = { ...(char.equipment || {}), armadura: item };
   }
@@ -543,9 +585,10 @@ export async function equipItem(characterId, slot, itemId) {
   const hpMax = stats.hpMax;
   const mpMax = stats.mpMax;
   await query(
-    `UPDATE characters SET equipment = $1, hp_max = $2, mp_max = $3, hp_current = $4, mp_current = $5 WHERE id = $6`,
+    `UPDATE characters SET equipment = $1, inventory = $2, hp_max = $3, mp_max = $4, hp_current = $5, mp_current = $6 WHERE id = $7`,
     [
       JSON.stringify(equipment),
+      JSON.stringify(inventory),
       hpMax,
       mpMax,
       Math.min(char.hp_current, hpMax),

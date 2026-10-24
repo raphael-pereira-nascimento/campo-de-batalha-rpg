@@ -466,9 +466,10 @@ export const api = {
       const chars = getOfflineCharacters();
       const c = chars.find((ch) => ch.id === id);
       if (c) {
-        // Arsenal: uma arma por categoria (perto/distancia/utilitaria) + armadura.
+        // Arsenal: uma arma por categoria (perto/distancia/utilitaria) + armadura + acessório.
         const SLOT_ARMA = { arma_perto: 'perto', arma_distancia: 'distancia', arma_utilitaria: 'utilitaria' };
         const categoria = SLOT_ARMA[slot] || (slot === 'arma' ? 'perto' : null);
+        const isAcessorio = slot === 'acessorio';
         c.equipment = c.equipment || {};
         let item = null;
         if (itemId) {
@@ -477,6 +478,9 @@ export const api = {
             const def = EQUIPMENT.armas[itemId];
             const catDef = def && (def.categoria || (def.alcance === 'corpo' ? 'perto' : 'distancia'));
             if (def && catDef === categoria) item = { id: itemId, ...def };
+          } else if (isAcessorio) {
+            const def = EQUIPMENT.acessorios?.[itemId];
+            item = def ? { id: itemId, ...def } : null;
           } else {
             const def = EQUIPMENT.armaduras[itemId];
             item = def ? { id: itemId, ...def } : null;
@@ -486,7 +490,9 @@ export const api = {
         // Reequipar o mesmo item preserva as gemas.
         const oldItem = categoria
           ? c.equipment.armas?.[categoria] || (categoria === 'perto' ? c.equipment.arma : null)
-          : c.equipment.armadura;
+          : isAcessorio
+            ? c.equipment.acessorio
+            : c.equipment.armadura;
         if (oldItem && item && oldItem.id === item.id) {
           item = {
             ...item,
@@ -499,12 +505,22 @@ export const api = {
             if (gemId) addOfflineGem(id, gemId, estados[i] || 'polido');
           });
         }
+        // Mantém no inventário equipamentos de fichas antigas ao trocar/remover.
+        if (oldItem?.id && (!item || item.id !== oldItem.id)) {
+          c.inventory = Array.isArray(c.inventory) ? c.inventory : [];
+          if (!c.inventory.some((it) => it.id === oldItem.id)) {
+            const { socketedGems: _sg, socketedGemEstados: _sge, ...oldCopy } = oldItem;
+            c.inventory.push(oldCopy);
+          }
+        }
         if (categoria) {
           const armas = { ...(c.equipment.armas || {}) };
           armas[categoria] = item;
           const primaria = armas.perto || armas.distancia || armas.utilitaria;
           c.equipment.armas = armas;
           c.equipment.arma = primaria ? { ...primaria } : null;
+        } else if (isAcessorio) {
+          c.equipment.acessorio = item;
         } else {
           c.equipment.armadura = item;
         }
@@ -590,7 +606,7 @@ export const api = {
   },
   getShop: () => {
     if (isOffline()) {
-      return Promise.resolve({ ok: true, items: [] });
+      return Promise.resolve({ ok: true, items: [], equipment: EQUIPMENT });
     }
     return auth('/api/shop');
   },
@@ -988,6 +1004,37 @@ export const api = {
     return auth('/api/shop/buy-tool', {
       method: 'POST',
       body: JSON.stringify({ characterId, toolId: ferramenta.id }),
+    });
+  },
+  buyEquipment: (characterId, equipamento) => {
+    if (isOffline()) {
+      if (!characterId) return Promise.reject(new Error('Escolha um personagem.'));
+      const id = equipamento?.id;
+      if (!id) return Promise.reject(new Error('Equipamento inválido.'));
+      const preco = Number(equipamento.preco || 0);
+      if (preco <= 0) return Promise.reject(new Error('Equipamento sem preço definido.'));
+      const carteira = getOfflineWallet();
+      if (carteira < preco) return Promise.reject(new Error('Ouro insuficiente.'));
+      const chars = getOfflineCharacters();
+      const c = chars.find((ch) => ch.id === characterId);
+      if (!c) return Promise.reject(new Error('Personagem não encontrado.'));
+      const equipamentoAtual = c.equipment || {};
+      const possui =
+        (c.inventory || []).some((it) => it.id === id) ||
+        equipamentoAtual.arma?.id === id ||
+        equipamentoAtual.armadura?.id === id ||
+        equipamentoAtual.acessorio?.id === id ||
+        Object.values(equipamentoAtual.armas || {}).some((a) => a?.id === id);
+      if (possui) return Promise.reject(new Error('Você já possui este equipamento.'));
+      const item = { ...equipamento, id };
+      c.inventory = [...(c.inventory || []), item];
+      localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
+      addOfflineCoins(-preco);
+      return Promise.resolve({ ok: true, item, walletCents: carteira - preco });
+    }
+    return auth('/api/shop/buy-equipment', {
+      method: 'POST',
+      body: JSON.stringify({ characterId, itemId: equipamento?.id }),
     });
   },
   polishGem: (characterId, gemId, fromEstado) => {

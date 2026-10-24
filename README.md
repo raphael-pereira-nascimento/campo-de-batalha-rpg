@@ -14,7 +14,7 @@ Jogue **online** (com backend + banco local PGlite ou PostgreSQL) ou **offline**
 - **Criação de Personagem** com multi-raças, multi-classes, golpes customizados, ultimate e especial
 - **23 Raças jogáveis** com bônus de atributo e passivas mecânicas
 - **6 Classes base** (Guerreiro, Mago, Arqueiro, Clérigo, Assassino, Paladino)
-- **Sistema de Loja** com moedas (cobre, prata, ouro, ouropla, platina) e itens de combate
+- **Sistema de Loja** com moedas (cobre, prata, ouro, ouropla, platina), itens de combate e equipamentos (armas, armaduras e acessórios) que entram no inventário e podem ser equipados na ficha
 - **World Registry** para criar classes, raças, equipamentos, golpes e monstros customizados
 - **Bestiário** com 10 monstros built-in + monstros customizados
 - **Sistema de Level-Up** com distribuição automática de atributos
@@ -193,8 +193,9 @@ npm run build
 | GET | `/api/characters/:id` | ✓ | Ver ficha |
 | POST | `/api/characters/:id/equip` | ✓ | Equipar item |
 | GET | `/api/wallet` | ✓ | Ver carteira |
-| GET | `/api/shop` | - | Itens da loja |
+| GET | `/api/shop` | - | Itens da loja e catálogo de equipamentos |
 | POST | `/api/shop/buy` | ✓ | Comprar item |
+| POST | `/api/shop/buy-equipment` | ✓ | Comprar arma, armadura ou acessório para o personagem |
 | GET | `/api/gamedata` | - | Dados do jogo |
 | GET | `/api/gems/catalog` | - | Catálogo de gemas e veios de mineração |
 | GET | `/api/characters/:id/gems/detailed` | ✓ | Inventário de gemas do personagem |
