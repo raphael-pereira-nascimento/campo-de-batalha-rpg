@@ -1184,7 +1184,9 @@ function VictoryPanel({ battle, player, onExit }) {
     if (!isOffline()) return;
     for (const p of winners) {
       if (p.playerId === player.id) {
-        applyOfflineRewards(p.characterId, p.xpGained || 0, p.kills || 0);
+        // Vitória é por batalha, não por abate: `kills` é usado apenas no
+        // painel de recompensas e não deve inflar o contador de vitórias.
+        applyOfflineRewards(p.characterId, p.xpGained || 0, 1);
       }
     }
   }, [winners, player.id]);

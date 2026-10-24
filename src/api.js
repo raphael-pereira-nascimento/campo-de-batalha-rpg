@@ -249,7 +249,7 @@ class MockSocket {
 const mockSocket = new MockSocket();
 
 // Aplica recompensas de batalha a um personagem offline (espelho do grantRewards do servidor).
-export function applyOfflineRewards(charId, xpGained, wins = 0) {
+export function applyOfflineRewards(charId, xpGained, vitorias = 0) {
   if (!isOffline()) return;
   const chars = getOfflineCharacters();
   const c = chars.find((ch) => ch.id === charId);
@@ -266,7 +266,7 @@ export function applyOfflineRewards(charId, xpGained, wins = 0) {
   );
   c.level = level;
   c.xp = xp;
-  c.wins = (c.wins || 0) + wins;
+  c.wins = (c.wins || 0) + vitorias;
   c.hp_max = stats.hpMax;
   c.mp_max = stats.mpMax;
   c.hp_current = Math.min(c.hp_current ?? stats.hpMax, stats.hpMax);
@@ -275,7 +275,7 @@ export function applyOfflineRewards(charId, xpGained, wins = 0) {
   localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
 
   // Drop de gema (espelho do servidor): 10% por vitória. A gema já vem polida.
-  if (wins > 0 && Math.random() < 0.1) {
+  if (vitorias > 0 && Math.random() < 0.1) {
     const pool = GEM_LIST.filter((g) => !gemIsRaw(g.id));
     const gema = pool[Math.floor(Math.random() * pool.length)];
     if (gema) addOfflineGem(charId, gema.id, 'polido');

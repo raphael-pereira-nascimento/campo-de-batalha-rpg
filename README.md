@@ -21,6 +21,14 @@ Jogue **online** (com backend + banco local PGlite ou PostgreSQL) ou **offline**
 - **Recompensas Pós-Batalha** (XP, moedas, abates)
 - **Autenticação** com senhas e hashing scrypt
 
+## Correções recentes
+
+- A prévia de masmorra agora usa o nível do personagem selecionado, em vez de assumir nível 1.
+- Vitórias offline contam **1 por batalha vencida**, não a quantidade de abates.
+- O log de recuperação de mana só anuncia o teto de 10% quando o limite realmente foi aplicado.
+- `tools/sync-server-game.ps1` não sobrescreve mais `data.js`/`battleManager.js`, que contêm lógica exclusiva de gemas da forja no servidor.
+- Regras ainda pendentes estão registradas em [`PENDENCIAS.md`](PENDENCIAS.md).
+
 ## Tecnologias
 
 | Camada | Tecnologia |
@@ -94,7 +102,7 @@ campo-de-batalha-rpg/
 │   ├── App.jsx              # Componente raiz e roteamento
 │   ├── components/          # Componentes reutilizáveis
 │   │   ├── CharacterSheet.jsx   # Exibição de ficha
-│   │   ├── FichaForm.jsx        # Wizard de criação (10 passos)
+│   │   ├── FichaForm.jsx        # Wizard de criação (12 passos)
 │   │   ├── StatBar.jsx          # Barra de HP/MP
 │   │   └── ErrorBoundary.jsx    # Error boundary React
 │   ├── pages/               # Páginas da aplicação

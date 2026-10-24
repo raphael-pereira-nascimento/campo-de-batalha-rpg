@@ -545,7 +545,8 @@ export class BattleManager {
     p.manaGastoTurno = 0;
     if (rec > 0) {
       const base = manaRecuperada(gastoTurno);
-      const teto = base > rec ? ' (teto de 10% do MP atingido)' : '';
+      const limitado = manaRecuperada(gastoTurno, p.mpMax);
+      const teto = base > limitado ? ' (teto de 10% do MP atingido)' : '';
       battle.log.push(makeLog(`💧 ${p.charName} recupera ${rec} de MP (gasto ${gastoTurno} ÷ 2${teto}).`, 'heal'));
     }
     if (efeito.regenMana) {

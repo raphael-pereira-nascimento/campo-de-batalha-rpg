@@ -84,7 +84,7 @@ export default function Dungeons({ player, characters, onBack, onOpenBattle }) {
     setBusy(d.id);
     setError('');
     try {
-      const enc = montarEncontro(d.id, { nivelJogadores: 1, dia, tipoEclipse: tipo });
+      const enc = montarEncontro(d.id, { nivelJogadores: nivel, dia, tipoEclipse: tipo });
       const ack = await emitAck('createBattle', {
         name: `🗺️ ${d.nome}`,
         mode: 'mestre',
@@ -250,7 +250,7 @@ export default function Dungeons({ player, characters, onBack, onOpenBattle }) {
         {/* ── Lista de dungeons ── */}
         <div className="dungeon-list">
           {lista.map((d) => {
-            const enc = montarEncontro(d.id, { nivelJogadores: 1, dia, tipoEclipse: tipo });
+            const enc = montarEncontro(d.id, { nivelJogadores: nivel, dia, tipoEclipse: tipo });
             return (
               <div key={d.id} className={`panel dungeon-card${d.bloqueada ? ' bloqueada' : ''}`}>
                 <div className="dungeon-head">

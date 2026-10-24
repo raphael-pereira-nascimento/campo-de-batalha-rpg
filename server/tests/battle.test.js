@@ -456,6 +456,26 @@ describe('BattleManager — melhorias do Mestre', () => {
     expect(log).toContain('teto de 10% do MP');
   });
 
+  it('não anuncia teto de 10% quando o MP apenas está quase cheio', () => {
+    const { manager } = makeManager();
+    const battle = manager.createBattle({
+      name: 'T',
+      mode: 'mestre',
+      host: 'p1',
+      hostName: 'M',
+      character: makeCharacter(),
+    });
+    const hero = battle.participants[0];
+    hero.mp = 95;
+    hero.mpMax = 100;
+    hero.manaGastoTurno = 20; // metade = 10, dentro do teto; só 5 entram no MP
+    manager._resolveTurnGains(battle, hero);
+    expect(hero.mp).toBe(100);
+    const log = battle.log.map((l) => l.text).join('\n');
+    expect(log).toContain('recupera 5 de MP');
+    expect(log).not.toContain('teto de 10% do MP');
+  });
+
   it('recuperação de mana respeita o máximo', () => {
     const { manager } = makeManager();
     const p = {
