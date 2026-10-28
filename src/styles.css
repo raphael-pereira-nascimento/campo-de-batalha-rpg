@@ -5,11 +5,15 @@
   --border: #343b63;
   --text: #e8e9f5;
   --muted: #9aa0c0;
-  --accent: #7c5cff;
+  /* --accent é usado como FUNDO (texto branco por cima): 4.92:1 com #fff.
+     Para texto roxo sobre painel escuro use --accent-text (6.37:1). */
+  --accent: #7452f5;
+  --accent-text: #a892ff;
   --accent-2: #ffd166;
   --green: #3ddc84;
-  --red: #e63946;
+  --red: #ff6b75;
   --blue: #4a90e2;
+  --focus-ring: #a892ff;
 }
 
 * {
@@ -189,7 +193,7 @@ select:focus {
 }
 .home-tab.active {
   background: var(--accent);
-  color: #0b0d16;
+  color: #fff;
 }
 .home-hint {
   color: var(--muted);
@@ -627,7 +631,7 @@ label {
   background: rgba(124, 92, 255, 0.07);
 }
 .ff-fighter.current {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   background: rgba(124, 92, 255, 0.12);
   box-shadow: 0 0 20px rgba(124, 92, 255, 0.3);
 }
@@ -736,7 +740,7 @@ label {
 .current-tag {
   background: var(--accent);
   color: #fff;
-  border-color: var(--accent);
+  border-color: var(--accent-text);
 }
 .dead-label {
   text-align: center;
@@ -807,7 +811,7 @@ label {
   color: var(--accent-2);
 }
 .log-status {
-  border-left-color: var(--accent);
+  border-left-color: var(--accent-text);
   font-style: italic;
 }
 .status-tag {
@@ -838,7 +842,7 @@ label {
 }
 .action-tabs button.active {
   background: var(--accent);
-  border-color: var(--accent);
+  border-color: var(--accent-text);
 }
 .action-body {
   display: flex;
@@ -937,7 +941,7 @@ label {
 }
 .registry-tabs button.active {
   background: var(--accent);
-  border-color: var(--accent);
+  border-color: var(--accent-text);
 }
 .scope-toggle {
   display: flex;
@@ -950,7 +954,7 @@ label {
 }
 .scope-toggle button.active {
   background: var(--accent);
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   color: #0b0d16;
   font-weight: 600;
 }
@@ -1040,14 +1044,14 @@ button.danger {
   transition: border-color 0.15s, background 0.15s, transform 0.05s;
 }
 .chip-btn:hover:not(:disabled) {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
 }
 .chip-btn:active:not(:disabled) {
   transform: scale(0.97);
 }
 .chip-btn.on {
   background: var(--accent);
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   color: #fff;
 }
 .chip-btn:disabled {
@@ -1105,7 +1109,7 @@ button.danger {
 }
 .wizard-steps button.active {
   background: var(--accent);
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   color: #fff;
 }
 .wizard-steps button.done {
@@ -1323,7 +1327,7 @@ button.danger {
 }
 .rules-section.open .rules-section-head {
   border-bottom: 1px solid var(--border);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .rules-section-body {
   padding: 14px 18px 18px;
@@ -1354,7 +1358,7 @@ button.danger {
 }
 .compendium-tabs button.active {
   background: var(--accent);
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   color: #fff;
 }
 
@@ -1459,12 +1463,12 @@ button.danger {
   position: relative;
 }
 .socket-slot:hover {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   background: rgba(124, 92, 255, 0.12);
 }
 .socket-slot.filled {
   border-style: solid;
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   background: rgba(124, 92, 255, 0.18);
 }
 .socket-slot .slot-gem-name {
@@ -1516,7 +1520,7 @@ button.danger {
   padding: 3px 0;
 }
 .gem-effect-type {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
   min-width: 64px;
 }
@@ -1556,7 +1560,7 @@ button.danger {
   transition: border-color 0.15s, transform 0.1s;
 }
 .gem-select-card:hover {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   transform: translateY(-1px);
 }
 .gem-select-card .gem-name {
@@ -1613,7 +1617,7 @@ button.danger {
   font-size: 15px;
 }
 .gender-option.selected {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   background: rgba(124, 92, 255, 0.15);
 }
 .gender-icon {
@@ -1768,7 +1772,7 @@ button.danger {
   padding: 6px 12px;
 }
 .reward-xp { color: var(--accent-2); border-color: var(--accent-2); }
-.reward-coins { color: var(--accent); }
+.reward-coins { color: var(--accent-text); }
 
 /* ─── Elemento / fraqueza tags ─── */
 .elem-tag {
@@ -1819,7 +1823,7 @@ button.danger {
   cursor: pointer;
   white-space: nowrap;
 }
-.quick-chat-btn:hover { background: var(--accent); border-color: var(--accent); }
+.quick-chat-btn:hover { background: var(--accent); border-color: var(--accent-text); }
 .chat-bubble {
   position: absolute;
   bottom: 100%;
@@ -1880,7 +1884,7 @@ button.danger {
   gap: 8px;
   transition: border-color 0.2s;
 }
-.fighter-card:hover { border-color: var(--accent); }
+.fighter-card:hover { border-color: var(--accent-text); }
 .fighter-card.fighter-dead { opacity: 0.4; }
 .fighter-card-header {
   display: flex;
@@ -1959,7 +1963,7 @@ button.danger {
   z-index: 1;
   flex-shrink: 0;
 }
-.stat-input:focus { border-color: var(--accent); outline: none; }
+.stat-input:focus { border-color: var(--accent-text); outline: none; }
 .stat-max { color: var(--muted); font-size: 11px; position: relative; z-index: 1; flex-shrink: 0; }
 
 .stat-btns { display: flex; gap: 3px; flex-shrink: 0; }
@@ -2004,7 +2008,7 @@ button.danger {
   color: var(--fg);
   font-size: 13px;
 }
-.table-battle-form input:focus { border-color: var(--accent); outline: none; }
+.table-battle-form input:focus { border-color: var(--accent-text); outline: none; }
 .attr-mini-label {
   display: flex;
   flex-direction: column;
@@ -2042,7 +2046,7 @@ button.danger {
   background: var(--panel-2);
   color: var(--fg);
 }
-.vs-text { color: var(--accent); font-weight: 700; font-size: 18px; padding-bottom: 6px; }
+.vs-text { color: var(--accent-text); font-weight: 700; font-size: 18px; padding-bottom: 6px; }
 .attack-info {
   display: flex;
   flex-direction: column;
@@ -2302,7 +2306,7 @@ button.danger {
 .timeline-node.drunk .timeline-icon { filter: drop-shadow(0 0 4px #f59e0b); }
 .timeline-node.drunk .timeline-name { color: #fbbf24; }
 .timeline-node.active {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   background: var(--panel);
   transform: translateY(-2px) scale(1.06);
   box-shadow: 0 0 0 2px rgba(110,163,255,0.25), 0 0 18px rgba(110,163,255,0.6);
@@ -2407,7 +2411,7 @@ button.danger {
   border-radius: 6px;
   padding: 2px 6px;
 }
-.gem-ef-ativo .gem-ef-slot { color: var(--accent); }
+.gem-ef-ativo .gem-ef-slot { color: var(--accent-text); }
 
 /* Cart�o padr�o (fantasia sombria: borda dourada/roxa, fundo escuro) */
 .gem-select-card.dark-fantasy {
@@ -3863,7 +3867,7 @@ button.danger {
 
 .btn-next-turn {
   background: var(--accent);
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   color: #fff;
   font-weight: 700;
 }
@@ -3904,7 +3908,7 @@ button.danger {
 
 .attack-vs {
   font-size: 18px;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 700;
   flex-shrink: 0;
 }
@@ -3943,7 +3947,7 @@ button.danger {
   border-radius: 8px;
   min-height: 44px;
 }
-.dice-btn-roll:hover:not(:disabled) { border-color: var(--accent); background: var(--border); }
+.dice-btn-roll:hover:not(:disabled) { border-color: var(--accent-text); background: var(--border); }
 .dice-btn-roll:disabled { opacity: 0.5; }
 
 /* Ações Rápidas — painel de comando do mestre */
@@ -4053,7 +4057,7 @@ button.danger {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-text);
   background: rgba(124, 92, 255, 0.14);
   border: 1px solid rgba(124, 92, 255, 0.35);
   padding: 5px 10px;
@@ -4221,7 +4225,7 @@ button.danger {
   border-radius: 9px;
 }
 .subnav button:hover:not(:disabled) {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   filter: none;
 }
 .subnav button.primary-link {

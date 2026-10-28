@@ -1,0 +1,10 @@
+# Campo de Batalha RPG
+# Obs.: no GitHub Pages (projeto em subpasta) o robots.txt precisa ficar na
+# raiz do domínio para ser lido. No Render, servido na raiz, funciona direto.
+
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /share/
+
+Sitemap: https://raphael-pereira-nascimento.github.io/campo-de-batalha-rpg/sitemap.xml
