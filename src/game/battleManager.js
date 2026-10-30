@@ -388,18 +388,22 @@ export class BattleManager {
     }
 
     if (modoChefeDinamico) {
-      // Modo Chefe Dinâmico: vira chefe com HP = soma do HP dos jogadores x 2.0
+      // Modo Chefe Dinâmico: vira chefe com HP = baseHp + soma do HP dos jogadores x fator escala
       // (× bônus por nº de adversários) e acoesPorTurno conforme o nº de jogadores.
       m.isBoss = true;
-      m.monsterDef = { ...m.monsterDef, multiplicadorHP: 2.0 };
-      m.hp = m.hpMax = Math.max(50, Math.round(sumHeroHp * 2.0 * chefeHpMultPorAdversarios(playerCount)));
+      const fatorEscala = def.hpEscalaFator || 0.5;
+      const baseHp = def.baseHp || 0;
+      m.monsterDef = { ...m.monsterDef, multiplicadorHP: fatorEscala };
+      m.hp = m.hpMax = Math.max(50, Math.round(baseHp + sumHeroHp * fatorEscala * chefeHpMultPorAdversarios(playerCount)));
       if (playerCount <= 4) m.acoesPorTurno = 1;
       else if (playerCount <= 8) m.acoesPorTurno = 2;
       else if (playerCount <= 12) m.acoesPorTurno = 3;
       else m.acoesPorTurno = 4;
     } else if (m.isBoss) {
-      // Regra do criador (soma do HP × multiplicador) + bônus por adversários.
-      m.hp = m.hpMax = Math.max(50, Math.round(sumHeroHp * (def.multiplicadorHP || 3) * chefeHpMultPorAdversarios(playerCount)));
+      // Novo sistema: baseHp + (soma do HP × fator escala suave) + bônus por adversários.
+      const fatorEscala = def.hpEscalaFator || 0.5;
+      const baseHp = def.baseHp || 0;
+      m.hp = m.hpMax = Math.max(50, Math.round(baseHp + sumHeroHp * fatorEscala * chefeHpMultPorAdversarios(playerCount)));
     }
     m.monsterDef = { ...m.monsterDef, acoesPorTurno: m.acoesPorTurno };
     battle.participants.push(m);
@@ -448,8 +452,10 @@ export class BattleManager {
       const sum = heroes.reduce((s, h) => s + h.hpMax, 0);
       enemies.forEach((e) => {
         if (e.isBoss) {
-          // Recalcula no início: soma do HP × multiplicador × bônus por adversários.
-          const hpBase = Math.max(50, Math.round(sum * (e.monsterDef.multiplicadorHP || 3) * chefeHpMultPorAdversarios(heroes.length)));
+          // Novo sistema: baseHp + (soma do HP × fator escala suave) + bônus por adversários.
+          const fatorEscala = e.monsterDef.hpEscalaFator || 0.5;
+          const baseHp = e.monsterDef.baseHp || 0;
+          const hpBase = Math.max(50, Math.round(baseHp + sum * fatorEscala * chefeHpMultPorAdversarios(heroes.length)));
           const ajustado = aplicarEclipseEmChefe(
             { ...e, hp: hpBase, hpMax: hpBase, acoesPorTurno: e.acoesPorTurno },
             { estado: eclipse, hpBase },

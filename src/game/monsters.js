@@ -70,6 +70,8 @@ export const MONSTERS = {
     passiva: 'Colosso: atinge vários inimigos, não sangra e não pode ser derrubado facilmente.',
     efeitos: { danoFisicoMult: 1.15, imune: ['sangramento', 'veneno'] },
     escalaChefe: true,
+    baseHp: 380,
+    hpEscalaFator: 0.5,
     multiplicadorHP: 2.5,
     fraquezas: ['agua', 'ar'],
     resistencias: ['terra', 'fisico'],
@@ -90,6 +92,8 @@ export const MONSTERS = {
     passiva: 'Terror dos Mares: tentáculos atingem vários alvos e o redemoinho cega quem for pego.',
     efeitos: { danoFisicoMult: 1.2, imune: ['sangramento'] },
     escalaChefe: true,
+    baseHp: 500,
+    hpEscalaFator: 0.5,
     multiplicadorHP: 2.8,
     fraquezas: ['ar', 'luz'],
     resistencias: ['agua', 'fisico'],
@@ -115,6 +119,8 @@ export const MONSTERS = {
     passiva: 'Guardião Antigo: raízes prendem os invasores e a floresta inteira luta ao seu lado.',
     efeitos: { danoMagicoMult: 1.2, imune: ['veneno'] },
     escalaChefe: true,
+    baseHp: 450,
+    hpEscalaFator: 0.5,
     multiplicadorHP: 2.6,
     fraquezas: ['fogo'],
     resistencias: ['terra', 'agua'],
@@ -140,6 +146,8 @@ export const MONSTERS = {
     passiva: 'Pestilência Viva: imune a veneno, espalha toxinas que corroem por turnos.',
     efeitos: { danoFisicoMult: 1.15, imune: ['veneno', 'sangramento'] },
     escalaChefe: true,
+    baseHp: 480,
+    hpEscalaFator: 0.5,
     multiplicadorHP: 2.7,
     fraquezas: ['fogo', 'luz'],
     resistencias: ['agua', 'trevas'],
@@ -165,6 +173,8 @@ export const MONSTERS = {
     passiva: 'Filho da Nevasca: congela quem tocar e avalanchas varrem o campo inteiro.',
     efeitos: { danoFisicoMult: 1.2, imune: ['congelamento'] },
     escalaChefe: true,
+    baseHp: 460,
+    hpEscalaFator: 0.5,
     multiplicadorHP: 2.7,
     fraquezas: ['fogo'],
     resistencias: ['agua', 'fisico'],
@@ -190,6 +200,8 @@ export const MONSTERS = {
     passiva: 'Devoradora de Túneis: emerge do solo sem aviso e desaba a caverna sobre todos.',
     efeitos: { danoFisicoMult: 1.15, esquivaBonus: 0.1 },
     escalaChefe: true,
+    baseHp: 420,
+    hpEscalaFator: 0.5,
     multiplicadorHP: 2.6,
     fraquezas: ['ar'],
     resistencias: ['terra', 'fisico'],
@@ -215,6 +227,8 @@ export const MONSTERS = {
     passiva: 'Montanha Viva: casco quase impenetrável reduz dano físico e cada passo é um tremor.',
     efeitos: { danoFisicoMult: 1.15, reducaoDanoFisico: 0.2, imune: ['sangramento'] },
     escalaChefe: true,
+    baseHp: 520,
+    hpEscalaFator: 0.45,
     multiplicadorHP: 2.9,
     fraquezas: ['agua'],
     resistencias: ['terra', 'fisico'],
@@ -243,6 +257,8 @@ export const MONSTERS = {
     altitude: 3,
     alcanceVertical: 2,
     escalaChefe: true,
+    baseHp: 600,
+    hpEscalaFator: 0.5,
     multiplicadorHP: 3.0,
     fraquezas: ['agua'],
     resistencias: ['fogo', 'terra'],
@@ -409,12 +425,15 @@ export function defFromCustomMonster(row) {
     passiva: row.passiva || '',
     efeitos: {},
     escalaChefe: row.escala_chefe,
+    baseHp: Number(row.base_hp) || 0,
+    hpEscalaFator: Number(row.hp_escala_fator) || 0.5,
     multiplicadorHP: Number(row.multiplicador_hp) || 3,
   };
 }
 
 // Monta um monstro pronto para entrar em batalha.
-// `playerHpSum` só é usado para chefes: vida = soma do HP dos jogadores x multiplicador.
+// `playerHpSum` só é usado para chefes: vida = baseHp + soma do HP dos jogadores x fator escala.
+// O fator escala é mais suave que o multiplicador antigo para não ser punitivo demais.
 export function buildMonster(def, playerHpSum = 0) {
   // Mesma fórmula de vida dos jogadores (reforma da vida): 500 + (RES × 10).
   const hpPorUnidade = 500 + Math.round(def.attributes.resistencia * 10);
@@ -422,7 +441,10 @@ export function buildMonster(def, playerHpSum = 0) {
   const mpMax = manaMaxFrom(def.attributes.inteligencia, def.attributes.inteligencia);
   let hp = hpPorUnidade;
   if (def.escalaChefe) {
-    hp = Math.max(50, Math.round(playerHpSum * (def.multiplicadorHP || 3)));
+    // Novo sistema: baseHp (vida própria do chefe) + soma dos jogadores × fator escala suave
+    const fatorEscala = def.hpEscalaFator || 0.5;
+    const base = def.baseHp || 0;
+    hp = Math.max(50, Math.round(base + playerHpSum * fatorEscala));
   }
   // Horda: vida = HP individual × quantidade de corpos.
   const unidadesHorda = def.horda?.quantidade || 0;
