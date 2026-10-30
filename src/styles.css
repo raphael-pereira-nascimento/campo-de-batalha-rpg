@@ -324,6 +324,13 @@ select:focus {
   margin-right: 6px;
 }
 
+.tag.recommend-tag {
+  background: rgba(255, 209, 102, 0.18);
+  border-color: var(--accent-2);
+  color: var(--accent-2);
+  font-weight: 700;
+}
+
 .attr-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);

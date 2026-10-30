@@ -30,6 +30,7 @@ import {
   ARMA_CATEGORIA_INFO,
   ALVO_LABEL,
 } from '../game/sistema.js';
+import { CLASSES } from '../game/data.js';
 
 const STEP_NAMES = [
   'Identidade',
@@ -328,6 +329,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
               equipment={equipment}
               setEquipment={setEquipment}
               player={player}
+              classes={classes}
             />
           )}
 
@@ -962,7 +964,7 @@ function MegaSkillStep({ title, value, onChange, allowModo }) {
   );
 }
 
-function EquipStep({ gameData, customEquipment, equipment, setEquipment, player }) {
+function EquipStep({ gameData, customEquipment, equipment, setEquipment, player, classes = [] }) {
   const [creating, setCreating] = useState(false);
   const [publish, setPublish] = useState(false);
   const [form, setForm] = useState({
@@ -981,13 +983,18 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player 
   });
   const [armaPicks, setArmaPicks] = useState({ perto: '', distancia: '', utilitaria: '' });
   const [armaduraPick, setArmaduraPick] = useState('');
+  const [acessorioPick, setAcessorioPick] = useState('');
+
+  const mainScores = mainAttributesForClasses(classes);
 
   // O id do catálogo é a CHAVE do objeto — Object.values perde o id e o select
   // não consegue equipar (option value ficava undefined). Usamos Object.entries.
   const presetArmas = Object.entries(gameData.equipment.armas).map(([id, it]) => ({ id, ...it }));
   const presetArmaduras = Object.entries(gameData.equipment.armaduras).map(([id, it]) => ({ id, ...it }));
+  const presetAcessorios = Object.entries(gameData.equipment.acessorios || {}).map(([id, it]) => ({ id, ...it }));
   const customArmas = customEquipment.filter((e) => e.tipo === 'arma');
   const customArmaduras = customEquipment.filter((e) => e.tipo === 'armadura');
+  const customAcessorios = customEquipment.filter((e) => e.tipo === 'acessorio');
 
   const armasDaCategoria = (categoria) =>
     [...presetArmas.filter((a) => (a.categoria || categoriaDeArma(a)) === categoria), ...customArmas].map((a) => ({
@@ -1034,6 +1041,17 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player 
       ? { id: armaduraPick, nome: src.nome, defesa: Number(src.defesa), bonus: src.bonus || {}, penalidade: src.penalidade || {}, maleficio: src.maleficio || '' }
       : { id: src.id, nome: src.nome, defesa: src.defesa, bonus: src.bonus || {}, penalidade: src.penalidade || {}, maleficio: src.maleficio || '' };
     setEquipment((eq) => ({ ...eq, armadura: def }));
+  };
+
+  const applyAcessorio = () => {
+    if (!acessorioPick) return;
+    const src = [...presetAcessorios, ...customAcessorios].find((a) => a.id === acessorioPick || a.nome === acessorioPick);
+    if (!src) return;
+    const isCustom = customAcessorios.some((a) => a.id === acessorioPick);
+    const def = isCustom
+      ? { id: acessorioPick, nome: src.nome, bonus: src.bonus || {}, penalidade: src.penalidade || {}, maleficio: src.maleficio || '', socketSlots: src.socketSlots || 0 }
+      : { id: src.id, nome: src.nome, bonus: src.bonus || {}, penalidade: src.penalidade || {}, maleficio: src.maleficio || '', socketSlots: src.socketSlots || 0 };
+    setEquipment((eq) => ({ ...eq, acessorio: def }));
   };
 
   const setBonus = (k, v) => setForm((f) => ({ ...f, bonus: { ...f.bonus, [k]: Number(v) } }));
@@ -1115,11 +1133,15 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player 
               <select value={armaPicks[cat]} onChange={(e) => setArmaPicks((p) => ({ ...p, [cat]: e.target.value }))}>
                 <option value="">Escolher arma...</option>
                 <optgroup label="Catálogo">
-                  {catalogo.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.nome} (dano {a.danoBase}{a.usosMax ? ` · ${a.usosMax} usos` : ''}{a.recarga > 0 ? ` · recarga ${a.recarga}` : ''})
-                    </option>
-                  ))}
+                  {catalogo.map((a) => {
+                    const rec = equipmentRecommendation(a, classes);
+                    return (
+                      <option key={a.id} value={a.id}>
+                        {rec.recomendado && rec.principal ? '🌟' : ''} {a.nome}
+                        (dano {a.danoBase}{a.usosMax ? ` · ${a.usosMax} usos` : ''}{a.recarga > 0 ? ` · recarga ${a.recarga}` : ''})
+                      </option>
+                    );
+                  })}
                 </optgroup>
                 {customArmas.length > 0 && (
                   <optgroup label="Criadas">
@@ -1137,14 +1159,43 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player 
           <select value={armaduraPick} onChange={(e) => setArmaduraPick(e.target.value)}>
             <option value="">Escolher armadura...</option>
             <optgroup label="Catálogo">
-              {presetArmaduras.map((a) => (
-                <option key={a.id} value={a.id}>{a.nome} (def {a.defesa})</option>
-              ))}
+              {presetArmaduras.map((a) => {
+                const rec = equipmentRecommendation(a, classes);
+                return (
+                  <option key={a.id} value={a.id}>
+                    {rec.recomendado && rec.principal ? '🌟' : ''} {a.nome} (def {a.defesa})
+                  </option>
+                );
+              })}
             </optgroup>
             {customArmaduras.length > 0 && (
               <optgroup label="Criadas">
                 {customArmaduras.map((a) => (
                   <option key={a.id} value={a.id}>{a.nome} (def {a.defesa})</option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+        </label>
+        <label>
+          💍 Acessório
+          <select value={acessorioPick} onChange={(e) => setAcessorioPick(e.target.value)}>
+            <option value="">Escolher acessório...</option>
+            <optgroup label="Catálogo">
+              {presetAcessorios.map((a) => {
+                const rec = equipmentRecommendation(a, classes);
+                return (
+                  <option key={a.id} value={a.id}>
+                    {rec.recomendado && rec.principal ? '🌟' : ''} {a.nome}
+                    {a.bonus ? ` (` + Object.entries(a.bonus).map(([k, v]) => `${ATTRIBUTE_NAMES[k]} +${v}`).join(', ') + ')' : ''}
+                  </option>
+                );
+              })}
+            </optgroup>
+            {customAcessorios.length > 0 && (
+              <optgroup label="Criadas">
+                {customAcessorios.map((a) => (
+                  <option key={a.id} value={a.id}>{a.nome}</option>
                 ))}
               </optgroup>
             )}
@@ -1158,6 +1209,7 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player 
           </button>
         ))}
         <button onClick={applyArmadura} disabled={!armaduraPick}>Equipar armadura</button>
+        <button onClick={applyAcessorio} disabled={!acessorioPick}>Equipar acessório</button>
         <button className="ghost" onClick={() => setCreating((c) => !c)}>
           {creating ? 'Fechar' : '✍️ Criar equipamento'}
         </button>
@@ -1262,9 +1314,11 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player 
           const arma = equipment.armas?.[cat];
           if (!arma) return null;
           const info = ARMA_CATEGORIA_INFO[cat];
+          const rec = equipmentRecommendation(arma, classes);
           return (
             <div className="chosen-chip" key={cat}>
               <strong>{info.icon} {arma.nome}</strong>
+              {rec.recomendado && rec.principal && <span className="tag recommend-tag">🌟 Recomendado</span>}
               <span className="tag">{info.nome}</span>
               <span className="tag">dano {arma.danoBase}</span>
               {arma.usosMax ? <span className="tag">{arma.usosMax} usos</span> : null}
@@ -1283,15 +1337,80 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player 
         {equipment.armadura && (
           <div className="chosen-chip">
             <strong>🛡️ {equipment.armadura.nome}</strong>
+            {equipmentRecommendation(equipment.armadura, classes).recomendado && equipmentRecommendation(equipment.armadura, classes).principal && <span className="tag recommend-tag">🌟 Recomendado</span>}
             <span className="tag">def {equipment.armadura.defesa}</span>
             <span className="muted small">{bonusSummary(equipment.armadura)}</span>
             <button className="ghost remove-x" onClick={() => setEquipment((eq) => ({ ...eq, armadura: null }))}>✕</button>
           </div>
         )}
-        {!armasDeEquipamento(equipment).length && !equipment.armadura && <p className="muted">Sem equipamento.</p>}
+        {equipment.acessorio && (
+          <div className="chosen-chip">
+            <strong>💍 {equipment.acessorio.nome}</strong>
+            {equipmentRecommendation(equipment.acessorio, classes).recomendado && equipmentRecommendation(equipment.acessorio, classes).principal && <span className="tag recommend-tag">🌟 Recomendado</span>}
+            <span className="muted small">{bonusSummary(equipment.acessorio)}</span>
+            <button className="ghost remove-x" onClick={() => setEquipment((eq) => ({ ...eq, acessorio: null }))}>✕</button>
+          </div>
+        )}
+        {!armasDeEquipamento(equipment).length && !equipment.armadura && !equipment.acessorio && <p className="muted">Sem equipamento.</p>}
       </div>
     </div>
   );
+}
+
+function AbilitiesStep({ pontosDisponiveis, habilidades, setHabilidades }) {
+
+// ── Sistema de indicação de equipamento ─────────────────────────────
+// Calcula o(s) atributo(s) principal(is) com base nas classes escolhidas.
+// Retorna um mapa { atributo: pontuacao } onde maior = mais importante.
+function mainAttributesForClasses(classes) {
+  const scores = {};
+  for (const c of classes || []) {
+    const def = CLASSES[c.id || c.archetype];
+    if (!def) continue;
+    const lvl = c.archetype ? c.archetype : c.id;
+    const clsDef = CLASSES[lvl];
+    if (!clsDef) continue;
+    // O atributo do "levelUp" é o principal da classe.
+    const prim = clsDef.levelUp;
+    scores[prim] = (scores[prim] || 0) + 1;
+    // Bônus diretos da classe também contam como indicação.
+    for (const [k, v] of Object.entries(clsDef.bonus || {})) {
+      if (v > 0) scores[k] = (scores[k] || 0) + v;
+    }
+  }
+  return scores;
+}
+
+// Verifica se um item (arma/armadura/acessorio) é recomendado para as classes.
+// Retorna { recomendado: boolean, motivo: string, atributos: string[] }
+function equipmentRecommendation(item, classes) {
+  if (!item || !classes?.length) return { recomendado: false, motivo: '', atributos: [] };
+  const scores = mainAttributesForClasses(classes);
+  if (!scores || Object.keys(scores).length === 0) return { recomendado: false, motivo: '', atributos: [] };
+
+  const hitAttrs = [];
+  const b = item.bonus || {};
+  const p = item.penalidade || {};
+
+  for (const [attr, val] of Object.entries(b)) {
+    if (val > 0 && scores[attr] && scores[attr] > 0) hitAttrs.push(attr);
+  }
+  // Itens com penalidade no atributo principal não são recomendados.
+  for (const [attr, val] of Object.entries(p)) {
+    if (val > 0 && scores[attr] && scores[attr] > 0) return { recomendado: false, motivo: 'Penalidade no atributo principal', atributos: [] };
+  }
+
+  if (hitAttrs.length === 0) return { recomendado: false, motivo: '', atributos: [] };
+
+  const main = Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0];
+  const motivos = hitAttrs.map((a) => `${ATTRIBUTE_NAMES[a]} +${b[a]}`).join(', ');
+  const ehPrincipal = hitAttrs.includes(main);
+  return {
+    recomendado: true,
+    motivo: ehPrincipal ? `Ideal para suas classes: ${motivos}` : `Bônus úteis: ${motivos}`,
+    atributos: hitAttrs,
+    principal: ehPrincipal,
+  };
 }
 
 function AbilitiesStep({ pontosDisponiveis, habilidades, setHabilidades }) {
