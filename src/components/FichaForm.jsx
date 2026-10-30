@@ -964,6 +964,60 @@ function MegaSkillStep({ title, value, onChange, allowModo }) {
   );
 }
 
+// ── Sistema de indicação de equipamento ─────────────────────────────
+// Calcula o(s) atributo(s) principal(is) com base nas classes escolhidas.
+// Retorna um mapa { atributo: pontuacao } onde maior = mais importante.
+function mainAttributesForClasses(classes) {
+  const scores = {};
+  for (const c of classes || []) {
+    const def = CLASSES[c.id || c.archetype];
+    if (!def) continue;
+    const lvl = c.archetype ? c.archetype : c.id;
+    const clsDef = CLASSES[lvl];
+    if (!clsDef) continue;
+    // O atributo do "levelUp" é o principal da classe.
+    const prim = clsDef.levelUp;
+    scores[prim] = (scores[prim] || 0) + 1;
+    // Bônus diretos da classe também contam como indicação.
+    for (const [k, v] of Object.entries(clsDef.bonus || {})) {
+      if (v > 0) scores[k] = (scores[k] || 0) + v;
+    }
+  }
+  return scores;
+}
+
+// Verifica se um item (arma/armadura/acessorio) é recomendado para as classes.
+// Retorna { recomendado: boolean, motivo: string, atributos: string[] }
+function equipmentRecommendation(item, classes) {
+  if (!item || !classes?.length) return { recomendado: false, motivo: '', atributos: [] };
+  const scores = mainAttributesForClasses(classes);
+  if (!scores || Object.keys(scores).length === 0) return { recomendado: false, motivo: '', atributos: [] };
+
+  const hitAttrs = [];
+  const b = item.bonus || {};
+  const p = item.penalidade || {};
+
+  for (const [attr, val] of Object.entries(b)) {
+    if (val > 0 && scores[attr] && scores[attr] > 0) hitAttrs.push(attr);
+  }
+  // Itens com penalidade no atributo principal não são recomendados.
+  for (const [attr, val] of Object.entries(p)) {
+    if (val > 0 && scores[attr] && scores[attr] > 0) return { recomendado: false, motivo: 'Penalidade no atributo principal', atributos: [] };
+  }
+
+  if (hitAttrs.length === 0) return { recomendado: false, motivo: '', atributos: [] };
+
+  const main = Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0];
+  const motivos = hitAttrs.map((a) => `${ATTRIBUTE_NAMES[a]} +${b[a]}`).join(', ');
+  const ehPrincipal = hitAttrs.includes(main);
+  return {
+    recomendado: true,
+    motivo: ehPrincipal ? `Ideal para suas classes: ${motivos}` : `Bônus úteis: ${motivos}`,
+    atributos: hitAttrs,
+    principal: ehPrincipal,
+  };
+}
+
 function EquipStep({ gameData, customEquipment, equipment, setEquipment, player, classes = [] }) {
   const [creating, setCreating] = useState(false);
   const [publish, setPublish] = useState(false);
@@ -1355,62 +1409,6 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player,
       </div>
     </div>
   );
-}
-
-function AbilitiesStep({ pontosDisponiveis, habilidades, setHabilidades }) {
-
-// ── Sistema de indicação de equipamento ─────────────────────────────
-// Calcula o(s) atributo(s) principal(is) com base nas classes escolhidas.
-// Retorna um mapa { atributo: pontuacao } onde maior = mais importante.
-function mainAttributesForClasses(classes) {
-  const scores = {};
-  for (const c of classes || []) {
-    const def = CLASSES[c.id || c.archetype];
-    if (!def) continue;
-    const lvl = c.archetype ? c.archetype : c.id;
-    const clsDef = CLASSES[lvl];
-    if (!clsDef) continue;
-    // O atributo do "levelUp" é o principal da classe.
-    const prim = clsDef.levelUp;
-    scores[prim] = (scores[prim] || 0) + 1;
-    // Bônus diretos da classe também contam como indicação.
-    for (const [k, v] of Object.entries(clsDef.bonus || {})) {
-      if (v > 0) scores[k] = (scores[k] || 0) + v;
-    }
-  }
-  return scores;
-}
-
-// Verifica se um item (arma/armadura/acessorio) é recomendado para as classes.
-// Retorna { recomendado: boolean, motivo: string, atributos: string[] }
-function equipmentRecommendation(item, classes) {
-  if (!item || !classes?.length) return { recomendado: false, motivo: '', atributos: [] };
-  const scores = mainAttributesForClasses(classes);
-  if (!scores || Object.keys(scores).length === 0) return { recomendado: false, motivo: '', atributos: [] };
-
-  const hitAttrs = [];
-  const b = item.bonus || {};
-  const p = item.penalidade || {};
-
-  for (const [attr, val] of Object.entries(b)) {
-    if (val > 0 && scores[attr] && scores[attr] > 0) hitAttrs.push(attr);
-  }
-  // Itens com penalidade no atributo principal não são recomendados.
-  for (const [attr, val] of Object.entries(p)) {
-    if (val > 0 && scores[attr] && scores[attr] > 0) return { recomendado: false, motivo: 'Penalidade no atributo principal', atributos: [] };
-  }
-
-  if (hitAttrs.length === 0) return { recomendado: false, motivo: '', atributos: [] };
-
-  const main = Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0];
-  const motivos = hitAttrs.map((a) => `${ATTRIBUTE_NAMES[a]} +${b[a]}`).join(', ');
-  const ehPrincipal = hitAttrs.includes(main);
-  return {
-    recomendado: true,
-    motivo: ehPrincipal ? `Ideal para suas classes: ${motivos}` : `Bônus úteis: ${motivos}`,
-    atributos: hitAttrs,
-    principal: ehPrincipal,
-  };
 }
 
 function AbilitiesStep({ pontosDisponiveis, habilidades, setHabilidades }) {
