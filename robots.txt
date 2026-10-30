@@ -1,0 +1,25 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://raphael-pereira-nascimento.github.io/campo-de-batalha-rpg/sitemap.xml
+
+# Páginas públicas do Campo de Batalha RPG
+Allow: /campo-de-batalha-rpg/
+Allow: /campo-de-batalha-rpg/index.html
+Allow: /campo-de-batalha-rpg/mesa-de-batalha.html
+Allow: /campo-de-batalha-rpg/campo-de-batalha.html
+Allow: /campo-de-batalha-rpg/masmorras.html
+Allow: /campo-de-batalha-rpg/taverna.html
+Allow: /campo-de-batalha-rpg/personagens.html
+Allow: /campo-de-batalha-rpg/arsenal.html
+Allow: /campo-de-batalha-rpg/regras.html
+Allow: /campo-de-batalha-rpg/forja.html
+Allow: /campo-de-batalha-rpg/loja.html
+Allow: /campo-de-batalha-rpg/registro.html
+
+# Negar arquivos internos/dev
+Disallow: /src/
+Disallow: /server/
+Disallow: /tools/
+Disallow: /dist/
+Disallow: /.git/
