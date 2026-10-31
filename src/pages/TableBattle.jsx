@@ -109,11 +109,12 @@ const uid = () => `tb_${_nextId++}`;
 
 function makeFighter(name, team, attrs = {}, extra = {}) {
   const a = { forca: 5, inteligencia: 5, resistencia: 5, destreza: 5, reflexos: 5, ...attrs };
-  const hpMax = 500 + (a.resistencia || 5) * 10;
-  const mpMax = (a.inteligencia || 5) * 10;
+  const hpMax = extra.hpMax ?? (500 + (a.resistencia || 5) * 10);
+  const mpMax = extra.mpMax ?? ((a.inteligencia || 5) * 10);
   return {
     id: uid(), name, team,
-    hp: hpMax, hpMax, mp: mpMax, mpMax,
+    hp: extra.hp ?? hpMax, hpMax,
+    mp: extra.mp ?? mpMax, mpMax,
     speed: a.destreza || 5, reflexos: a.reflexos || 5,
     forca: a.forca || 5, inteligencia: a.inteligencia || 5,
     resistencia: a.resistencia || 5, destreza: a.destreza || 5,
@@ -325,11 +326,18 @@ const [lastRoll, setLastRoll] = useState(null);
     if (!def) return;
     const cfg = PROTECTION_CHEFS[def.id];
     const protection = cfg ? makeProtection(cfg, bossEclipse) : null;
+
+    // Nova fórmula de escala de chefe: baseHp + (soma do HP dos aliados × hpEscalaFator)
+    const allyHpSum = allies.reduce((sum, f) => sum + f.hpMax, 0);
+    const fatorEscala = def.hpEscalaFator || 0.5;
+    const baseHp = def.baseHp || 0;
+    const bossHp = Math.max(50, Math.round(baseHp + allyHpSum * fatorEscala));
+
     const f = makeFighter(
       `${bossEclipse && def.varianteEclipse ? '🌑 ' : ''}${def.icone || '👑'} ${def.nome}${bossEclipse && def.varianteEclipse ? ` (${def.varianteEclipse.sufixo || 'Eclipse'})` : ''}`,
       'enemy',
       { ...def.attributes },
-      { protection, _bossId: def.id, _eclipse: bossEclipse && def.varianteEclipse ? true : null }
+      { protection, _bossId: def.id, _eclipse: bossEclipse && def.varianteEclipse ? true : null, hpMax: bossHp, hp: bossHp }
     );
     setFighters((prevFighters) => {
       const next = [...prevFighters, f];
@@ -342,9 +350,9 @@ const [lastRoll, setLastRoll] = useState(null);
     const protoTxt = protection
       ? ` 🛡️ Proteção: ${protection.hp}/${protection.maxHp} (${bossEclipse ? 'Eclipse' : 'normal'})`
       : '';
-    addLog(`👑 ${def.nome} (Nv.${def.nivel}) entra na mesa como inimigo! Passiva: ${def.passiva || '—'}${golpes ? ` Golpes: ${golpes}.` : ''}${protoTxt}`);
+    addLog(`👑 ${def.nome} (Nv.${def.nivel}) entra na mesa como inimigo! Passiva: ${def.passiva || '—'}${golpes ? ` Golpes: ${golpes}.` : ''}${protoTxt} HP: ${bossHp}`);
     setBossId('');
-  }, [bossId, addLog, initiativeRolled, bossEclipse]);
+  }, [bossId, addLog, initiativeRolled, bossEclipse, allies]);
 
   // Rola iniciativa (D20 + VEL) para todos que ainda não têm e define a ordem de turnos.
   const rollInitiative = useCallback(() => {
