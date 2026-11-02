@@ -18,6 +18,8 @@ export default defineConfig({
         forja: 'forja.html',
         loja: 'loja.html',
         registro: 'registro.html',
+        materiais: 'materiais.html',
+        equipamentos: 'equipamentos.html',
       },
     },
   },

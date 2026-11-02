@@ -333,6 +333,34 @@ export default function App({ initialView } = {}) {
     </Suspense>;
   }
 
+  if (view === 'materiais') {
+    return (
+      <div className="page">
+        <header className="topbar">
+          <h1>📦 Materiais</h1>
+          <button className="ghost" onClick={() => setView('characters')}>← Voltar</button>
+        </header>
+        <div className="content">
+          <p className="muted">Catálogo de minérios, metais e pedras preciosas.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === 'equipamentos') {
+    return (
+      <div className="page">
+        <header className="topbar">
+          <h1>⚔️ Equipamentos</h1>
+          <button className="ghost" onClick={() => setView('characters')}>← Voltar</button>
+        </header>
+        <div className="content">
+          <p className="muted">Catálogo de armas, armaduras, acessórios e itens mágicos.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (view === 'lobby') {
     return <Suspense fallback={<div className="loading">Carregando...</div>}>
       <Lobby
