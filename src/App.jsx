@@ -3,6 +3,8 @@ import { api, getSocket, getPlayer, getToken, logout, isOffline, setPlayerSessio
 import Home from './pages/Home.jsx';
 import Characters from './pages/Characters.jsx';
 import ConnectionBadge from './components/ConnectionBadge.jsx';
+import { MATERIAIS, getMateriaisPorTipo, getMateriaisPorRaridade } from './game/materials.js';
+import { EQUIPAMENTOS, getEquipamentosPorTipo, EQUIP_TIPO } from './game/equipments.js';
 
 const Lobby = lazy(() => import('./pages/Lobby.jsx'));
 const Battle = lazy(() => import('./pages/Battle.jsx'));
@@ -336,6 +338,9 @@ export default function App({ initialView } = {}) {
   }
 
   if (view === 'materiais') {
+    const porTipo = Object.fromEntries(
+      ['minerio', 'metal', 'pedra'].map(t => [t, getMateriaisPorTipo(t)])
+    );
     return (
       <div className="page">
         <header className="topbar">
@@ -343,13 +348,33 @@ export default function App({ initialView } = {}) {
           <button className="ghost" onClick={() => setView('characters')}>← Voltar</button>
         </header>
         <div className="content">
-          <p className="muted">Catálogo de minérios, metais e pedras preciosas.</p>
+          <p className="muted">Catálogo de minérios, metais e pedras preciosas para forja.</p>
+          <div style={{ display: 'grid', gap: 16, padding: 12 }}>
+            {['minerio', 'metal', 'pedra'].map(tipo => (
+              <section key={tipo} style={{ border: '1px solid #3a2e54', borderRadius: 8, padding: 12, background: '#241a3a' }}>
+                <h3 style={{ margin: '0 0 8px', color: '#b8a9cf' }}>{tipo.charAt(0).toUpperCase() + tipo.slice(1)}s</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
+                  {porTipo[tipo].map(m => (
+                    <div key={m.id} style={{ border: '1px solid #444', borderRadius: 6, padding: 8, background: '#1e142c' }}>
+                      <div style={{ fontWeight: 'bold', color: '#eee' }}>{m.nome}</div>
+                      <div style={{ fontSize: '0.85em', color: '#888' }}>{m.raridade} • {m.bioma}</div>
+                      <div style={{ fontSize: '0.85em', color: '#b8a9cf', marginTop: 4 }}>{m.descricao}</div>
+                      <div style={{ fontSize: '0.8em', color: '#8b5fbf', marginTop: 4 }}>R$ {m.precoPorKg}/kg</div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
         </div>
       </div>
     );
   }
 
   if (view === 'equipamentos') {
+    const porTipo = Object.fromEntries(
+      Object.values(EQUIP_TIPO).map(t => [t.nome.toLowerCase(), getEquipamentosPorTipo(t.nome.toLowerCase().replace('ã', 'a'))])
+    );
     return (
       <div className="page">
         <header className="topbar">
@@ -358,6 +383,27 @@ export default function App({ initialView } = {}) {
         </header>
         <div className="content">
           <p className="muted">Catálogo de armas, armaduras, acessórios e itens mágicos.</p>
+          <div style={{ display: 'grid', gap: 16, padding: 12 }}>
+            {Object.entries(EQUIP_TIPO).map(([id, tipo]) => {
+              const items = getEquipamentosPorTipo(id);
+              if (items.length === 0) return null;
+              return (
+                <section key={id} style={{ border: '1px solid #3a2e54', borderRadius: 8, padding: 12, background: '#241a3a' }}>
+                  <h3 style={{ margin: '0 0 8px', color: '#b8a9cf' }}>{tipo.nome} ({items.length})</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
+                    {items.map(eq => (
+                      <div key={eq.id} style={{ border: '1px solid #444', borderRadius: 6, padding: 8, background: '#1e142c' }}>
+                        <div style={{ fontWeight: 'bold', color: '#eee' }}>{eq.nome}</div>
+                        <div style={{ fontSize: '0.85em', color: '#888' }}>{eq.raridade} • {eq.peso} kg</div>
+                        <div style={{ fontSize: '0.85em', color: '#b8a9cf', marginTop: 4 }}>{eq.descricao}</div>
+                        <div style={{ fontSize: '0.8em', color: '#8b5fbf', marginTop: 4 }}>R$ {calcularPrecoEquipamento(eq.id)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
         </div>
       </div>
     );
