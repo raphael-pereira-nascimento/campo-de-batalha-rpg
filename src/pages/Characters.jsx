@@ -6,7 +6,7 @@ import { exportarFicha, importarFicha } from '../utils/fichaFile.js';
 import { api, isOffline } from '../api.js';
 import { shareCharacter, resolveSharedCharacter } from '../utils/shareCharacter.js';
 
-export default function Characters({ player, characters, gameData, customClasses = [], onRefresh, onEnterLobby, onOpenRegistry, onOpenCompendium, onOpenRules, onOpenGemForge, onOpenToolShop, onOpenEquipmentShop, onOpenMining, onOpenTavern, onOpenTableBattle, onOpenDungeons, onLogout }) {
+export default function Characters({ player, characters, gameData, customClasses = [], onRefresh, onEnterLobby, onOpenRegistry, onOpenCompendium, onOpenRules, onOpenGemForge, onOpenMateriais, onOpenEquipamentos, onOpenToolShop, onOpenEquipmentShop, onOpenMining, onOpenTavern, onOpenTableBattle, onOpenDungeons, onLogout }) {
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState(null);
   const [importError, setImportError] = useState('');
@@ -54,6 +54,8 @@ export default function Characters({ player, characters, gameData, customClasses
       <nav className="subnav" aria-label="Atalhos do jogo">
         <button className="primary-link" onClick={onOpenRegistry}>📜 Registro do Mundo</button>
         <button className="primary-link" onClick={onOpenGemForge}>🔮 Forja de Gemas</button>
+        <button className="primary-link" onClick={onOpenMateriais}>⛏️ Materiais</button>
+        <button className="primary-link" onClick={onOpenEquipamentos}>⚔️ Equipamentos</button>
         {characters.length > 0 && (
           <button className="primary-link" onClick={() => onOpenMining?.(characters[0].id)}>⛏️ Mineração</button>
         )}

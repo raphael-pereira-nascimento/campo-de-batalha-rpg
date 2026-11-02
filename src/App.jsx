@@ -233,6 +233,8 @@ export default function App({ initialView } = {}) {
         onOpenCompendium={() => setView('compendium')}
         onOpenRules={() => setView('rules')}
         onOpenGemForge={abrirForja}
+        onOpenMateriais={() => setView('materiais')}
+        onOpenEquipamentos={() => setView('equipamentos')}
         onOpenToolShop={() => abrirToolShop({ tab: 'tools' })}
         onOpenEquipmentShop={(characterId) => abrirToolShop({ tab: 'equipment', characterId })}
         onOpenMining={abrirMineracao}
