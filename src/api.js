@@ -4,6 +4,7 @@ import { isOffline, setServerStatus, saveOfflinePlayer, getOfflinePlayer, getOff
 import { offlineBattle } from './offline/battle.js';
 import { MONSTERS } from './game/monsters.js';
 import { gemIsRaw, getGemaById, GEM_LIST, GEMS, gemPrice, MINERA_VEIOS, polirPedra, verificarFusao } from './game/gems.js';
+import { VEIOS_MATERIAIS, getVeioMaterialById, calcularDropsMonstro, calcularDropsChefe } from './game/mineracao.js';
 import { precoEmCents } from './game/tools.js';
 import { EQUIPMENT, POTIONS, deriveStats, applyMaxMults, aplicarCrescimentoNivel, efeitosDeHabilidades, TAVERN_DRINKS, TAVERN_FOODS } from './game/data.js';
 import { DUNGEONS } from './game/dungeons.js';
@@ -919,6 +920,85 @@ export const api = {
       });
     }
     return auth('/api/gems/mine', { method: 'POST', body: JSON.stringify({ characterId, veioId }) });
+  },
+  // ── Mineração de Materiais ─────────────────────────────────────────────────
+  getMaterialMiningCooldowns: (characterId) => {
+    if (isOffline()) {
+      const chave = `cbr_offline_mining_material_${characterId}`;
+      const minas = JSON.parse(localStorage.getItem(chave) || '{}');
+      const agora = Date.now();
+      const cooldowns = VEIOS_MATERIAIS_LIST.map((veio) => {
+        const ultima = Number(minas[veio.id] || 0);
+        const cooldownMs = (veio.cooldownMin || 0) * 60_000;
+        const restante = ultima ? Math.max(0, cooldownMs - (agora - ultima)) : 0;
+        return {
+          veioId: veio.id,
+          lastMinedAt: ultima || null,
+          restanteSeg: Math.ceil(restante / 1000),
+        };
+      });
+      return Promise.resolve({ ok: true, cooldowns });
+    }
+    return auth(`/api/materials/${characterId}/mining`);
+  },
+  mineMaterial: (characterId, veioId) => {
+    if (isOffline()) {
+      const veio = getVeioMaterialById(veioId);
+      if (!veio) return Promise.reject(new Error('Veio de material inválido.'));
+      const chave = `cbr_offline_mining_material_${characterId}`;
+      const minas = JSON.parse(localStorage.getItem(chave) || '{}');
+      const cooldownMs = (veio.cooldownMin || 0) * 60_000;
+      const ultima = Number(minas[veio.id] || 0);
+      const passado = Date.now() - ultima;
+      if (cooldownMs > 0 && ultima && passado < cooldownMs) {
+        const restam = Math.ceil((cooldownMs - passado) / 1000);
+        return Promise.reject(
+          new Error(
+            `Este veio ainda está se recuperando. Aguarde ${Math.floor(restam / 60)}min ${restam % 60}s.`,
+          ),
+        );
+      }
+      const carteira = getOfflineWallet();
+      if (carteira < (veio.custoCents || 0)) {
+        return Promise.reject(
+          new Error(`Ouro insuficiente. Custo: ${veio.custoCents} moedas.`),
+        );
+      }
+
+      // Adiciona o material ao inventário do personagem
+      addOfflineCoins(-veio.custoCents);
+      const chars = getOfflineCharacters();
+      const c = chars.find((ch) => ch.id === characterId);
+      if (c) {
+        c.inventory = Array.isArray(c.inventory) ? c.inventory : [];
+        c.inventory.push({
+          id: veio.material,
+          nome: veio.nome.replace('Veio de ', ''),
+          tipo: 'material',
+          materialId: veio.material,
+          quantidade: veio.quantidade,
+          raridade: 'comum',
+        });
+        localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
+      }
+      minas[veio.id] = Date.now();
+      localStorage.setItem(chave, JSON.stringify(minas));
+
+      return Promise.resolve({
+        ok: true,
+        material: veio.material,
+        quantidade: veio.quantidade,
+        veio: veio.nome,
+        veioId: veio.id,
+        cooldownMin: veio.cooldownMin || 0,
+        walletCents: carteira - (veio.custoCents || 0),
+        offline: true,
+      });
+    }
+    return auth('/api/materials/mine', {
+      method: 'POST',
+      body: JSON.stringify({ characterId, veioId }),
+    });
   },
   buyGem: (characterId, gemId) => {
     if (isOffline()) {
