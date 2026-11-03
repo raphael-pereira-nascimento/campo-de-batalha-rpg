@@ -13,6 +13,7 @@ const Compendium = lazy(() => import('./pages/Compendium.jsx'));
 const Rules = lazy(() => import('./pages/Rules.jsx'));
 const TableBattle = lazy(() => import('./pages/TableBattle.jsx'));
 const GemForge = lazy(() => import('./pages/GemForge.jsx'));
+const Forge = lazy(() => import('./pages/Forge.jsx'));
 const ToolShop = lazy(() => import('./pages/ToolShop.jsx'));
 const Tavern = lazy(() => import('./pages/Tavern.jsx'));
 const Dungeons = lazy(() => import('./pages/Dungeons.jsx'));
@@ -237,6 +238,7 @@ export default function App({ initialView } = {}) {
         onOpenGemForge={abrirForja}
         onOpenMateriais={() => setView('materiais')}
         onOpenEquipamentos={() => setView('equipamentos')}
+        onOpenForge={() => setView('forge')}
         onOpenToolShop={() => abrirToolShop({ tab: 'tools' })}
         onOpenEquipmentShop={(characterId) => abrirToolShop({ tab: 'equipment', characterId })}
         onOpenMining={abrirMineracao}
@@ -277,6 +279,19 @@ export default function App({ initialView } = {}) {
         onOpenToolShop={() => abrirToolShop()}
         onOpenMining={abrirMineracao}
         onEnterLobby={() => setView('lobby')}
+      />
+    </Suspense>;
+  }
+
+  if (view === 'forge') {
+    return <Suspense fallback={<div className="loading">Acessando a forja de equipamentos...</div>}>
+      <Forge
+        onBack={() => setView('characters')}
+        player={player}
+        characters={characters}
+        walletCents={walletCents}
+        onWalletChange={setWalletCents}
+        onRefresh={refreshCharacters}
       />
     </Suspense>;
   }
