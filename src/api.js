@@ -1075,6 +1075,37 @@ export const api = {
     }
     return auth(`/api/characters/${characterId}/gems`);
   },
+  // ── Forja: salvar equipamento craftado no inventário ──────────────────────
+  craftItem: (characterId, item) => {
+    if (isOffline()) {
+      if (!characterId) return Promise.reject(new Error('Escolha um personagem.'));
+      const chars = getOfflineCharacters();
+      const c = chars.find((ch) => ch.id === characterId);
+      if (!c) return Promise.reject(new Error('Personagem não encontrado.'));
+      c.inventory = Array.isArray(c.inventory) ? c.inventory : [];
+      c.inventory.push({ ...item, id: item.id || 'crafted-' + Date.now() });
+      localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
+      return Promise.resolve({ ok: true, item: c.inventory[c.inventory.length - 1], offline: true });
+    }
+    return auth('/api/characters/craft', {
+      method: 'POST',
+      body: JSON.stringify({ characterId, item }),
+    });
+  },
+
+  gastarCarteira: (cents) => {
+    if (isOffline()) {
+      const carteira = getOfflineWallet();
+      if (carteira < cents) return Promise.reject(new Error('Ouro insuficiente.'));
+      addOfflineCoins(-cents);
+      return Promise.resolve({ ok: true, walletCents: carteira - cents, offline: true });
+    }
+    return auth('/api/wallet/spend', {
+      method: 'POST',
+      body: JSON.stringify({ cents }),
+    });
+  },
+
   socketGem: (characterId, slot, gemId) => {
     if (isOffline()) {
       const chars = getOfflineCharacters();

@@ -176,6 +176,42 @@ export const EQUIPAMENTOS = {
     descricao: 'Pistola de serviço naval, precisa e resistente à corrosão.',
     imagem: 'assets/equipamentos/pistola_da_marinha.png',
   },
+  canhao_de_explosao: {
+    id: 'canhao_de_explosao', nome: 'Canhão de Explosão', tipo: 'arma', subcategoria: 'fogo',
+    raridade: 'epica', peso: 8.0, precoBase: 6500,
+    categoria: 'utilitaria', usosMax: 1, recargaTurnos: 4, danoBase: 10,
+    materiaisUsados: [{ id: 'aco', quantidade: 6.0 }, { id: 'latão', quantidade: 2.0 }, { id: 'obsidiana', quantidade: 0.5 }],
+    slots: 7, bonus: { forca: 3 }, penalidade: { destreza: -2, reflexos: -1 },
+    descricao: 'Canhão de artilharia portátil — projétil explosivo causa dano em área.',
+    imagem: 'assets/equipamentos/canhao_de_explosao.png',
+  },
+  canhao_de_gelo: {
+    id: 'canhao_de_gelo', nome: 'Canhão de Gelo', tipo: 'arma', subcategoria: 'fogo',
+    raridade: 'rara', peso: 6.0, precoBase: 4200,
+    categoria: 'utilitaria', usosMax: 1, recargaTurnos: 3, danoBase: 7,
+    materiaisUsados: [{ id: 'ferroForjado', quantidade: 4.0 }, { id: 'prata', quantidade: 1.0 }],
+    slots: 6, bonus: { inteligencia: 1, resistencia: 1 }, penalidade: { destreza: -1 },
+    descricao: 'Dispara projéteis congelados que podem deixar o alvo lento.',
+    imagem: 'assets/equipamentos/canhao_de_gelo.png',
+  },
+  canhao_de_relampago: {
+    id: 'canhao_de_relampago', nome: 'Canhão de Relâmpago', tipo: 'arma', subcategoria: 'fogo',
+    raridade: 'rara', peso: 5.5, precoBase: 4800,
+    categoria: 'utilitaria', usosMax: 1, recargaTurnos: 3, danoBase: 8,
+    materiaisUsados: [{ id: 'cobre', quantidade: 3.0 }, { id: 'prata', quantidade: 1.0 }, { id: 'latão', quantidade: 1.0 }],
+    slots: 6, bonus: { inteligencia: 2, destreza: 1 }, penalidade: {},
+    descricao: 'Canaliza energia elétrica através de canos de cobre. Dano de raio em cadeia.',
+    imagem: 'assets/equipamentos/canhao_de_relampago.png',
+  },
+  canhao_pesado: {
+    id: 'canhao_pesado', nome: 'Canhão Pesado', tipo: 'arma', subcategoria: 'fogo',
+    raridade: 'lendaria', peso: 12.0, precoBase: 12000,
+    categoria: 'utilitaria', usosMax: 1, recargaTurnos: 5, danoBase: 14,
+    materiaisUsados: [{ id: 'diamante', quantidade: 0.3 }, { id: 'aco', quantidade: 8.0 }, { id: 'latão', quantidade: 3.0 }],
+    slots: 8, bonus: { forca: 4, resistencia: 2 }, penalidade: { destreza: -3, reflexos: -2 },
+    descricao: 'A arma de fogo mais devastadora já forjada. Destrói quase tudo no caminho.',
+    imagem: 'assets/equipamentos/canhao_pesado.png',
+  },
 
   // ── ARMADURAS ─────────────────────────────────────────────────────────────
   roupa_de_aventureiro: {

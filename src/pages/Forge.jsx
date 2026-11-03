@@ -103,6 +103,10 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
       setMensagem('Não há recursos suficientes para craftar.');
       return;
     }
+    if (!personagemSelecionado) {
+      setMensagem('Selecione um personagem destinatário antes de craftar.');
+      return;
+    }
     if (verificarFerroEstigio && !verificarFerroEstigio.podeUsar) {
       setMensagem(verificarFerroEstigio.motivo);
       return;
@@ -122,15 +126,46 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
     }
 
     setResultado(resultadoCraft);
-    setMensagem(`Equipamento "${equipSelecionado.nome}" craftado com sucesso! Custo: ${custoTotal} bronze.`);
 
-    // Deduzir carteira via API
+    // Salvar o item craftado no inventário do personagem
     try {
-      await api.gastarCarteira(custoTotal);
-      if (onWalletChange) onWalletChange(walletCents - custoTotal);
-      if (onRefresh) onRefresh();
+      const itemParaInventario = {
+        id: resultadoCraft.equip.id || equipId,
+        nome: equipSelecionado.nome,
+        tipo: 'equipamento',
+        raridade: equipSelecionado.raridade,
+        peso: equipSelecionado.peso,
+        slots: equipSelecionado.slots,
+        bonus: equipSelecionado.bonus,
+        penalidade: equipSelecionado.penalidade,
+        atributosFinais: resultadoCraft.atributos,
+        materiais: resultadoCraft.equip.materiais,
+        custo: resultadoCraft.custo,
+        honrineoAplicado: resultadoCraft.equip.honrineoAplicado,
+        gemasSlotadas,
+        descricao: equipSelecionado.descricao,
+        subcategoria: equipSelecionado.subcategoria,
+      };
+
+      const res = await api.craftItem(personagemSelecionado, itemParaInventario);
+      if (!res.ok) {
+        setMensagem(`Item craftado mas não foi salvo no inventário: ${res.error || ''}`);
+        return;
+      }
+
+      // Deduzir carteira via API
+      try {
+        await api.gastarCarteira(custoTotal);
+        if (onWalletChange) onWalletChange(walletCents - custoTotal);
+        if (onRefresh) onRefresh();
+      } catch (e) {
+        setMensagem('Item salvo no inventário, mas não foi possível deduzir a carteira.');
+        return;
+      }
+
+      setMensagem(`Equipamento "${equipSelecionado.nome}" craftado e adicionado ao inventário de ${personagem.nome}! Custo: ${custoTotal} bronze.`);
     } catch (e) {
-      setMensagem('Equipamento craftado, mas não foi possível deduzir a carteira.');
+      setMensagem('Erro ao salvar item no inventário: ' + e.message);
     }
   };
 
@@ -176,6 +211,25 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
                   {tipo.icone} {tipo.nome}
                 </button>
               ))}
+            </div>
+
+            <h3 style={{ marginTop: 0, color: '#b8a9cf' }}>Personagem Destinatário</h3>
+            <div style={{ marginBottom: 16 }}>
+              <select
+                value={personagemSelecionado || ''}
+                onChange={(e) => setPersonagemSelecionado(e.target.value || null)}
+                style={{
+                  width: '100%', padding: '8px', borderRadius: 6,
+                  border: '1px solid #444', background: '#1e142c', color: '#eee',
+                }}
+              >
+                <option value="">— Escolha um personagem —</option>
+                {characters.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} (Nv.{c.level || 1})
+                  </option>
+                ))}
+              </select>
             </div>
 
             <h3 style={{ marginTop: 0, color: '#b8a9cf' }}>2. Equipamento</h3>
