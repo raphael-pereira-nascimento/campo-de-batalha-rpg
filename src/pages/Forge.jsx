@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   MATERIAIS, getMateriaisPorTipo, getMaterialById,
 } from '../game/materials.js';
@@ -10,6 +10,7 @@ import {
   craftarEquipamento, calcularAtributosEquipamento, calcularCustoFabricacao,
   podeUsarFerroEstigio, aplicarHonrineo,
 } from '../game/forge.js';
+import { getGemaById, GEM_LIST } from '../game/gems.js';
 import { api } from '../api.js';
 
 const RARITY_COLOR = {
@@ -31,33 +32,40 @@ const TIPO_LABEL = {
   catalisador: '⚗️ Catalisador',
 };
 
+const SLOT_MAP = {
+  arma: 'perto',
+  armadura: 'armadura',
+  acessorio: 'acessorio',
+};
+
 export default function Forge({ onBack, player, characters, walletCents, onWalletChange, onRefresh }) {
   const [tipoSelecionado, setTipoSelecionado] = useState('arma');
   const [equipId, setEquipId] = useState(null);
-  [, ] = useState(null); // materialPrimarioId, materialSecundarioId
   const [materialPrimarioId, setMaterialPrimarioId] = useState(null);
   const [materialSecundarioId, setMaterialSecundarioId] = useState(null);
-  [, ] = useState([]); // gemasSlotadas
   const [gemasSlotadas, setGemasSlotadas] = useState([]);
-  [, ] = useState(null); // personagemSelecionado
   const [personagemSelecionado, setPersonagemSelecionado] = useState(null);
-  [, ] = useState(null); // resultado
   const [resultado, setResultado] = useState(null);
-  [, ] = useState(''); // mensagem
   const [mensagem, setMensagem] = useState('');
+  const [itemCraftadoId, setItemCraftadoId] = useState(null); // id do item no inventário após craftar
+
+  // Gems do personagem para socketar
+  const [characterGems, setCharacterGems] = useState([]);
+  const [carregandoGems, setCarregandoGems] = useState(false);
+  const [socketEquipSlot, setSocketEquipSlot] = useState(null); // { equipSlot, slotIndex }
+  const [socketGemId, setSocketGemId] = useState(null);
+  const [socketando, setSocketando] = useState(false);
 
   const equipamentosDisponiveis = useMemo(() =>
     getEquipamentosPorTipo(tipoSelecionado), [tipoSelecionado]);
 
   const materiaisDisponiveis = useMemo(() => {
     if (tipoSelecionado === 'arma') {
-      // Armas usam minérios e metais
       return [...getMateriaisPorTipo('minerio'), ...getMateriaisPorTipo('metal')];
     }
     if (tipoSelecionado === 'armadura') {
       return [...getMateriaisPorTipo('minerio'), ...getMateriaisPorTipo('metal')];
     }
-    // Acessórios e mágicos usam pedras e metais preciosos
     return [...getMateriaisPorTipo('pedra'), ...getMateriaisPorTipo('metal').filter(m => m.raridade !== 'comum')];
   }, [tipoSelecionado]);
 
@@ -67,6 +75,25 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
   const personagem = personagemSelecionado
     ? characters.find(c => c.id === personagemSelecionado)
     : null;
+
+  // Carrega gems do personagem quando muda o personagem
+  useEffect(() => {
+    if (!personagemSelecionado) {
+      setCharacterGems([]);
+      return;
+    }
+    setCarregandoGems(true);
+    api.getCharacterGemsDetailed(personagemSelecionado)
+      .then((d) => setCharacterGems(d.gems || []))
+      .catch((e) => console.warn('[forge] gems:', e.message))
+      .finally(() => setCarregandoGems(false));
+  }, [personagemSelecionado]);
+
+  // Filtra gems polidas (não brutas, não destruídas) disponíveis para socketar
+  const gemsDisponiveisSocket = useMemo(() => {
+    if (!personagemSelecionado) return [];
+    return characterGems.filter((g) => g.estado && !['bruta', 'destruida'].includes(g.estado));
+  }, [characterGems, personagemSelecionado]);
 
   const preview = useMemo(() => {
     if (!equipSelecionado) return null;
@@ -97,6 +124,19 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
     }
     return null;
   }, [materialPrimarioId, materialSecundarioId, personagem]);
+
+  // Determina o slot de equipamento para o tipo selecionado
+  const slotParaEquipar = useMemo(() => {
+    if (!equipSelecionado) return null;
+    if (equipSelecionado.tipo === 'arma') {
+      // Canções/armas utilitárias vão para slot 'utilitaria', outras para 'perto' ou 'distancia'
+      const subcategoria = equipSelecionado.subcategoria || 'lâmina';
+      if (equipSelecionado.categoria === 'utilitaria') return 'utilitaria';
+      if (subcategoria === 'fogo') return 'distancia';
+      return 'perto';
+    }
+    return SLOT_MAP[equipSelecionado.tipo] || null;
+  }, [equipSelecionado]);
 
   const handleCraftar = async () => {
     if (!podeCraftar) {
@@ -132,7 +172,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
       const itemParaInventario = {
         id: resultadoCraft.equip.id || equipId,
         nome: equipSelecionado.nome,
-        tipo: 'equipamento',
+        tipo: equipSelecionado.tipo === 'arma' ? 'arma_fogo' : equipSelecionado.tipo,
         raridade: equipSelecionado.raridade,
         peso: equipSelecionado.peso,
         slots: equipSelecionado.slots,
@@ -142,9 +182,13 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
         materiais: resultadoCraft.equip.materiais,
         custo: resultadoCraft.custo,
         honrineoAplicado: resultadoCraft.equip.honrineoAplicado,
-        gemasSlotadas,
+        gemasSlotadas: resultadoCraft.equip.gemasSlotadas || [],
         descricao: equipSelecionado.descricao,
         subcategoria: equipSelecionado.subcategoria,
+        categoria: equipSelecionado.categoria,
+        usosMax: equipSelecionado.usosMax,
+        recargaTurnos: equipSelecionado.recargaTurnos,
+        danoBase: equipSelecionado.danoBase,
       };
 
       const res = await api.craftItem(personagemSelecionado, itemParaInventario);
@@ -152,6 +196,9 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
         setMensagem(`Item craftado mas não foi salvo no inventário: ${res.error || ''}`);
         return;
       }
+
+      const novoItemId = res.item?.id || itemParaInventario.id;
+      setItemCraftadoId(novoItemId);
 
       // Deduzir carteira via API
       try {
@@ -163,22 +210,71 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
         return;
       }
 
-      setMensagem(`Equipamento "${equipSelecionado.nome}" craftado e adicionado ao inventário de ${personagem.nome}! Custo: ${custoTotal} bronze.`);
+      setMensagem(`⚒️ "${equipSelecionado.nome}" craftado e adicionado ao inventário de ${personagem.nome}! Custo: ${custoTotal} bronze.`);
     } catch (e) {
       setMensagem('Erro ao salvar item no inventário: ' + e.message);
     }
   };
 
-  const handleInstalarGema = (slotIndex, gemaId) => {
+  const handleInstalarGemaPreview = (slotIndex, gemaId) => {
     const nova = [...gemasSlotadas];
     nova[slotIndex] = { slot: slotIndex, gemaId };
     setGemasSlotadas(nova);
   };
 
-  const handleRemoverGema = (slotIndex) => {
+  const handleRemoverGemaPreview = (slotIndex) => {
     const nova = [...gemasSlotadas];
     nova[slotIndex] = null;
     setGemasSlotadas(nova);
+  };
+
+  // Socketar uma gema do personagem em um slot do item craftado
+  const handleSocketGema = async () => {
+    if (!socketEquipSlot || !socketGemId || !personagemSelecionado || !itemCraftadoId) return;
+    setSocketando(true);
+    try {
+      const slotKey = `${socketEquipSlot.equipSlot}_${socketEquipSlot.slotIndex}`;
+      const d = await api.socketGem(personagemSelecionado, slotKey, socketGemId);
+      if (d.character) {
+        // Recarrega gems do personagem
+        const gems = await api.getCharacterGemsDetailed(personagemSelecionado);
+        setCharacterGems(gems.gems || []);
+        setMensagem(`✨ Gema socketada no item "${equipSelecionado?.nome}"!`);
+      }
+      setSocketEquipSlot(null);
+      setSocketGemId(null);
+    } catch (e) {
+      setMensagem('Erro ao socketar gema: ' + e.message);
+    } finally {
+      setSocketando(false);
+    }
+  };
+
+  // Mapeia o slot interno para o formato esperado pela API equipItem
+  const slotParaApi = useMemo(() => {
+    if (!slotParaEquipar) return null;
+    if (slotParaEquipar === 'perto') return 'arma_perto';
+    if (slotParaEquipar === 'distancia') return 'arma_distancia';
+    if (slotParaEquipar === 'utilitaria') return 'arma_utilitaria';
+    return slotParaEquipar; // 'armadura', 'acessorio' permanecem iguais
+  }, [slotParaEquipar]);
+
+  // Equipar o item craftado no personagem
+  const handleEquipar = async () => {
+    if (!personagemSelecionado || !itemCraftadoId || !slotParaApi) return;
+    setMensagem('Equipando item...');
+    try {
+      const d = await api.equipItem(personagemSelecionado, slotParaApi, itemCraftadoId);
+      if (d.character) {
+        setMensagem(`⚔️ "${equipSelecionado?.nome}" equipado em ${personagem.nome}!`);
+        if (onRefresh) onRefresh();
+        // Limpa o item craftado após equipar
+        setItemCraftadoId(null);
+        setResultado(null);
+      }
+    } catch (e) {
+      setMensagem('Erro ao equipar item: ' + e.message);
+    }
   };
 
   return (
@@ -343,7 +439,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
             )}
           </div>
 
-          {/* Painel direito: preview e crafting */}
+          {/* Painel direito: preview, crafting, socketar e equipar */}
           <div style={{ border: '1px solid #3a2e54', borderRadius: 12, padding: 16, background: '#241a3a' }}>
             <h3 style={{ marginTop: 0, color: '#b8a9cf' }}>Preview do Equipamento</h3>
 
@@ -414,15 +510,13 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
                               borderRadius: 6,
                               background: gemasSlotadas[i] ? '#4a3a6e' : '#1e142c',
                               color: '#eee',
-                              fontSize: '0.85em',
                               cursor: 'pointer',
                               width: 60,
                               textAlign: 'center',
                             }}
                             onClick={() => {
-                              // Abrir selector de gema (simplificado)
                               const gemaId = window.prompt('ID da gema (ex: diamante, obsidiana):');
-                              if (gemaId) handleInstalarGema(i, gemaId);
+                              if (gemaId) handleInstalarGemaPreview(i, gemaId);
                             }}
                           >
                             {gemasSlotadas[i] ? gemasSlotadas[i].gemaId : 'vazio'}
@@ -437,12 +531,11 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
                       </div>
                     )}
 
-                    <div style={{ display: 'flex', gap: 12 }}>
+                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                       <button
                         onClick={handleCraftar}
                         disabled={!podeCraftar}
                         style={{
-                          flex: 1,
                           padding: '12px 20px',
                           border: 'none',
                           borderRadius: 8,
@@ -456,6 +549,102 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
                         ⚒️ Craftar ({custoTotal} bronze)
                       </button>
                     </div>
+
+                    {/* === SEÇÃO: SOCKETAR GEMA (conecta com GemForge) === */}
+                    {itemCraftadoId && personagemSelecionado && (
+                      <div style={{ marginTop: 24, padding: 16, border: '1px solid #4a3a6e', borderRadius: 8, background: '#2a1d3e' }}>
+                        <h4 style={{ margin: '0 0 12px', color: '#ffd166' }}>💎 Socketar Gema no Item Craftado</h4>
+                        <p style={{ fontSize: '0.85em', color: '#b8a9cf', marginBottom: 12 }}>
+                          Escolha uma gema do inventário de {personagem.nome} para encaixar em um slot do item.
+                        </p>
+
+                        <div style={{ marginBottom: 12 }}>
+                          <label style={{ display: 'block', fontSize: '0.85em', color: '#888', marginBottom: 6 }}>Slot de gema</label>
+                          <select
+                            value={socketEquipSlot ? `${socketEquipSlot.equipSlot}_${socketEquipSlot.slotIndex}` : ''}
+                            onChange={(e) => {
+                              const [es, si] = e.target.value.split('_');
+                              setSocketEquipSlot({ equipSlot: es, slotIndex: Number(si) });
+                            }}
+                            style={{
+                              width: '100%', padding: '8px', borderRadius: 6,
+                              border: '1px solid #444', background: '#1e142c', color: '#eee',
+                            }}
+                          >
+                            <option value="">— Escolher slot —</option>
+                            {Array.from({ length: equipSelecionado.slots }).map((_, i) => (
+                              <option key={i} value={`slot_${i}`}>
+                                Slot {i + 1} {gemasSlotadas[i] ? '(ocupado no preview)' : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div style={{ marginBottom: 12 }}>
+                          <label style={{ display: 'block', fontSize: '0.85em', color: '#888', marginBottom: 6 }}>Gema</label>
+                          <select
+                            value={socketGemId || ''}
+                            onChange={(e) => setSocketGemId(e.target.value || null)}
+                            style={{
+                              width: '100%', padding: '8px', borderRadius: 6,
+                              border: '1px solid #444', background: '#1e142c', color: '#eee',
+                            }}
+                            disabled={!socketEquipSlot}
+                          >
+                            <option value="">— Escolher gema —</option>
+                            {gemsDisponiveisSocket.map((g) => {
+                              const gemDef = getGemaById(g.gem_id);
+                              const cor = gemDef?.raridade ? (() => {
+                                switch (gemDef.raridade) {
+                                  case 'comum': return '#9aa0c0';
+                                  case 'incomum': return '#3ddc84';
+                                  case 'rara': return '#4a90e2';
+                                  case 'epica': return '#7c5cff';
+                                  case 'lendaria': return '#ffd166';
+                                  default: return '#fff';
+                                }
+                              })() : '#fff';
+                              return (
+                                <option key={`${g.gem_id}|${g.estado}`} value={g.gem_id} style={{ color: cor }}>
+                                  {gemDef?.nome || g.gem_id} ({g.estado}) · {gemDef?.raridade || '?'}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+
+                        <button
+                          onClick={handleSocketGema}
+                          disabled={socketando || !socketEquipSlot || !socketGemId}
+                          style={{
+                            width: '100%', padding: '10px', border: 'none', borderRadius: 6,
+                            background: (socketEquipSlot && socketGemId) ? '#4a90e2' : '#444',
+                            color: '#fff', fontWeight: 'bold', cursor: (socketEquipSlot && socketGemId) ? 'pointer' : 'not-allowed',
+                          }}
+                        >
+                          {socketando ? 'Socketando...' : '✨ Socketar Gema'}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* === SEÇÃO: EQUIPAR ITEM === */}
+                    {itemCraftadoId && personagemSelecionado && slotParaEquipar && (
+                      <div style={{ marginTop: 16, padding: 16, border: '1px solid #3ddc84', borderRadius: 8, background: '#1d3a2e' }}>
+                        <h4 style={{ margin: '0 0 8px', color: '#3ddc84' }}>⚔️ Equipar Item no Personagem</h4>
+                        <p style={{ fontSize: '0.85em', color: '#b8a9cf', marginBottom: 12 }}>
+                          Equipar "{equipSelecionado.nome}" em {personagem.nome} no slot <strong>{slotParaEquipar}</strong>.
+                        </p>
+                        <button
+                          onClick={handleEquipar}
+                          style={{
+                            width: '100%', padding: '12px', border: 'none', borderRadius: 6,
+                            background: '#3ddc84', color: '#000', fontWeight: 'bold', cursor: 'pointer',
+                          }}
+                        >
+                          Equipar Agora
+                        </button>
+                      </div>
+                    )}
                   </>
                 )}
               </>
