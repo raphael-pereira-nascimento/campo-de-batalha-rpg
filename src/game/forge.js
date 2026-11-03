@@ -5,6 +5,7 @@
 
 import { MATERIAIS, getMaterialById, calcularPrecoMaterial } from './materials.js';
 import { EQUIPAMENTOS, getEquipamentoById, calcularPrecoEquipamento as calcPrecoCat } from './equipments.js';
+import { getGemaById } from './gems.js';
 
 // ============================================================================
 // CÁLCULO DE PREÇO DE EQUIPAMENTO (delega para equipments.js)
@@ -142,11 +143,21 @@ export function calcularAtributosEquipamento(equipId, materialPrimarioId, materi
     }
   }
 
-  // Gemas slotadas adicionam seus bônus
+  // Gemas slotadas aplicam seus bônus por tipo de equipamento
+  // Mapeia o tipo do equipamento para a chave de efeitos das gemas
+  const gemaEquipTipo = equip.tipo === 'arma' ? 'arma'
+    : equip.tipo === 'armadura' ? 'armadura'
+    : equip.tipo === 'acessorio' ? 'acessorio'
+    : null;
+
   for (const g of gemasSlotadas) {
-    if (g && g.gemaId) {
-      // Os bônus das gemas viriam do catálogo de gems.js
-      // Aqui apenas registramos que a gema está instalada
+    if (!g || !g.gemaId) continue;
+    const gema = getGemaById(g.gemaId);
+    if (!gema) continue;
+    const efeito = gema.efeitos?.[gemaEquipTipo];
+    if (!efeito || !efeito.bonus) continue;
+    for (const [attr, val] of Object.entries(efeito.bonus)) {
+      atributos[attr] = (atributos[attr] || 0) + val;
     }
   }
 
