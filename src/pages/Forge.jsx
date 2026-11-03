@@ -8,7 +8,7 @@ import {
 } from '../game/equipments.js';
 import {
   craftarEquipamento, calcularAtributosEquipamento, calcularCustoFabricacao,
-  podeUsarFerroEstigio, aplicarHonrineo,
+  podeUsarFerroEstigio, aplicarHonrineo, melhorarEquipamento, calcularCustoMelhoria,
 } from '../game/forge.js';
 import { getGemaById, GEM_LIST } from '../game/gems.js';
 import { api } from '../api.js';
@@ -49,6 +49,10 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
   const [mensagem, setMensagem] = useState('');
   const [itemCraftadoId, setItemCraftadoId] = useState(null); // id do item no inventário após craftar
 
+  // Melhoria de equipamento (+1, +2, etc.)
+  const [equipParaMelhorar, setEquipParaMelhorar] = useState(null); // item do inventário
+  const [melhoriaPreview, setMelhoriaPreview] = useState(null); // { custo, nivelNovo, atributosAdicionados }
+
   // Gems do personagem para socketar
   const [characterGems, setCharacterGems] = useState([]);
   const [carregandoGems, setCarregandoGems] = useState(false);
@@ -87,6 +91,28 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
       .then((d) => setCharacterGems(d.gems || []))
       .catch((e) => console.warn('[forge] gems:', e.message))
       .finally(() => setCarregandoGems(false));
+  }, [personagemSelecionado]);
+
+  // Itens do inventário do personagem disponíveis para melhoria
+  const [inventarioItens, setInventarioItens] = useState([]);
+  const [carregandoInventario, setCarregandoInventario] = useState(false);
+
+  useEffect(() => {
+    if (!personagemSelecionado) {
+      setInventarioItens([]);
+      return;
+    }
+    setCarregandoInventario(true);
+    // Usamos getCharacter para obter o inventário completo
+    api.getCharacter(personagemSelecionado)
+      .then((d) => {
+        const itens = (d.character?.inventory || []).filter((it) =>
+          it && (it.tipo === 'arma' || it.tipo === 'arma_fogo' || it.tipo === 'armadura' || it.tipo === 'acessorio')
+        );
+        setInventarioItens(itens);
+      })
+      .catch((e) => console.warn('[forge] inventário:', e.message))
+      .finally(() => setCarregandoInventario(false));
   }, [personagemSelecionado]);
 
   // Filtra gems polidas (não brutas, não destruídas) disponíveis para socketar
@@ -275,6 +301,91 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
     } catch (e) {
       setMensagem('Erro ao equipar item: ' + e.message);
     }
+  };
+
+  // Calcular prévia de melhoria para um item do inventário
+  const calcularPreviewMelhoria = useCallback((item) => {
+    if (!item) return null;
+    const nivelAtual = Number(item.melhoriaNivel || 0);
+    const custo = calcularCustoMelhoria(nivelAtual);
+    const tipoBonus = MELHORIA_BONUS_POR_NIVEL[item.tipo] || { forca: 1 };
+    const atributosAdicionados = {};
+    for (const [attr, val] of Object.entries(tipoBonus)) {
+      atributosAdicionados[attr] = val;
+    }
+    return { custo, nivelNovo: nivelAtual + 1, atributosAdicionados };
+  }, []);
+
+  // Executar melhoria de equipamento
+  const handleMelhorarEquipamento = async () => {
+    if (!equipParaMelhorar || !personagemSelecionado) return;
+
+    const preview = calcularPreviewMelhoria(equipParaMelhorar);
+    if (!preview) return;
+
+    const carteira = walletCents;
+    if (carteira < preview.custo) {
+      setMensagem(`Ouro insuficiente. Custo: ${preview.custo} bronze.`);
+      return;
+    }
+
+    try {
+      const resultado = melhorarEquipamento(equipParaMelhorar, personagem);
+      if (!resultado.ok) {
+        setMensagem(resultado.motivo);
+        return;
+      }
+
+      // Salvar o item melhorado no inventário (substituir o antigo)
+      const itemMelhorado = {
+        ...equipParaMelhorar,
+        melhoriaNivel: resultado.nivelNovo,
+        atributosFinais: resultado.equip.atributosFinais,
+        custoMelhoria: resultado.custo,
+      };
+
+      // Remover o item antigo e adicionar o melhorado
+      const res = await api.craftItem(personagemSelecionado, itemMelhorado);
+      if (!res.ok) {
+        setMensagem(`Item melhorado mas não foi salvo: ${res.error || ''}`);
+        return;
+      }
+
+      // Deduzir carteira
+      try {
+        await api.gastarCarteira(preview.custo);
+        if (onWalletChange) onWalletChange(walletCents - preview.custo);
+        if (onRefresh) onRefresh();
+      } catch (e) {
+        setMensagem('Item melhorado, mas não foi possível deduzir a carteira.');
+        return;
+      }
+
+      setMensagem(`✨ "${equipParaMelhorar.nome}" melhorado para +${resultado.nivelNovo}!`);
+      setEquipParaMelhorar(null);
+      setMelhoriaPreview(null);
+      // Recarregar inventário
+      api.getCharacter(personagemSelecionado)
+        .then((d) => {
+          const itens = (d.character?.inventory || []).filter((it) =>
+            it && (it.tipo === 'arma' || it.tipo === 'arma_fogo' || it.tipo === 'armadura' || it.tipo === 'acessorio')
+          );
+          setInventarioItens(itens);
+        });
+    } catch (e) {
+      setMensagem('Erro ao melhorar item: ' + e.message);
+    }
+  };
+
+  const MELHORIA_BONUS_POR_NIVEL = {
+    arma: { forca: 1 },
+    armadura: { resistencia: 1 },
+    acessorio: { inteligencia: 1 },
+    cajado: { inteligencia: 1 },
+    varinha: { inteligencia: 1 },
+    grimorio: { inteligencia: 1 },
+    orbe: { inteligencia: 1 },
+    catalisador: { inteligencia: 1 },
   };
 
   return (
@@ -648,6 +759,86 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
                   </>
                 )}
               </>
+            )}
+
+            {/* === SEÇÃO: MELHORIA DE EQUIPAMENTO (+1, +2, etc.) === */}
+            {personagemSelecionado && (
+              <div style={{ marginTop: 24, padding: 16, border: '1px solid #7c5cff', borderRadius: 8, background: '#2a1d3e' }}>
+                <h4 style={{ margin: '0 0 12px', color: '#7c5cff' }}>✨ Melhoria de Equipamento (+Nível)</h4>
+                <p style={{ fontSize: '0.85em', color: '#b8a9cf', marginBottom: 12 }}>
+                  Aumente o nível de melhoria de um item do inventário para ganhar bônus de atributo permanente.
+                </p>
+
+                {inventarioItens.length === 0 ? (
+                  <p style={{ fontSize: '0.85em', color: '#888', fontStyle: 'italic' }}>
+                    Nenhum equipamento no inventário para melhorar.
+                  </p>
+                ) : (
+                  <>
+                    <div style={{ marginBottom: 12 }}>
+                      <label style={{ display: 'block', fontSize: '0.85em', color: '#888', marginBottom: 6 }}>
+                        Item para Melhorar
+                      </label>
+                      <select
+                        value={equipParaMelhorar?.id || ''}
+                        onChange={(e) => {
+                          const id = e.target.value;
+                          const item = inventarioItens.find((it) => it.id === id) || null;
+                          setEquipParaMelhorar(item);
+                          setMelhoriaPreview(item ? calcularPreviewMelhoria(item) : null);
+                        }}
+                        style={{
+                          width: '100%', padding: '8px', borderRadius: 6,
+                          border: '1px solid #444', background: '#1e142c', color: '#eee',
+                        }}
+                      >
+                        <option value="">— Escolher item —</option>
+                        {inventarioItens.map((it) => {
+                          const nivel = Number(it.melhoriaNivel || 0);
+                          return (
+                            <option key={it.id} value={it.id}>
+                              {it.nome} {nivel > 0 ? ` (+${nivel})` : ''} · {it.tipo}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
+                    {equipParaMelhorar && melhoriaPreview && (
+                      <div style={{ marginBottom: 12, padding: 10, borderRadius: 6, background: '#1e142c' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85em', color: '#888', marginBottom: 6 }}>
+                          <span>Nível Atual:</span>
+                          <span style={{ color: '#eee' }}>{Number(equipParaMelhorar.melhoriaNivel || 0)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85em', color: '#888', marginBottom: 6 }}>
+                          <span>Novo Nível:</span>
+                          <span style={{ color: '#ffd166', fontWeight: 'bold' }}>{melhoriaPreview.nivelNovo}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85em', color: '#888', marginBottom: 8 }}>
+                          <span>Custo:</span>
+                          <span style={{ color: '#ffd166', fontWeight: 'bold' }}>{melhoriaPreview.custo} bronze</span>
+                        </div>
+                        <div style={{ fontSize: '0.8em', color: '#b8a9cf' }}>
+                          Bônus: {Object.entries(melhoriaPreview.atributosAdicionados)
+                            .map(([attr, val]) => `${attr} ${val > 0 ? '+' : ''}${val}`)
+                            .join(', ')}
+                        </div>
+                        <button
+                          onClick={handleMelhorarEquipamento}
+                          disabled={walletCents < melhoriaPreview.custo}
+                          style={{
+                            width: '100%', padding: '10px', border: 'none', borderRadius: 6,
+                            background: (walletCents >= melhoriaPreview.custo) ? '#7c5cff' : '#444',
+                            color: '#fff', fontWeight: 'bold', cursor: (walletCents >= melhoriaPreview.custo) ? 'pointer' : 'not-allowed',
+                          }}
+                        >
+                          ✨ Melhorar (+{melhoriaPreview.nivelNovo}) ({melhoriaPreview.custo} bronze)
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             )}
           </div>
         </div>

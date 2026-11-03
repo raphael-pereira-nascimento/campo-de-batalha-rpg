@@ -244,6 +244,74 @@ export function craftarEquipamento(equipId, materialPrimarioId, materialSecundar
 }
 
 // ============================================================================
+// MELHORIA / APRRIMORAMENTO DE EQUIPAMENTO (+1, +2, etc.)
+// ============================================================================
+
+// Custo base para cada nível de melhoria (cresce exponencialmente)
+const MELHORIA_CUSTO_BASE = 500; // bronze por nível
+const MELHORIA_CUSTO_MULT = 1.5; // multiplicador por nível
+
+// Bônus de atributo por nível de melhoria (aplica em um atributo aleatório ou principal)
+const MELHORIA_BONUS_POR_NIVEL = {
+  arma: { forca: 1 },
+  armadura: { resistencia: 1 },
+  acessorio: { inteligencia: 1 },
+  cajado: { inteligencia: 1 },
+  varinha: { inteligencia: 1 },
+  grimorio: { inteligencia: 1 },
+  orbe: { inteligencia: 1 },
+  catalisador: { inteligencia: 1 },
+};
+
+/**
+ * Calcula o custo para melhorar um equipamento para o próximo nível.
+ * Fórmula: base * (mult ^ nivelAtual)
+ */
+export function calcularCustoMelhoria(nivelAtual = 0) {
+  return Math.round(MELHORIA_CUSTO_BASE * Math.pow(MELHORIA_CUSTO_MULT, nivelAtual));
+}
+
+/**
+ * Melhora um equipamento, aumentando seu nível de melhoria e aplicando bônus de atributo.
+ * Retorna { ok, equip, custo, nivelNovo, atributosAdicionados } ou { ok: false, motivo }.
+ */
+export function melhorarEquipamento(equip, personagem = null) {
+  if (!equip) return { ok: false, motivo: 'Equipamento inválido.' };
+
+  const nivelAtual = Number(equip.melhoriaNivel || 0);
+  const nivelNovo = nivelAtual + 1;
+  const custo = calcularCustoMelhoria(nivelAtual);
+
+  // Determina o bônus baseado no tipo de equipamento
+  const tipoBonus = MELHORIA_BONUS_POR_NIVEL[equip.tipo] || { forca: 1 };
+  const atributosAdicionados = {};
+  for (const [attr, val] of Object.entries(tipoBonus)) {
+    atributosAdicionados[attr] = val;
+  }
+
+  // Aplica o bônus aos atributos finais existentes
+  const atributosFinais = { ...(equip.atributosFinais || equip.bonus || {}) };
+  for (const [attr, val] of Object.entries(atributosAdicionados)) {
+    atributosFinais[attr] = (atributosFinais[attr] || 0) + val;
+  }
+
+  const equipMelhorado = {
+    ...equip,
+    melhoriaNivel: nivelNovo,
+    atributosFinais,
+    custoMelhoria: custo,
+  };
+
+  return {
+    ok: true,
+    equip: equipMelhorado,
+    custo,
+    nivelNovo,
+    atributosAdicionados,
+  };
+}
+
+// ============================================================================
 // EXPORTAÇÕES PARA COMPATIBILIDADE COM OUTROS MÓDULOS
 // ============================================================================
 
