@@ -87,6 +87,55 @@ export function aplicarHonrineo(equip, personagem) {
 // CÁLCULO DE ATRIBUTOS DO PERSONAGEM COM EQUIPAMENTO
 // ============================================================================
 
+// Bônus de conjunto: quando o personagem usa múltiplos itens do mesmo material primário
+// 2 itens = bônus menor, 3 itens = bônus médio, 4+ itens = bônus máximo
+export const BONUS_CONJUNTO = {
+  ferro:   { 2: { forca: 1 }, 3: { forca: 2 }, 4: { forca: 3, resistencia: 1 } },
+  cobre:   { 2: { inteligencia: 1 }, 3: { inteligencia: 2 }, 4: { inteligencia: 3 } },
+  bronze:  { 2: { forca: 1, resistencia: 1 }, 3: { forca: 2, resistencia: 2 }, 4: { forca: 3, resistencia: 3 } },
+  aco:     { 2: { forca: 2 }, 3: { forca: 3, resistencia: 1 }, 4: { forca: 4, resistencia: 2 } },
+  prata:   { 2: { inteligencia: 1, resistencia: 1 }, 3: { inteligencia: 2, resistencia: 2 }, 4: { inteligencia: 3, resistencia: 3 } },
+  ouro:    { 2: { inteligencia: 2 }, 3: { inteligencia: 3 }, 4: { inteligencia: 4, sorte: 1 } },
+  obsidiana: { 2: { forca: 1, inteligencia: 1 }, 3: { forca: 2, inteligencia: 2 }, 4: { forca: 3, inteligencia: 3 } },
+  diamante:  { 2: { forca: 2, resistencia: 1 }, 3: { forca: 3, resistencia: 2, inteligencia: 1 }, 4: { forca: 4, resistencia: 3, inteligencia: 2 } },
+};
+
+/**
+ * Calcula os bônus de conjunto baseados nos materiais primários dos itens equipados.
+ * Retorna um objeto com os atributos adicionais do conjunto.
+ */
+export function calcularBonusConjunto(equipamentoEquipado = {}) {
+  const contagemMateriais = {};
+  for (const slot of Object.values(equipamentoEquipado)) {
+    if (!slot || !slot.materiais) continue;
+    const matPrimario = slot.materiais.primario;
+    if (matPrimario) {
+      contagemMateriais[matPrimario] = (contagemMateriais[matPrimario] || 0) + 1;
+    }
+  }
+
+  const bonusConjunto = {};
+  for (const [material, qtd] of Object.entries(contagemMateriais)) {
+    const niveis = BONUS_CONJUNTO[material];
+    if (!niveis) continue;
+    // Encontra o maior nível de bônus que a quantidade atinge
+    let melhorNivel = 0;
+    for (const [nivelMin, bonus] of Object.entries(niveis)) {
+      if (qtd >= Number(nivelMin)) {
+        melhorNivel = Number(nivelMin);
+      }
+    }
+    if (melhorNivel > 0) {
+      const bonus = niveis[melhorNivel];
+      for (const [attr, val] of Object.entries(bonus)) {
+        bonusConjunto[attr] = (bonusConjunto[attr] || 0) + val;
+      }
+    }
+  }
+
+  return bonusConjunto;
+}
+
 export function calcularAtributosPersonagem(personagem, equipamentoEquipado = {}) {
   const atributos = { ...(personagem.attributes || personagem.atributos || {}) };
 
@@ -102,6 +151,12 @@ export function calcularAtributosPersonagem(personagem, equipamentoEquipado = {}
         atributos[attr] = (atributos[attr] || 0) + val;
       }
     }
+  }
+
+  // Aplica bônus de conjunto
+  const bonusConjunto = calcularBonusConjunto(equipamentoEquipado);
+  for (const [attr, val] of Object.entries(bonusConjunto)) {
+    atributos[attr] = (atributos[attr] || 0) + val;
   }
 
   return atributos;
