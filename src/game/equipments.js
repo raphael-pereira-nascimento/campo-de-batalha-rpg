@@ -130,6 +130,53 @@ export const EQUIPAMENTOS = {
     imagem: 'assets/equipamentos/rifle_de_caca.png',
   },
 
+  // ── CANHÕES E ARMAS DE FOGO PESADAS ───────────────────────────────────────
+  canhao_de_mao: {
+    id: 'canhao_de_mao', nome: 'Canhão de Mão', tipo: 'arma', subcategoria: 'fogo',
+    raridade: 'rara', peso: 5.0, precoBase: 3500,
+    categoria: 'utilitaria', usosMax: 1, recargaTurnos: 3, danoBase: 6,
+    materiaisUsados: [{ id: 'aco', quantidade: 4.0 }, { id: 'latão', quantidade: 1.0 }],
+    slots: 5, bonus: { forca: 1 }, penalidade: { destreza: -1 },
+    descricao: 'Canhão portátil de fogo devastador. Precisa de recarga após cada tiro.',
+    imagem: 'assets/equipamentos/canhao_de_mao.png',
+  },
+  bacamarte: {
+    id: 'bacamarte', nome: 'Bacamarte', tipo: 'arma', subcategoria: 'fogo',
+    raridade: 'incomum', peso: 3.0, precoBase: 800,
+    categoria: 'utilitaria', usosMax: 1, recargaTurnos: 2, danoBase: 4,
+    materiaisUsados: [{ id: 'ferroForjado', quantidade: 2.0 }],
+    slots: 5, bonus: {}, penalidade: { destreza: -1 },
+    descricao: 'Arma de fogo antiga de um só tiro, barulhenta e letal.',
+    imagem: 'assets/equipamentos/bacamarte.png',
+  },
+  nock_gun: {
+    id: 'nock_gun', nome: 'Nock Gun', tipo: 'arma', subcategoria: 'fogo',
+    raridade: 'rara', peso: 6.0, precoBase: 2200,
+    categoria: 'utilitaria', usosMax: 1, recargaTurnos: 4, danoBase: 8,
+    materiaisUsados: [{ id: 'aco', quantidade: 5.0 }, { id: 'latão', quantidade: 2.0 }],
+    slots: 7, bonus: { forca: 2 }, penalidade: { destreza: -2 },
+    descricao: 'Canhão de sete canos — dispara múltiplas balas de uma vez. Alto dano, recarga lenta.',
+    imagem: 'assets/equipamentos/nock_gun.png',
+  },
+  pistola_de_latao: {
+    id: 'pistola_de_latao', nome: 'Pistola de Latão', tipo: 'arma', subcategoria: 'fogo',
+    raridade: 'incomum', peso: 1.0, precoBase: 450,
+    categoria: 'utilitaria', usosMax: 3, recargaTurnos: 1, danoBase: 3,
+    materiaisUsados: [{ id: 'latão', quantidade: 0.5 }],
+    slots: 3, bonus: { destreza: 1 }, penalidade: {},
+    descricao: 'Pistola ornamentada de latão, confiável e de recarga rápida.',
+    imagem: 'assets/equipamentos/pistola_de_latao.png',
+  },
+  pistola_da_marinha: {
+    id: 'pistola_da_marinha', nome: 'Pistola da Marinha', tipo: 'arma', subcategoria: 'fogo',
+    raridade: 'rara', peso: 1.2, precoBase: 850,
+    categoria: 'utilitaria', usosMax: 2, recargaTurnos: 1, danoBase: 4,
+    materiaisUsados: [{ id: 'prata', quantidade: 0.5 }, { id: 'ferro', quantidade: 0.3 }],
+    slots: 4, bonus: { destreza: 2 }, penalidade: {},
+    descricao: 'Pistola de serviço naval, precisa e resistente à corrosão.',
+    imagem: 'assets/equipamentos/pistola_da_marinha.png',
+  },
+
   // ── ARMADURAS ─────────────────────────────────────────────────────────────
   roupa_de_aventureiro: {
     id: 'roupa_de_aventureiro', nome: 'Roupa de Aventureiro', tipo: 'armadura',

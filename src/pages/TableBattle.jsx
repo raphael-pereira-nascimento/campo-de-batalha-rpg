@@ -208,6 +208,12 @@ const [lastRoll, setLastRoll] = useState(null);
   const [selSpellId, setSelSpellId] = useState('');
   const [selItemId, setSelItemId] = useState('');
 
+  // Controle de recarga e usos de armas utilitárias (canhões etc.)
+  // wpnRecarga[armaId] = turnos restantes até poder usar novamente
+  // wpnUsos[armaId] = usos restantes antes de precisar recarregar
+  const [wpnRecarga, setWpnRecarga] = useState({});
+  const [wpnUsos, setWpnUsos] = useState({});
+
   const [log, setLog] = useState([]);
 
   const allies = useMemo(() => fighters.filter((f) => f.team === 'ally'), [fighters]);
@@ -271,6 +277,17 @@ const [lastRoll, setLastRoll] = useState(null);
     setFighters((prev) => prev.map((f) => f.id === id ? { ...f, mp: Math.max(0, Math.min(f.mpMax, Number(val) || 0)) } : f));
   }, []);
 
+  const initWpnState = useCallback((f) => {
+    const armas = armasDoLutador(f);
+    const usos = {};
+    const recarga = {};
+    for (const { arma } of armas) {
+      if (arma.usosMax) usos[arma.id] = arma.usosMax;
+      if (arma.recargaTurnos) recarga[arma.id] = 0;
+    }
+    return { usos, recarga };
+  }, []);
+
   const addFighter = useCallback(() => {
     if (!newName.trim()) return;
     setFighters((prevFighters) => {
@@ -312,6 +329,25 @@ const [lastRoll, setLastRoll] = useState(null);
       return next;
     });
   }, [characters, importTeam, initiativeRolled]);
+
+  // Inicializa wpnUsos e wpnRecarga para fighters que ainda não têm entrada.
+  useEffect(() => {
+    const novosUsos = { ...wpnUsos };
+    const novosRec = { ...wpnRecarga };
+    let mudou = false;
+    for (const f of fighters) {
+      if (novosUsos[f.id] === undefined || novosRec[f.id] === undefined) {
+        const { usos, recarga } = initWpnState(f);
+        if (Object.keys(usos).length) novosUsos[f.id] = usos;
+        if (Object.keys(recarga).length) novosRec[f.id] = recarga;
+        mudou = true;
+      }
+    }
+    if (mudou) {
+      setWpnUsos(novosUsos);
+      setWpnRecarga(novosRec);
+    }
+  }, [fighters, wpnUsos, wpnRecarga, initWpnState]);
 
   const bosses = useMemo(
     () => Object.values(MONSTERS)
@@ -412,6 +448,24 @@ const [lastRoll, setLastRoll] = useState(null);
       const defender = fighters.find((f) => f.id === actTargets[0]);
       if (!defender || defender.hp <= 0) return;
 
+      // ── Verificação de recarga e usos de canhões/armas utilitárias ──
+      if (arma.categoria === 'utilitaria' || arma.recargaTurnos) {
+        const recargaAtual = wpnRecarga[arma.id] || 0;
+        if (recargaAtual > 0) {
+          addLog(`⏳ ${arma.nome} ainda está recarregando (${recargaAtual} turno(s)).`);
+          setActTargets([]);
+          return;
+        }
+        const usosAtuais = wpnUsos[arma.id] ?? arma.usosMax ?? 0;
+        if (usosAtuais <= 0) {
+          addLog(`🔫 ${arma.nome} sem munição — recarregando por ${arma.recargaTurnos} turno(s).`);
+          setWpnRecarga((prev) => ({ ...prev, [arma.id]: arma.recargaTurnos }));
+          setWpnUsos((prev) => ({ ...prev, [arma.id]: arma.usosMax ?? 0 }));
+          setActTargets([]);
+          return;
+        }
+      }
+
       const roll = Math.floor(Math.random() * 20) + 1;
       const chance = computeHitChance(attacker, defender);
       const threshold = Math.ceil(chance * 20);
@@ -421,6 +475,16 @@ const [lastRoll, setLastRoll] = useState(null);
       if (hit) {
         const dmg = Math.round(danoFisicoAtaque(effectiveStat(attacker, 'forca'), danoBaseDaArma(arma)) * (isCrit ? 2 : 1));
         const res = applyDamageWithProtection(defender, dmg);
+
+        // Consumir uso e definir recarga se for arma utilitária
+        if (arma.categoria === 'utilitaria' || arma.recargaTurnos) {
+          const novoUsos = (wpnUsos[arma.id] ?? arma.usosMax ?? 1) - 1;
+          setWpnUsos((prev) => ({ ...prev, [arma.id]: novoUsos }));
+          if (novoUsos <= 0) {
+            setWpnRecarga((prev) => ({ ...prev, [arma.id]: arma.recargaTurnos }));
+          }
+        }
+
         setFighters((prev) => prev.map((f) => {
           if (f.id !== defender.id) return f;
           if (res.protecaoDano > 0) {
@@ -593,11 +657,23 @@ const [lastRoll, setLastRoll] = useState(null);
     const advance = (idx) => {
       const nextIdx = idx + 1;
       if (nextIdx >= initiativeOrder.length) {
-        // Fim da rodada: processa efeitos e proteção, incrementa rodada e reinicia a ordem
+        // Fim da rodada: processa efeitos, proteção e decrementa recarga de armas
         setFighters((prev) => processProtectionTick(prev));
         tickEffects();
         setRound((r) => r + 1);
         setCurrentTurnIndex(0);
+        // Decrementa recarga de todas as armas de todos os fighters
+        setWpnRecarga((prev) => {
+          const next = { ...prev };
+          let mudou = false;
+          for (const fid of Object.keys(next)) {
+            if (next[fid] > 0) {
+              next[fid] -= 1;
+              mudou = true;
+            }
+          }
+          return mudou ? next : prev;
+        });
         addLog(`═══ Fim da rodada ${round}. Iniciando rodada ${round + 1} ═══`);
       } else {
         const nextFighter = fighters.find((f) => f.id === initiativeOrder[nextIdx]);
@@ -706,6 +782,33 @@ const [lastRoll, setLastRoll] = useState(null);
               </span>
             </div>
           )}
+          {/* Recarga/usos de armas utilitárias (canhões etc.) */}
+          {(() => {
+            const armas = armasDoLutador(f);
+            const armasUtil = armas.filter((a) => a.arma.categoria === 'utilitaria' || a.arma.recargaTurnos);
+            if (armasUtil.length === 0) return null;
+            const rec = wpnRecarga[f.id] || {};
+            const usos = wpnUsos[f.id] || {};
+            return (
+              <div className="fighter-card-bar-row wpn-row" style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid #3a2e54' }}>
+                {armasUtil.map((a) => {
+                  const arma = a.arma;
+                  const r = rec[arma.id] || 0;
+                  const u = usos[arma.id] ?? arma.usosMax ?? 0;
+                  const emRecarga = r > 0;
+                  return (
+                    <span key={arma.id} className="wpn-badge" style={{ 
+                      background: emRecarga ? '#3a1a2a' : '#1e142c',
+                      border: emRecarga ? '1px solid #ff5c8a' : '1px solid #4a90e2',
+                      color: emRecarga ? '#ff5c8a' : '#3ddc84',
+                    }}>
+                      {emRecarga ? '⏳' : '🔫'} {arma.nome}: {emRecarga ? `${r}t` : `${u}/${arma.usosMax ?? '∞'}`}
+                    </span>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
         {f.statusEffects.length > 0 && (
           <div className="fighter-card-effects">
@@ -969,9 +1072,18 @@ const [lastRoll, setLastRoll] = useState(null);
                   <div className="action-field">
                     <label>Arma</label>
                     <select value={selWeaponId} onChange={(e) => setSelWeaponId(e.target.value)}>
-                      {armasDoLutador(fighters.find((f) => f.id === actAttacker)).map((a) => (
-                        <option key={a.id} value={a.id}>{a.nome} (dano base {danoBaseDaArma(a)})</option>
-                      ))}
+                      {armasDoLutador(fighters.find((f) => f.id === actAttacker)).map((a) => {
+                        const arma = a.arma;
+                        const r = (wpnRecarga[actAttacker] || {})[arma.id] || 0;
+                        const u = (wpnUsos[actAttacker] || {})[arma.id] ?? arma.usosMax ?? 0;
+                        const emRecarga = r > 0;
+                        const semMunicao = !emRecarga && u <= 0;
+                        return (
+                          <option key={a.id} value={a.id} disabled={emRecarga || semMunicao}>
+                            {a.nome} (dano base {danoBaseDaArma(a)}){emRecarga ? ` — recarregando ${r}t` : semMunicao ? ` — sem munição` : ` — ${u}/${arma.usosMax ?? '∞'}`}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
                 </div>

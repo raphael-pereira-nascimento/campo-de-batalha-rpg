@@ -142,6 +142,21 @@ export const MATERIAIS = {
       golem:        { desc: 'Golem dourado ornamental', bonus: { inteligencia: 1 } },
     },
   },
+  latão: {
+    id: 'latão', nome: 'Latão', tipo: 'metal',
+    raridade: 'incomum', precoPorKg: 30, bioma: 'montanhas',
+    descricao: 'Liga de cobre e zinco, usado em armas de fogo e instrumentos.',
+    imagem: 'assets/materiais/latao.png',
+    efeitos: {
+      armaLamina:   { desc: 'Sem efeito', bonus: {} },
+      armaImpacto:  { desc: 'Sem efeito', bonus: {} },
+      armaFogo:     { desc: 'Condução de pólvora', bonus: { inteligencia: 0 } },
+      armadura:     { desc: 'Proteção decorativa', bonus: { resistencia: 0 } },
+      acessorio:    { desc: 'Sem efeito', bonus: {} },
+      equipamentoMagico: { desc: 'Condução neutra', bonus: {} },
+      golem:        { desc: 'Golem de latão dourado', bonus: { resistencia: 1 } },
+    },
+  },
 
   // ── Pedras preciosas ──────────────────────────────────────────────────────
   obsidiana: {
