@@ -367,6 +367,73 @@ export function melhorarEquipamento(equip, personagem = null) {
 }
 
 // ============================================================================
+// DESMONTAGEM / SALVAGEM DE EQUIPAMENTO
+// ============================================================================
+
+// Porcentagem de materiais recuperados baseado na raridade do equipamento
+const DESMONTAGEM_RECUPERACAO_POR_RARIDADE = {
+  comum: 0.5,
+  incomum: 0.4,
+  rara: 0.35,
+  epica: 0.3,
+  lendaria: 0.25,
+};
+
+/**
+ * Desmonta um equipamento e recupera parte dos materiais usados em sua criação.
+ * Retorna { ok, materiaisRecuperados, motivo } ou { ok: false, motivo }.
+ * 
+ * A recuperação é baseada na raridade: itens comuns recuperam 50%, lendários 25%.
+ * Equipamentos com nível de melhoria recuperam um bônus extra.
+ */
+export function desmontarEquipamento(equip) {
+  if (!equip) return { ok: false, motivo: 'Equipamento inválido.' };
+
+  const materiais = equip.materiais;
+  if (!materiais || (!materiais.primario && !materiais.secundario)) {
+    return { ok: false, motivo: 'Este equipamento não possui materiais para recuperar.' };
+  }
+
+  const raridade = equip.raridade || 'comum';
+  const taxaBase = DESMONTAGEM_RECUPERACAO_POR_RARIDADE[raridade] || 0.5;
+  const nivelMelhoria = Number(equip.melhoriaNivel || 0);
+  // Bônus de recuperação por nível de melhoria (+5% por nível, máximo +25%)
+  const bonusMelhoria = Math.min(0.25, nivelMelhoria * 0.05);
+  const taxaFinal = Math.min(0.9, taxaBase + bonusMelhoria);
+
+  const materiaisRecuperados = {};
+
+  if (materiais.primario && materiais.primario.id) {
+    const qtd = Math.max(1, Math.round((materiais.primario.quantidade || 1) * taxaFinal));
+    materiaisRecuperados[materiais.primario.id] = qtd;
+  }
+
+  if (materiais.secundario && materiais.secundario.id) {
+    const qtd = Math.max(1, Math.round((materiais.secundario.quantidade || 1) * taxaFinal));
+    materiaisRecuperados[materiais.secundario.id] = qtd;
+  }
+
+  // Gemas slotadas são recuperadas integralmente
+  const gemasRecuperadas = [];
+  if (equip.gemasSlotadas) {
+    for (const g of equip.gemasSlotadas) {
+      if (g && g.gemaId) {
+        gemasRecuperadas.push({ id: g.gemaId, slot: g.slot });
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    materiaisRecuperados,
+    gemasRecuperadas,
+    taxaRecuperacao: taxaFinal,
+    nivelMelhoria,
+    raridade,
+  };
+}
+
+// ============================================================================
 // EXPORTAÇÕES PARA COMPATIBILIDADE COM OUTROS MÓDULOS
 // ============================================================================
 
