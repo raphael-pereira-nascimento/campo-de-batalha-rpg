@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { GEMS, GEM_RARITY, GEM_LIST, getGemsByRarity } from '../game/gems.js';
 import {
   EQUIPMENT, WEAPON_STATES, ALCANCE_TYPES,
-  WEAPON_CATEGORIES, getWeaponsByCategory, getAllArmors,
+  WEAPON_CATEGORIES, getWeaponsByCategory, getAllWeapons, getAllArmors,
 } from '../game/data.js';
 
 const WEAPON_ICONS = {
@@ -14,6 +14,10 @@ const WEAPON_ICONS = {
   rifle_de_caca: '🎯', besta_pesada: '🏹', espada_baioneta: '🗡️',
   cajado_de_fogo: '🔥', arco_composto: '🏹',
   pistola_de_latao: '🔫', pistola_da_marinha: '🔫', nock_gun: '💣',
+  canhao_leve: '💣', canhao_cerco: '💣', canhao_ferro: '💣',
+  canhao_de_salto: '💣', canhao_morteiro: '💣', canhao_bombasta: '💣',
+  canhao_dragoes: '🐉', canhao_abismo: '🌑',
+  canhao_de_mao: '💣',
 };
 
 const ARMOR_ICONS = {
@@ -158,13 +162,14 @@ export default function Compendium({ onBack }) {
   const [rarityFilter, setRarityFilter] = useState('all');
 
   const armors = getAllArmors();
-  const allWeaponsFlat = Object.entries(EQUIPMENT.armas).map(([id, w]) => ({ id, ...w }));
+  const allWeaponsFlat = getAllWeapons();
 
   const filteredWeapons = weaponFilter === 'all'
     ? allWeaponsFlat
     : allWeaponsFlat.filter((w) => {
         if (weaponFilter === 'branca') return w.tipo === 'arma' && ['corpo', 'medio'].includes(w.alcance || 'corpo');
-        if (weaponFilter === 'fogo') return w.tipo === 'arma_fogo';
+        if (weaponFilter === 'fogo') return w.tipo === 'arma_fogo' && !EQUIPMENT.canoes?.[w.id];
+        if (weaponFilter === 'artilharia') return Boolean(EQUIPMENT.canoes?.[w.id]);
         if (weaponFilter === 'magica') return w.tipo === 'arma' && w.alcance === 'longo' && (w.bonus?.inteligencia || 0) >= 2;
         return true;
       });
@@ -174,7 +179,7 @@ export default function Compendium({ onBack }) {
     : GEM_LIST.filter((g) => g.raridade === rarityFilter);
 
   return (
-    <div className="page">
+    <main className="page">
       <header className="topbar">
         <div>
           <h1>⚔️ Arsenal</h1>
@@ -208,6 +213,7 @@ export default function Compendium({ onBack }) {
                 { key: 'all', label: 'Todas' },
                 { key: 'branca', label: '⚔️ Brancas' },
                 { key: 'fogo', label: '🔫 Fogo' },
+                { key: 'artilharia', label: '💣 Artilharia' },
                 { key: 'magica', label: '✨ Mágicas' },
               ].map((f) => (
                 <button
@@ -283,6 +289,6 @@ export default function Compendium({ onBack }) {
           </>
         )}
       </div>
-    </div>
+    </main>
   );
 }

@@ -989,7 +989,10 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player,
 
   // O id do catálogo é a CHAVE do objeto — Object.values perde o id e o select
   // não consegue equipar (option value ficava undefined). Usamos Object.entries.
-  const presetArmas = Object.entries(gameData.equipment.armas).map(([id, it]) => ({ id, ...it }));
+  const presetArmas = [
+    ...Object.entries(gameData.equipment.armas),
+    ...Object.entries(gameData.equipment.canoes || {}),
+  ].map(([id, it]) => ({ id, ...it }));
   const presetArmaduras = Object.entries(gameData.equipment.armaduras).map(([id, it]) => ({ id, ...it }));
   const presetAcessorios = Object.entries(gameData.equipment.acessorios || {}).map(([id, it]) => ({ id, ...it }));
   const customArmas = customEquipment.filter((e) => e.tipo === 'arma');
@@ -1356,8 +1359,6 @@ function EquipStep({ gameData, customEquipment, equipment, setEquipment, player,
     </div>
   );
 }
-
-function AbilitiesStep({ pontosDisponiveis, habilidades, setHabilidades }) {
 
 // ── Sistema de indicação de equipamento ─────────────────────────────
 // Calcula o(s) atributo(s) principal(is) com base nas classes escolhidas.

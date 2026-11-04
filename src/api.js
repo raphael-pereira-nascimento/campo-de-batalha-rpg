@@ -476,7 +476,7 @@ export const api = {
         if (itemId) {
           if (categoria) {
             // Guarda a definição COMPLETA do item (dano/bônus/slots de gema).
-            const def = EQUIPMENT.armas[itemId];
+            const def = EQUIPMENT.canoes?.[itemId] || EQUIPMENT.armas[itemId];
             const catDef = def && (def.categoria || (def.alcance === 'corpo' ? 'perto' : 'distancia'));
             if (def && catDef === categoria) item = { id: itemId, ...def };
           } else if (isAcessorio) {
@@ -1260,12 +1260,32 @@ export function logout() {
   clearToken();
 }
 
+const ACK_TIMEOUT_MS = 10000;
+
 export function emitAck(event, payload) {
   return new Promise((resolve, reject) => {
-    getSocket().emit(event, payload, (ack) => {
-      if (ack && ack.ok) resolve(ack);
-      else reject(new Error((ack && ack.error) || 'Erro no servidor'));
-    });
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error('O servidor demorou para responder. Verifique a conexão e tente novamente.'));
+    }, ACK_TIMEOUT_MS);
+
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn(value);
+    };
+
+    try {
+      getSocket().emit(event, payload, (ack) => {
+        if (ack && ack.ok) finish(resolve, ack);
+        else finish(reject, new Error((ack && ack.error) || 'Erro no servidor'));
+      });
+    } catch (err) {
+      finish(reject, err);
+    }
   });
 }
 

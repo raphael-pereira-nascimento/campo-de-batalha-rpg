@@ -27,6 +27,11 @@ const EQUIPAMENTOS = [
     ...it,
     grupo: it.categoria || 'perto',
   })),
+  ...Object.entries(EQUIPMENT.canoes || {}).map(([id, it]) => ({
+    id,
+    ...it,
+    grupo: 'artilharia',
+  })),
   ...Object.entries(EQUIPMENT.armaduras).map(([id, it]) => ({
     id,
     ...it,
@@ -43,6 +48,7 @@ const EQUIP_CATEGORIAS = [
   { id: 'todos', nome: 'Todos', icone: '✨' },
   { id: 'perto', nome: 'Corpo a corpo', icone: '⚔️' },
   { id: 'distancia', nome: 'À distância', icone: '🏹' },
+  { id: 'artilharia', nome: 'Artilharia', icone: '💣' },
   { id: 'utilitaria', nome: 'Utilitárias', icone: '🧰' },
   { id: 'armaduras', nome: 'Armaduras', icone: '🛡️' },
   { id: 'acessorios', nome: 'Acessórios', icone: '💍' },
@@ -61,6 +67,7 @@ function iconeEquipamento(item) {
   if (item.tipo === 'armadura') return '🛡️';
   if (item.tipo === 'acessorio') return '💍';
   const grupo = item.grupo || item.categoria;
+  if (grupo === 'artilharia') return '💣';
   if (grupo === 'distancia') return '🏹';
   if (grupo === 'utilitaria') return '🧰';
   return '⚔️';
@@ -70,6 +77,7 @@ function grupoEquipamento(item) {
   return {
     perto: 'Corpo a corpo',
     distancia: 'À distância',
+    artilharia: 'Artilharia',
     utilitaria: 'Utilitária',
     armaduras: 'Armadura',
     acessorios: 'Acessório',
@@ -419,7 +427,7 @@ export default function ToolShop({
   };
 
   return (
-    <div className="page tools-shop-page">
+    <main className="page tools-shop-page">
       <header className="topbar">
         <div>
           <h1>🛒 Loja</h1>
@@ -796,7 +804,6 @@ export default function ToolShop({
         )}
       </div>
 
-      {toast && <div className={`tool-toast ${toast.tipo}`}>{toast.msg}</div>}
-    </div>
+    </main>
   );
 }

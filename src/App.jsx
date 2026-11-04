@@ -4,7 +4,7 @@ import Home from './pages/Home.jsx';
 import Characters from './pages/Characters.jsx';
 import ConnectionBadge from './components/ConnectionBadge.jsx';
 import { MATERIAIS, getMateriaisPorTipo, getMateriaisPorRaridade } from './game/materials.js';
-import { EQUIPAMENTOS, getEquipamentosPorTipo, EQUIP_TIPO } from './game/equipments.js';
+import { EQUIPAMENTOS, getEquipamentosPorTipo, EQUIP_TIPO, calcularPrecoEquipamento } from './game/equipments.js';
 
 const Lobby = lazy(() => import('./pages/Lobby.jsx'));
 const Battle = lazy(() => import('./pages/Battle.jsx'));

@@ -385,7 +385,7 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
 
   if (!battle) {
     return (
-      <div className="page">
+      <main className="page">
         <header className="topbar">
           <h1>Batalha</h1>
           <button className="ghost" onClick={onExit}>
@@ -395,7 +395,7 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
         <div className="content">
           <p className="muted">{error || 'Conectando à batalha...'}</p>
         </div>
-      </div>
+      </main>
     );
   }
 
@@ -426,7 +426,7 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
   };
 
   return (
-    <div className="page battle-page">
+    <main className="page battle-page">
       <header className="topbar">
         <div>
           <h1>
@@ -954,7 +954,7 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
           )}
         </aside>
       </div>
-    </div>
+    </main>
   );
 }
 
