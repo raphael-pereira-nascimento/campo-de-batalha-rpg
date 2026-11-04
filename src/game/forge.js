@@ -1,7 +1,7 @@
-// ══════════════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════════════════
 // SISTEMA DE FORJA — Cálculos puros para crafting de equipamentos
 // Importa de materials.js e equipments.js (sem dependência circular)
-// ══════════════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════════════
 
 import { MATERIAIS, getMaterialById, calcularPrecoMaterial } from './materials.js';
 import { EQUIPAMENTOS, getEquipamentoById, calcularPrecoEquipamento as calcPrecoCat } from './equipments.js';
@@ -17,7 +17,6 @@ export function calcularPrecoEquipamento(equipId) {
 // ============================================================================
 // COMPATIBILIDADE E INSTALAÇÃO DE GEMAS
 // ============================================================================
-
 export function verificarCompatibilidadeGema(equip, gemaId, slotIndex) {
   if (!equip || !gemaId) return { ok: false, motivo: 'Dados inválidos.' };
   if (slotIndex < 0 || slotIndex >= (equip.slots || 0)) {
@@ -50,7 +49,6 @@ export function removerGema(equip, slotIndex, temMagiaRemocao = false) {
 // ============================================================================
 // REGRAS ESPECIAIS — FERRO ESTÍGIO E HONRÍNEO
 // ============================================================================
-
 export function podeUsarFerroEstigio(personagem) {
   const treinamento = personagem && personagem.treinamentos
     ? personagem.treinamentos.includes('ferroEstigio')
@@ -88,7 +86,6 @@ export function aplicarHonrineo(equip, personagem) {
 // ============================================================================
 
 // Bônus de conjunto: quando o personagem usa múltiplos itens do mesmo material primário
-// 2 itens = bônus menor, 3 itens = bônus médio, 4+ itens = bônus máximo
 export const BONUS_CONJUNTO = {
   ferro:   { 2: { forca: 1 }, 3: { forca: 2 }, 4: { forca: 3, resistencia: 1 } },
   cobre:   { 2: { inteligencia: 1 }, 3: { inteligencia: 2 }, 4: { inteligencia: 3 } },
@@ -108,6 +105,8 @@ export function calcularBonusConjunto(equipamentoEquipado = {}) {
   const contagemMateriais = {};
   for (const slot of Object.values(equipamentoEquipado)) {
     if (!slot || !slot.materiais) continue;
+    // Item quebrado não conta para o conjunto
+    if (slot.durabilidade != null && slot.durabilidade <= 0) continue;
     const matPrimario = slot.materiais.primario;
     if (matPrimario) {
       contagemMateriais[matPrimario] = (contagemMateriais[matPrimario] || 0) + 1;
@@ -118,7 +117,6 @@ export function calcularBonusConjunto(equipamentoEquipado = {}) {
   for (const [material, qtd] of Object.entries(contagemMateriais)) {
     const niveis = BONUS_CONJUNTO[material];
     if (!niveis) continue;
-    // Encontra o maior nível de bônus que a quantidade atinge
     let melhorNivel = 0;
     for (const [nivelMin, bonus] of Object.entries(niveis)) {
       if (qtd >= Number(nivelMin)) {
@@ -141,6 +139,8 @@ export function calcularAtributosPersonagem(personagem, equipamentoEquipado = {}
 
   for (const slot of Object.values(equipamentoEquipado)) {
     if (!slot) continue;
+    // Item quebrado (durabilidade 0) não concede bônus
+    if (slot.durabilidade != null && slot.durabilidade <= 0) continue;
     if (slot.bonus) {
       for (const [attr, val] of Object.entries(slot.bonus)) {
         atributos[attr] = (atributos[attr] || 0) + val;
@@ -199,7 +199,6 @@ export function calcularAtributosEquipamento(equipId, materialPrimarioId, materi
   }
 
   // Gemas slotadas aplicam seus bônus por tipo de equipamento
-  // Mapeia o tipo do equipamento para a chave de efeitos das gemas
   const gemaEquipTipo = equip.tipo === 'arma' ? 'arma'
     : equip.tipo === 'armadura' ? 'armadura'
     : equip.tipo === 'acessorio' ? 'acessorio'
@@ -227,14 +226,12 @@ export function calcularAtributosEquipamento(equipId, materialPrimarioId, materi
 // ============================================================================
 // CUSTO DE FABRICAÇÃO
 // ============================================================================
-
 export function calcularCustoFabricacao(equipId, materialPrimarioId, materialSecundarioId, gemasSlotadas = []) {
   const equip = getEquipamentoById(equipId);
   if (!equip) return 0;
 
   let custo = equip.precoBase || 0;
 
-  // Custo dos materiais primários e secundários
   if (materialPrimarioId) {
     custo += calcularPrecoMaterial(materialPrimarioId, 1);
   }
@@ -242,7 +239,6 @@ export function calcularCustoFabricacao(equipId, materialPrimarioId, materialSec
     custo += Math.round(calcularPrecoMaterial(materialSecundarioId, 1) * 0.25);
   }
 
-  // Custo das gemas (usar preços aproximados)
   const GEMA_PRECO = { diamante: 500, obsidiana: 200 };
   for (const g of gemasSlotadas) {
     if (g && g.gemaId && GEMA_PRECO[g.gemaId] !== undefined) {
@@ -261,7 +257,6 @@ export function craftarEquipamento(equipId, materialPrimarioId, materialSecundar
   const equip = getEquipamentoById(equipId);
   if (!equip) return { ok: false, motivo: 'Equipamento não encontrado.' };
 
-  // Verificar Ferro Estígio
   if (materialPrimarioId === 'ferroEstigio' || materialSecundarioId === 'ferroEstigio') {
     const pode = podeUsarFerroEstigio(personagem);
     if (!pode.podeUsar) {
@@ -269,14 +264,11 @@ export function craftarEquipamento(equipId, materialPrimarioId, materialSecundar
     }
   }
 
-  // Calcular atributos finais
   const resultado = calcularAtributosEquipamento(equipId, materialPrimarioId, materialSecundarioId, gemasSlotadas);
   if (!resultado.ok) return resultado;
 
-  // Calcular custo
   const custo = calcularCustoFabricacao(equipId, materialPrimarioId, materialSecundarioId, gemasSlotadas);
 
-  // Aplicar Honríneo se solicitado
   let honrineo = null;
   if (personagem) {
     honrineo = aplicarHonrineo(resultado.equip, personagem);
@@ -302,11 +294,9 @@ export function craftarEquipamento(equipId, materialPrimarioId, materialSecundar
 // MELHORIA / APRRIMORAMENTO DE EQUIPAMENTO (+1, +2, etc.)
 // ============================================================================
 
-// Custo base para cada nível de melhoria (cresce exponencialmente)
-const MELHORIA_CUSTO_BASE = 500; // bronze por nível
-const MELHORIA_CUSTO_MULT = 1.5; // multiplicador por nível
+const MELHORIA_CUSTO_BASE = 500;
+const MELHORIA_CUSTO_MULT = 1.5;
 
-// Bônus de atributo por nível de melhoria (aplica em um atributo aleatório ou principal)
 const MELHORIA_BONUS_POR_NIVEL = {
   arma: { forca: 1 },
   armadura: { resistencia: 1 },
@@ -318,18 +308,10 @@ const MELHORIA_BONUS_POR_NIVEL = {
   catalisador: { inteligencia: 1 },
 };
 
-/**
- * Calcula o custo para melhorar um equipamento para o próximo nível.
- * Fórmula: base * (mult ^ nivelAtual)
- */
 export function calcularCustoMelhoria(nivelAtual = 0) {
   return Math.round(MELHORIA_CUSTO_BASE * Math.pow(MELHORIA_CUSTO_MULT, nivelAtual));
 }
 
-/**
- * Melhora um equipamento, aumentando seu nível de melhoria e aplicando bônus de atributo.
- * Retorna { ok, equip, custo, nivelNovo, atributosAdicionados } ou { ok: false, motivo }.
- */
 export function melhorarEquipamento(equip, personagem = null) {
   if (!equip) return { ok: false, motivo: 'Equipamento inválido.' };
 
@@ -337,14 +319,12 @@ export function melhorarEquipamento(equip, personagem = null) {
   const nivelNovo = nivelAtual + 1;
   const custo = calcularCustoMelhoria(nivelAtual);
 
-  // Determina o bônus baseado no tipo de equipamento
   const tipoBonus = MELHORIA_BONUS_POR_NIVEL[equip.tipo] || { forca: 1 };
   const atributosAdicionados = {};
   for (const [attr, val] of Object.entries(tipoBonus)) {
     atributosAdicionados[attr] = val;
   }
 
-  // Aplica o bônus aos atributos finais existentes
   const atributosFinais = { ...(equip.atributosFinais || equip.bonus || {}) };
   for (const [attr, val] of Object.entries(atributosAdicionados)) {
     atributosFinais[attr] = (atributosFinais[attr] || 0) + val;
@@ -370,7 +350,6 @@ export function melhorarEquipamento(equip, personagem = null) {
 // DESMONTAGEM / SALVAGEM DE EQUIPAMENTO
 // ============================================================================
 
-// Porcentagem de materiais recuperados baseado na raridade do equipamento
 const DESMONTAGEM_RECUPERACAO_POR_RARIDADE = {
   comum: 0.5,
   incomum: 0.4,
@@ -379,13 +358,6 @@ const DESMONTAGEM_RECUPERACAO_POR_RARIDADE = {
   lendaria: 0.25,
 };
 
-/**
- * Desmonta um equipamento e recupera parte dos materiais usados em sua criação.
- * Retorna { ok, materiaisRecuperados, motivo } ou { ok: false, motivo }.
- * 
- * A recuperação é baseada na raridade: itens comuns recuperam 50%, lendários 25%.
- * Equipamentos com nível de melhoria recuperam um bônus extra.
- */
 export function desmontarEquipamento(equip) {
   if (!equip) return { ok: false, motivo: 'Equipamento inválido.' };
 
@@ -397,7 +369,6 @@ export function desmontarEquipamento(equip) {
   const raridade = equip.raridade || 'comum';
   const taxaBase = DESMONTAGEM_RECUPERACAO_POR_RARIDADE[raridade] || 0.5;
   const nivelMelhoria = Number(equip.melhoriaNivel || 0);
-  // Bônus de recuperação por nível de melhoria (+5% por nível, máximo +25%)
   const bonusMelhoria = Math.min(0.25, nivelMelhoria * 0.05);
   const taxaFinal = Math.min(0.9, taxaBase + bonusMelhoria);
 
@@ -413,7 +384,6 @@ export function desmontarEquipamento(equip) {
     materiaisRecuperados[materiais.secundario.id] = qtd;
   }
 
-  // Gemas slotadas são recuperadas integralmente
   const gemasRecuperadas = [];
   if (equip.gemasSlotadas) {
     for (const g of equip.gemasSlotadas) {
@@ -430,6 +400,80 @@ export function desmontarEquipamento(equip) {
     taxaRecuperacao: taxaFinal,
     nivelMelhoria,
     raridade,
+  };
+}
+
+// ============================================================================
+// DURABILIDADE E REPARO DE EQUIPAMENTO
+// ============================================================================
+
+const DURABILIDADE_MAX_POR_RARIDADE = {
+  comum: 100,
+  incomum: 120,
+  rara: 150,
+  epica: 180,
+  lendaria: 200,
+};
+
+const CUSTO_REPARO_POR_PONTO_POR_RARIDADE = {
+  comum: 2,
+  incomum: 3,
+  rara: 5,
+  epica: 8,
+  lendaria: 12,
+};
+
+export function calcularDurabilidadeMax(raridade = 'comum') {
+  return DURABILIDADE_MAX_POR_RARIDADE[raridade] || 100;
+}
+
+export function calcularCustoReparoPorPonto(raridade = 'comum') {
+  return CUSTO_REPARO_POR_PONTO_POR_RARIDADE[raridade] || 2;
+}
+
+export function inicializarDurabilidade(equip) {
+  if (!equip) return 0;
+  return calcularDurabilidadeMax(equip.raridade || 'comum');
+}
+
+export function aplicarDanoDurabilidade(durabilidadeAtual, dano = 1) {
+  const nova = Math.max(0, durabilidadeAtual - dano);
+  return {
+    durabilidadeNova: nova,
+    quebrado: nova <= 0,
+  };
+}
+
+export function calcularCustoReparoCompleto(equip, durabilidadeAtual) {
+  if (!equip) return null;
+  const durMax = calcularDurabilidadeMax(equip.raridade || 'comum');
+  if (durabilidadeAtual >= durMax) return null;
+
+  const pontosReparar = durMax - durabilidadeAtual;
+  const custoPorPonto = calcularCustoReparoPorPonto(equip.raridade || 'comum');
+  const custoTotal = pontosReparar * custoPorPonto;
+
+  return {
+    custoTotal,
+    pontosReparar,
+    durabilidadeAtual,
+    durabilidadeMax: durMax,
+  };
+}
+
+export function repararEquipamento(equip, durabilidadeAtual) {
+  if (!equip) return { ok: false, motivo: 'Equipamento inválido.' };
+
+  const reparo = calcularCustoReparoCompleto(equip, durabilidadeAtual);
+  if (!reparo) {
+    return { ok: false, motivo: 'Este equipamento não precisa de reparo.' };
+  }
+
+  return {
+    ok: true,
+    custo: reparo.custoTotal,
+    durabilidadeNova: reparo.durabilidadeMax,
+    pontosReparados: reparo.pontosReparar,
   };
 }
 

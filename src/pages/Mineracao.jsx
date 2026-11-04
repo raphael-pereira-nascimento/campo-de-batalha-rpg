@@ -29,7 +29,6 @@ export default function Mineracao({ onBack, player, characters, walletCents, onW
     characters.find((c) => c.id === characterId) || null,
   [characters, characterId]);
 
-  // Carrega cooldowns quando muda o personagem
   useEffect(() => {
     if (!characterId) return;
     setCarregando(true);
@@ -39,7 +38,6 @@ export default function Mineracao({ onBack, player, characters, walletCents, onW
       .finally(() => setCarregando(false));
   }, [characterId]);
 
-  // Recarrega cooldowns periodicamente
   useEffect(() => {
     if (!characterId) return;
     const iv = setInterval(() => {
@@ -75,7 +73,6 @@ export default function Mineracao({ onBack, player, characters, walletCents, onW
       if (res.ok) {
         setUltimoDrop({ ...res, veio });
         setMensagem(`⛏️ ${res.quantidade}x ${res.material} obtido do ${veio.nome}!`);
-        // Recarrega cooldowns
         const d = await api.getMaterialMiningCooldowns(characterId);
         setCooldowns(d.cooldowns || []);
         if (onWalletChange) onWalletChange(res.walletCents);
@@ -99,7 +96,6 @@ export default function Mineracao({ onBack, player, characters, walletCents, onW
 
       <div className="content">
         <div style={{ padding: 16 }}>
-          {/* Seleção de personagem */}
           <div style={{ marginBottom: 16, padding: 12, border: '1px solid #3a2e54', borderRadius: 8, background: '#241a3a' }}>
             <label style={{ display: 'block', fontSize: '0.85em', color: '#888', marginBottom: 6 }}>
               Personagem
@@ -129,7 +125,6 @@ export default function Mineracao({ onBack, player, characters, walletCents, onW
 
           {characterId && (
             <>
-              {/* Informações do personagem */}
               <div style={{ marginBottom: 16, padding: 12, border: '1px solid #3a2e54', borderRadius: 8, background: '#241a3a' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
@@ -143,27 +138,21 @@ export default function Mineracao({ onBack, player, characters, walletCents, onW
                 </div>
               </div>
 
-              {/* Mensagem */}
               {mensagem && (
                 <div style={{ marginBottom: 12, padding: 10, borderRadius: 6, background: '#3a2e54', color: '#b8a9cf', fontSize: '0.9em' }}>
                   {mensagem}
                 </div>
               )}
 
-              {/* Último drop */}
               {ultimoDrop && (
                 <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: '#1d3a2e', border: '1px solid #3ddc84' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                     <span style={{ fontSize: '24px' }}>⛏️</span>
-                    <span style={{ fontWeight: 'bold', color: '#eee' }}>
-                      Material obtido!
-                    </span>
+                    <span style={{ fontWeight: 'bold', color: '#eee' }}>Material obtido!</span>
                   </div>
                   <div style={{ fontSize: '0.9em', color: '#b8a9cf' }}>
                     {ultimoDrop.quantidade}x {ultimoDrop.material}
-                    <span style={{ color: '#888', marginLeft: 8 }}>
-                      do {ultimoDrop.veio}
-                    </span>
+                    <span style={{ color: '#888', marginLeft: 8 }}>do {ultimoDrop.veio}</span>
                   </div>
                   <button
                     onClick={limparMensagem}
@@ -174,14 +163,12 @@ export default function Mineracao({ onBack, player, characters, walletCents, onW
                 </div>
               )}
 
-              {/* Veios de mineração */}
               <h3 style={{ margin: '0 0 12px', color: '#b8a9cf' }}>Veios Disponíveis</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
                 {VEIOS_MATERIAIS_LIST.map((veio) => {
                   const cd = cooldowns.find((c) => c.veioId === veio.id);
                   const restante = cd ? cd.restanteSeg : 0;
                   const pode = restante <= 0;
-                  const material = getMaterialById(veio.material);
                   const tipoLabel = VEIO_TIPO_LABEL[veio.tipo] || veio.tipo;
                   const biomaIcone = BIOMAS_ICONES[veio.bioma] || '📍';
 

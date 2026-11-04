@@ -9,6 +9,8 @@ import {
 import {
   craftarEquipamento, calcularAtributosEquipamento, calcularCustoFabricacao,
   podeUsarFerroEstigio, aplicarHonrineo, melhorarEquipamento, calcularCustoMelhoria,
+  inicializarDurabilidade, calcularDurabilidadeMax, calcularCustoReparoPorPonto,
+  calcularCustoReparoCompleto, repararEquipamento, desmontarEquipamento,
 } from '../game/forge.js';
 import { getGemaById, GEM_LIST } from '../game/gems.js';
 import { api } from '../api.js';
@@ -38,6 +40,17 @@ const SLOT_MAP = {
   acessorio: 'acessorio',
 };
 
+const MELHORIA_BONUS_POR_NIVEL = {
+  arma: { forca: 1 },
+  armadura: { resistencia: 1 },
+  acessorio: { inteligencia: 1 },
+  cajado: { inteligencia: 1 },
+  varinha: { inteligencia: 1 },
+  grimorio: { inteligencia: 1 },
+  orbe: { inteligencia: 1 },
+  catalisador: { inteligencia: 1 },
+};
+
 export default function Forge({ onBack, player, characters, walletCents, onWalletChange, onRefresh }) {
   const [tipoSelecionado, setTipoSelecionado] = useState('arma');
   const [equipId, setEquipId] = useState(null);
@@ -47,18 +60,26 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
   const [personagemSelecionado, setPersonagemSelecionado] = useState(null);
   const [resultado, setResultado] = useState(null);
   const [mensagem, setMensagem] = useState('');
-  const [itemCraftadoId, setItemCraftadoId] = useState(null); // id do item no inventário após craftar
+  const [itemCraftadoId, setItemCraftadoId] = useState(null);
 
-  // Melhoria de equipamento (+1, +2, etc.)
-  const [equipParaMelhorar, setEquipParaMelhorar] = useState(null); // item do inventário
-  const [melhoriaPreview, setMelhoriaPreview] = useState(null); // { custo, nivelNovo, atributosAdicionados }
+  // Melhoria
+  const [equipParaMelhorar, setEquipParaMelhorar] = useState(null);
+  const [melhoriaPreview, setMelhoriaPreview] = useState(null);
 
-  // Gems do personagem para socketar
+  // Durabilidade e reparo
+  const [itemParaReparar, setItemParaReparar] = useState(null);
+  const [reparoPreview, setReparoPreview] = useState(null);
+
+  // Socketar
   const [characterGems, setCharacterGems] = useState([]);
   const [carregandoGems, setCarregandoGems] = useState(false);
-  const [socketEquipSlot, setSocketEquipSlot] = useState(null); // { equipSlot, slotIndex }
+  const [socketEquipSlot, setSocketEquipSlot] = useState(null);
   const [socketGemId, setSocketGemId] = useState(null);
   const [socketando, setSocketando] = useState(false);
+
+  // Inventário
+  const [inventarioItens, setInventarioItens] = useState([]);
+  const [carregandoInventario, setCarregandoInventario] = useState(false);
 
   const equipamentosDisponiveis = useMemo(() =>
     getEquipamentosPorTipo(tipoSelecionado), [tipoSelecionado]);
@@ -80,7 +101,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
     ? characters.find(c => c.id === personagemSelecionado)
     : null;
 
-  // Carrega gems do personagem quando muda o personagem
+  // Carrega gems do personagem
   useEffect(() => {
     if (!personagemSelecionado) {
       setCharacterGems([]);
@@ -93,17 +114,13 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
       .finally(() => setCarregandoGems(false));
   }, [personagemSelecionado]);
 
-  // Itens do inventário do personagem disponíveis para melhoria
-  const [inventarioItens, setInventarioItens] = useState([]);
-  const [carregandoInventario, setCarregandoInventario] = useState(false);
-
+  // Carrega inventário do personagem
   useEffect(() => {
     if (!personagemSelecionado) {
       setInventarioItens([]);
       return;
     }
     setCarregandoInventario(true);
-    // Usamos getCharacter para obter o inventário completo
     api.getCharacter(personagemSelecionado)
       .then((d) => {
         const itens = (d.character?.inventory || []).filter((it) =>
@@ -115,7 +132,6 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
       .finally(() => setCarregandoInventario(false));
   }, [personagemSelecionado]);
 
-  // Filtra gems polidas (não brutas, não destruídas) disponíveis para socketar
   const gemsDisponiveisSocket = useMemo(() => {
     if (!personagemSelecionado) return [];
     return characterGems.filter((g) => g.estado && !['bruta', 'destruida'].includes(g.estado));
@@ -151,19 +167,25 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
     return null;
   }, [materialPrimarioId, materialSecundarioId, personagem]);
 
-  // Determina o slot de equipamento para o tipo selecionado
   const slotParaEquipar = useMemo(() => {
     if (!equipSelecionado) return null;
     if (equipSelecionado.tipo === 'arma') {
-      // Canções/armas utilitárias vão para slot 'utilitaria', outras para 'perto' ou 'distancia'
-      const subcategoria = equipSelecionado.subcategoria || 'lâmina';
       if (equipSelecionado.categoria === 'utilitaria') return 'utilitaria';
-      if (subcategoria === 'fogo') return 'distancia';
+      if (equipSelecionado.subcategoria === 'fogo') return 'distancia';
       return 'perto';
     }
     return SLOT_MAP[equipSelecionado.tipo] || null;
   }, [equipSelecionado]);
 
+  const slotParaApi = useMemo(() => {
+    if (!slotParaEquipar) return null;
+    if (slotParaEquipar === 'perto') return 'arma_perto';
+    if (slotParaEquipar === 'distancia') return 'arma_distancia';
+    if (slotParaEquipar === 'utilitaria') return 'arma_utilitaria';
+    return slotParaEquipar;
+  }, [slotParaEquipar]);
+
+  // ── CRAFTAR ──
   const handleCraftar = async () => {
     if (!podeCraftar) {
       setMensagem('Não há recursos suficientes para craftar.');
@@ -193,7 +215,6 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
 
     setResultado(resultadoCraft);
 
-    // Salvar o item craftado no inventário do personagem
     try {
       const itemParaInventario = {
         id: resultadoCraft.equip.id || equipId,
@@ -215,6 +236,8 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
         usosMax: equipSelecionado.usosMax,
         recargaTurnos: equipSelecionado.recargaTurnos,
         danoBase: equipSelecionado.danoBase,
+        durabilidade: inicializarDurabilidade(equipSelecionado),
+        durabilidadeMax: calcularDurabilidadeMax(equipSelecionado.raridade || 'comum'),
       };
 
       const res = await api.craftItem(personagemSelecionado, itemParaInventario);
@@ -226,7 +249,6 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
       const novoItemId = res.item?.id || itemParaInventario.id;
       setItemCraftadoId(novoItemId);
 
-      // Deduzir carteira via API
       try {
         await api.gastarCarteira(custoTotal);
         if (onWalletChange) onWalletChange(walletCents - custoTotal);
@@ -242,6 +264,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
     }
   };
 
+  // ── GEMS ──
   const handleInstalarGemaPreview = (slotIndex, gemaId) => {
     const nova = [...gemasSlotadas];
     nova[slotIndex] = { slot: slotIndex, gemaId };
@@ -254,7 +277,6 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
     setGemasSlotadas(nova);
   };
 
-  // Socketar uma gema do personagem em um slot do item craftado
   const handleSocketGema = async () => {
     if (!socketEquipSlot || !socketGemId || !personagemSelecionado || !itemCraftadoId) return;
     setSocketando(true);
@@ -262,7 +284,6 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
       const slotKey = `${socketEquipSlot.equipSlot}_${socketEquipSlot.slotIndex}`;
       const d = await api.socketGem(personagemSelecionado, slotKey, socketGemId);
       if (d.character) {
-        // Recarrega gems do personagem
         const gems = await api.getCharacterGemsDetailed(personagemSelecionado);
         setCharacterGems(gems.gems || []);
         setMensagem(`✨ Gema socketada no item "${equipSelecionado?.nome}"!`);
@@ -276,16 +297,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
     }
   };
 
-  // Mapeia o slot interno para o formato esperado pela API equipItem
-  const slotParaApi = useMemo(() => {
-    if (!slotParaEquipar) return null;
-    if (slotParaEquipar === 'perto') return 'arma_perto';
-    if (slotParaEquipar === 'distancia') return 'arma_distancia';
-    if (slotParaEquipar === 'utilitaria') return 'arma_utilitaria';
-    return slotParaEquipar; // 'armadura', 'acessorio' permanecem iguais
-  }, [slotParaEquipar]);
-
-  // Equipar o item craftado no personagem
+  // ── EQUIPAR ──
   const handleEquipar = async () => {
     if (!personagemSelecionado || !itemCraftadoId || !slotParaApi) return;
     setMensagem('Equipando item...');
@@ -294,7 +306,6 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
       if (d.character) {
         setMensagem(`⚔️ "${equipSelecionado?.nome}" equipado em ${personagem.nome}!`);
         if (onRefresh) onRefresh();
-        // Limpa o item craftado após equipar
         setItemCraftadoId(null);
         setResultado(null);
       }
@@ -303,7 +314,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
     }
   };
 
-  // Calcular prévia de melhoria para um item do inventário
+  // ── MELHORAR ──
   const calcularPreviewMelhoria = useCallback((item) => {
     if (!item) return null;
     const nivelAtual = Number(item.melhoriaNivel || 0);
@@ -316,15 +327,13 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
     return { custo, nivelNovo: nivelAtual + 1, atributosAdicionados };
   }, []);
 
-  // Executar melhoria de equipamento
   const handleMelhorarEquipamento = async () => {
     if (!equipParaMelhorar || !personagemSelecionado) return;
 
     const preview = calcularPreviewMelhoria(equipParaMelhorar);
     if (!preview) return;
 
-    const carteira = walletCents;
-    if (carteira < preview.custo) {
+    if (walletCents < preview.custo) {
       setMensagem(`Ouro insuficiente. Custo: ${preview.custo} bronze.`);
       return;
     }
@@ -336,7 +345,6 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
         return;
       }
 
-      // Salvar o item melhorado no inventário (substituir o antigo)
       const itemMelhorado = {
         ...equipParaMelhorar,
         melhoriaNivel: resultado.nivelNovo,
@@ -344,14 +352,12 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
         custoMelhoria: resultado.custo,
       };
 
-      // Remover o item antigo e adicionar o melhorado
       const res = await api.craftItem(personagemSelecionado, itemMelhorado);
       if (!res.ok) {
         setMensagem(`Item melhorado mas não foi salvo: ${res.error || ''}`);
         return;
       }
 
-      // Deduzir carteira
       try {
         await api.gastarCarteira(preview.custo);
         if (onWalletChange) onWalletChange(walletCents - preview.custo);
@@ -364,7 +370,6 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
       setMensagem(`✨ "${equipParaMelhorar.nome}" melhorado para +${resultado.nivelNovo}!`);
       setEquipParaMelhorar(null);
       setMelhoriaPreview(null);
-      // Recarregar inventário
       api.getCharacter(personagemSelecionado)
         .then((d) => {
           const itens = (d.character?.inventory || []).filter((it) =>
@@ -377,15 +382,69 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
     }
   };
 
-  const MELHORIA_BONUS_POR_NIVEL = {
-    arma: { forca: 1 },
-    armadura: { resistencia: 1 },
-    acessorio: { inteligencia: 1 },
-    cajado: { inteligencia: 1 },
-    varinha: { inteligencia: 1 },
-    grimorio: { inteligencia: 1 },
-    orbe: { inteligencia: 1 },
-    catalisador: { inteligencia: 1 },
+  // ── REPARAR ──
+  const calcularPreviewReparo = useCallback((item) => {
+    if (!item) return null;
+    const durAtual = item.durabilidade != null ? item.durabilidade : calcularDurabilidadeMax(item.raridade || 'comum');
+    const reparo = calcularCustoReparoCompleto(item, durAtual);
+    return reparo;
+  }, []);
+
+  const handleRepararEquipamento = async () => {
+    if (!itemParaReparar || !personagemSelecionado) return;
+
+    const preview = calcularPreviewReparo(itemParaReparar);
+    if (!preview) {
+      setMensagem('Este equipamento não precisa de reparo.');
+      return;
+    }
+
+    if (walletCents < preview.custoTotal) {
+      setMensagem(`Ouro insuficiente. Custo do reparo: ${preview.custoTotal} bronze.`);
+      return;
+    }
+
+    try {
+      const durAtual = itemParaReparar.durabilidade != null ? itemParaReparar.durabilidade : calcularDurabilidadeMax(itemParaReparar.raridade || 'comum');
+      const resultado = repararEquipamento(itemParaReparar, durAtual);
+      if (!resultado.ok) {
+        setMensagem(resultado.motivo);
+        return;
+      }
+
+      const itemReparado = {
+        ...itemParaReparar,
+        durabilidade: resultado.durabilidadeNova,
+      };
+
+      const res = await api.craftItem(personagemSelecionado, itemReparado);
+      if (!res.ok) {
+        setMensagem(`Item reparado mas não foi salvo: ${res.error || ''}`);
+        return;
+      }
+
+      try {
+        await api.gastarCarteira(preview.custoTotal);
+        if (onWalletChange) onWalletChange(walletCents - preview.custoTotal);
+        if (onRefresh) onRefresh();
+      } catch (e) {
+        setMensagem('Item reparado, mas não foi possível deduzir a carteira.');
+        return;
+      }
+
+      setMensagem(`🔧 "${itemParaReparar.nome}" reparado! Durabilidade restaurada.`);
+      setItemParaReparar(null);
+      setReparoPreview(null);
+      api.getCharacter(personagemSelecionado)
+        .then((d) => {
+          const itens = (d.character?.inventory || []).filter((it) =>
+            it && (it.tipo === 'arma' || it.tipo === 'arma_fogo' || it.tipo === 'armadura' || it.tipo === 'acessorio')
+          );
+          setInventarioItens(itens);
+        });
+    } catch (e) {
+      setMensagem('Erro ao reparar item: ' + e.message);
+    }
   };
 
   return (
@@ -397,7 +456,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
 
       <div className="content">
         <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 24, padding: 16 }}>
-          {/* Painel esquerdo: seleções */}
+          {/* Painel esquerdo */}
           <div style={{ border: '1px solid #3a2e54', borderRadius: 12, padding: 16, background: '#241a3a' }}>
             <h3 style={{ marginTop: 0, color: '#b8a9cf' }}>1. Tipo de Equipamento</h3>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
@@ -448,18 +507,13 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
                     key={eq.id}
                     onClick={() => setEquipId(eq.id)}
                     style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                       padding: '8px 10px',
                       border: '1px solid ' + (equipId === eq.id ? '#8b5fbf' : '#333'),
                       borderRadius: 6,
                       background: equipId === eq.id ? '#4a3a6e' : '#1e142c',
-                      color: '#eee',
-                      cursor: 'pointer',
-                      fontSize: '0.9em',
-                      width: '100%',
-                      textAlign: 'left',
+                      color: '#eee', cursor: 'pointer', fontSize: '0.9em',
+                      width: '100%', textAlign: 'left',
                     }}
                   >
                     <span>{eq.nome} <span style={{ color: rarityCor, fontSize: '0.8em' }}>{EQUIP_RARITY[eq.raridade]?.nome}</span></span>
@@ -482,9 +536,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
                         border: '1px solid ' + (materialPrimarioId === m.id ? '#8b5fbf' : '#444'),
                         borderRadius: 6,
                         background: materialPrimarioId === m.id ? '#4a3a6e' : '#1e142c',
-                        color: '#eee',
-                        cursor: 'pointer',
-                        fontSize: '0.8em',
+                        color: '#eee', cursor: 'pointer', fontSize: '0.8em',
                       }}
                     >
                       {m.nome}<br />
@@ -510,9 +562,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
                         border: '1px solid ' + (materialSecundarioId === m.id ? '#8b5fbf' : '#444'),
                         borderRadius: 6,
                         background: materialSecundarioId === m.id ? '#4a3a6e' : '#1e142c',
-                        color: '#eee',
-                        cursor: 'pointer',
-                        fontSize: '0.8em',
+                        color: '#eee', cursor: 'pointer', fontSize: '0.8em',
                       }}
                     >
                       {m.nome}<br />
@@ -550,7 +600,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
             )}
           </div>
 
-          {/* Painel direito: preview, crafting, socketar e equipar */}
+          {/* Painel direito */}
           <div style={{ border: '1px solid #3a2e54', borderRadius: 12, padding: 16, background: '#241a3a' }}>
             <h3 style={{ marginTop: 0, color: '#b8a9cf' }}>Preview do Equipamento</h3>
 
@@ -620,10 +670,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
                               border: '2px dashed ' + (gemasSlotadas[i] ? '#8b5fbf' : '#444'),
                               borderRadius: 6,
                               background: gemasSlotadas[i] ? '#4a3a6e' : '#1e142c',
-                              color: '#eee',
-                              cursor: 'pointer',
-                              width: 60,
-                              textAlign: 'center',
+                              color: '#eee', cursor: 'pointer', width: 60, textAlign: 'center',
                             }}
                             onClick={() => {
                               const gemaId = window.prompt('ID da gema (ex: diamante, obsidiana):');
@@ -647,13 +694,9 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
                         onClick={handleCraftar}
                         disabled={!podeCraftar}
                         style={{
-                          padding: '12px 20px',
-                          border: 'none',
-                          borderRadius: 8,
+                          padding: '12px 20px', border: 'none', borderRadius: 8,
                           background: podeCraftar ? '#8b5fbf' : '#444',
-                          color: '#fff',
-                          fontWeight: 'bold',
-                          fontSize: '1em',
+                          color: '#fff', fontWeight: 'bold', fontSize: '1em',
                           cursor: podeCraftar ? 'pointer' : 'not-allowed',
                         }}
                       >
@@ -661,7 +704,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
                       </button>
                     </div>
 
-                    {/* === SEÇÃO: SOCKETAR GEMA (conecta com GemForge) === */}
+                    {/* SOCKETAR GEMA */}
                     {itemCraftadoId && personagemSelecionado && (
                       <div style={{ marginTop: 24, padding: 16, border: '1px solid #4a3a6e', borderRadius: 8, background: '#2a1d3e' }}>
                         <h4 style={{ margin: '0 0 12px', color: '#ffd166' }}>💎 Socketar Gema no Item Craftado</h4>
@@ -705,18 +748,8 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
                             <option value="">— Escolher gema —</option>
                             {gemsDisponiveisSocket.map((g) => {
                               const gemDef = getGemaById(g.gem_id);
-                              const cor = gemDef?.raridade ? (() => {
-                                switch (gemDef.raridade) {
-                                  case 'comum': return '#9aa0c0';
-                                  case 'incomum': return '#3ddc84';
-                                  case 'rara': return '#4a90e2';
-                                  case 'epica': return '#7c5cff';
-                                  case 'lendaria': return '#ffd166';
-                                  default: return '#fff';
-                                }
-                              })() : '#fff';
                               return (
-                                <option key={`${g.gem_id}|${g.estado}`} value={g.gem_id} style={{ color: cor }}>
+                                <option key={`${g.gem_id}|${g.estado}`} value={g.gem_id}>
                                   {gemDef?.nome || g.gem_id} ({g.estado}) · {gemDef?.raridade || '?'}
                                 </option>
                               );
@@ -738,7 +771,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
                       </div>
                     )}
 
-                    {/* === SEÇÃO: EQUIPAR ITEM === */}
+                    {/* EQUIPAR ITEM */}
                     {itemCraftadoId && personagemSelecionado && slotParaEquipar && (
                       <div style={{ marginTop: 16, padding: 16, border: '1px solid #3ddc84', borderRadius: 8, background: '#1d3a2e' }}>
                         <h4 style={{ margin: '0 0 8px', color: '#3ddc84' }}>⚔️ Equipar Item no Personagem</h4>
@@ -760,87 +793,173 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
                 )}
               </>
             )}
+          </div>
 
-            {/* === SEÇÃO: MELHORIA DE EQUIPAMENTO (+1, +2, etc.) === */}
-            {personagemSelecionado && (
-              <div style={{ marginTop: 24, padding: 16, border: '1px solid #7c5cff', borderRadius: 8, background: '#2a1d3e' }}>
-                <h4 style={{ margin: '0 0 12px', color: '#7c5cff' }}>✨ Melhoria de Equipamento (+Nível)</h4>
-                <p style={{ fontSize: '0.85em', color: '#b8a9cf', marginBottom: 12 }}>
-                  Aumente o nível de melhoria de um item do inventário para ganhar bônus de atributo permanente.
+          {/* MELHORIA */}
+          {personagemSelecionado && (
+            <div style={{ marginTop: 24, padding: 16, border: '1px solid #7c5cff', borderRadius: 8, background: '#2a1d3e' }}>
+              <h4 style={{ margin: '0 0 12px', color: '#7c5cff' }}>✨ Melhoria de Equipamento (+Nível)</h4>
+              <p style={{ fontSize: '0.85em', color: '#b8a9cf', marginBottom: 12 }}>
+                Aumente o nível de melhoria de um item do inventário para ganhar bônus de atributo permanente.
+              </p>
+
+              {inventarioItens.length === 0 ? (
+                <p style={{ fontSize: '0.85em', color: '#888', fontStyle: 'italic' }}>
+                  Nenhum equipamento no inventário para melhorar.
                 </p>
+              ) : (
+                <>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ display: 'block', fontSize: '0.85em', color: '#888', marginBottom: 6 }}>
+                      Item para Melhorar
+                    </label>
+                    <select
+                      value={equipParaMelhorar?.id || ''}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        const item = inventarioItens.find((it) => it.id === id) || null;
+                        setEquipParaMelhorar(item);
+                        setMelhoriaPreview(item ? calcularPreviewMelhoria(item) : null);
+                      }}
+                      style={{
+                        width: '100%', padding: '8px', borderRadius: 6,
+                        border: '1px solid #444', background: '#1e142c', color: '#eee',
+                      }}
+                    >
+                      <option value="">— Escolher item —</option>
+                      {inventarioItens.map((it) => {
+                        const nivel = Number(it.melhoriaNivel || 0);
+                        return (
+                          <option key={it.id} value={it.id}>
+                            {it.nome} {nivel > 0 ? ` (+${nivel})` : ''} · {it.tipo}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
 
-                {inventarioItens.length === 0 ? (
-                  <p style={{ fontSize: '0.85em', color: '#888', fontStyle: 'italic' }}>
-                    Nenhum equipamento no inventário para melhorar.
-                  </p>
-                ) : (
-                  <>
-                    <div style={{ marginBottom: 12 }}>
-                      <label style={{ display: 'block', fontSize: '0.85em', color: '#888', marginBottom: 6 }}>
-                        Item para Melhorar
-                      </label>
-                      <select
-                        value={equipParaMelhorar?.id || ''}
-                        onChange={(e) => {
-                          const id = e.target.value;
-                          const item = inventarioItens.find((it) => it.id === id) || null;
-                          setEquipParaMelhorar(item);
-                          setMelhoriaPreview(item ? calcularPreviewMelhoria(item) : null);
-                        }}
+                  {equipParaMelhorar && melhoriaPreview && (
+                    <div style={{ marginBottom: 12, padding: 10, borderRadius: 6, background: '#1e142c' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85em', color: '#888', marginBottom: 6 }}>
+                        <span>Nível Atual:</span>
+                        <span style={{ color: '#eee' }}>{Number(equipParaMelhorar.melhoriaNivel || 0)}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85em', color: '#888', marginBottom: 6 }}>
+                        <span>Novo Nível:</span>
+                        <span style={{ color: '#ffd166', fontWeight: 'bold' }}>{melhoriaPreview.nivelNovo}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85em', color: '#888', marginBottom: 8 }}>
+                        <span>Custo:</span>
+                        <span style={{ color: '#ffd166', fontWeight: 'bold' }}>{melhoriaPreview.custo} bronze</span>
+                      </div>
+                      <div style={{ fontSize: '0.8em', color: '#b8a9cf' }}>
+                        Bônus: {Object.entries(melhoriaPreview.atributosAdicionados)
+                          .map(([attr, val]) => `${attr} ${val > 0 ? '+' : ''}${val}`)
+                          .join(', ')}
+                      </div>
+                      <button
+                        onClick={handleMelhorarEquipamento}
+                        disabled={walletCents < melhoriaPreview.custo}
                         style={{
-                          width: '100%', padding: '8px', borderRadius: 6,
-                          border: '1px solid #444', background: '#1e142c', color: '#eee',
+                          width: '100%', padding: '10px', border: 'none', borderRadius: 6,
+                          background: (walletCents >= melhoriaPreview.custo) ? '#7c5cff' : '#444',
+                          color: '#fff', fontWeight: 'bold', cursor: (walletCents >= melhoriaPreview.custo) ? 'pointer' : 'not-allowed',
                         }}
                       >
-                        <option value="">— Escolher item —</option>
-                        {inventarioItens.map((it) => {
-                          const nivel = Number(it.melhoriaNivel || 0);
-                          return (
-                            <option key={it.id} value={it.id}>
-                              {it.nome} {nivel > 0 ? ` (+${nivel})` : ''} · {it.tipo}
-                            </option>
-                          );
-                        })}
-                      </select>
+                        ✨ Melhorar (+{melhoriaPreview.nivelNovo}) ({melhoriaPreview.custo} bronze)
+                      </button>
                     </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
-                    {equipParaMelhorar && melhoriaPreview && (
-                      <div style={{ marginBottom: 12, padding: 10, borderRadius: 6, background: '#1e142c' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85em', color: '#888', marginBottom: 6 }}>
-                          <span>Nível Atual:</span>
-                          <span style={{ color: '#eee' }}>{Number(equipParaMelhorar.melhoriaNivel || 0)}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85em', color: '#888', marginBottom: 6 }}>
-                          <span>Novo Nível:</span>
-                          <span style={{ color: '#ffd166', fontWeight: 'bold' }}>{melhoriaPreview.nivelNovo}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85em', color: '#888', marginBottom: 8 }}>
-                          <span>Custo:</span>
-                          <span style={{ color: '#ffd166', fontWeight: 'bold' }}>{melhoriaPreview.custo} bronze</span>
-                        </div>
-                        <div style={{ fontSize: '0.8em', color: '#b8a9cf' }}>
-                          Bônus: {Object.entries(melhoriaPreview.atributosAdicionados)
-                            .map(([attr, val]) => `${attr} ${val > 0 ? '+' : ''}${val}`)
-                            .join(', ')}
-                        </div>
-                        <button
-                          onClick={handleMelhorarEquipamento}
-                          disabled={walletCents < melhoriaPreview.custo}
-                          style={{
-                            width: '100%', padding: '10px', border: 'none', borderRadius: 6,
-                            background: (walletCents >= melhoriaPreview.custo) ? '#7c5cff' : '#444',
-                            color: '#fff', fontWeight: 'bold', cursor: (walletCents >= melhoriaPreview.custo) ? 'pointer' : 'not-allowed',
-                          }}
-                        >
-                          ✨ Melhorar (+{melhoriaPreview.nivelNovo}) ({melhoriaPreview.custo} bronze)
-                        </button>
+          {/* DURABILIDADE E REPARO */}
+          {personagemSelecionado && (
+            <div style={{ marginTop: 24, padding: 16, border: '1px solid #ffd166', borderRadius: 8, background: '#2e2a1d' }}>
+              <h4 style={{ margin: '0 0 12px', color: '#ffd166' }}>🔧 Durabilidade e Reparo</h4>
+              <p style={{ fontSize: '0.85em', color: '#b8a9cf', marginBottom: 12 }}>
+                Equipamentos perdem durabilidade com o uso em batalha. Quando a durabilidade chega a 0, o item fica quebrado e não pode ser usado até ser reparado.
+              </p>
+
+              {inventarioItens.length === 0 ? (
+                <p style={{ fontSize: '0.85em', color: '#888', fontStyle: 'italic' }}>
+                  Nenhum equipamento no inventário para reparar.
+                </p>
+              ) : (
+                <>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ display: 'block', fontSize: '0.85em', color: '#888', marginBottom: 6 }}>
+                      Item para Reparar
+                    </label>
+                    <select
+                      value={itemParaReparar?.id || ''}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        const item = inventarioItens.find((it) => it.id === id) || null;
+                        setItemParaReparar(item);
+                        setReparoPreview(item ? calcularPreviewReparo(item) : null);
+                      }}
+                      style={{
+                        width: '100%', padding: '8px', borderRadius: 6,
+                        border: '1px solid #444', background: '#1e142c', color: '#eee',
+                      }}
+                    >
+                      <option value="">— Escolher item —</option>
+                      {inventarioItens.map((it) => {
+                        const durAtual = it.durabilidade != null ? it.durabilidade : calcularDurabilidadeMax(it.raridade || 'comum');
+                        const durMax = calcularDurabilidadeMax(it.raridade || 'comum');
+                        const pct = Math.round((durAtual / durMax) * 100);
+                        const precisaReparo = durAtual < durMax;
+                        return (
+                          <option key={it.id} value={it.id}>
+                            {it.nome} {it.melhoriaNivel ? `(+${it.melhoriaNivel})` : ''} · Dur: {pct}% {precisaReparo ? '⚠️' : '✅'}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  {itemParaReparar && reparoPreview && (
+                    <div style={{ marginBottom: 12, padding: 10, borderRadius: 6, background: '#1e142c' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85em', color: '#888', marginBottom: 6 }}>
+                        <span>Durabilidade Atual:</span>
+                        <span style={{ color: '#eee' }}>{itemParaReparar.durabilidade != null ? itemParaReparar.durabilidade : calcularDurabilidadeMax(itemParaReparar.raridade || 'comum')}</span>
                       </div>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85em', color: '#888', marginBottom: 6 }}>
+                        <span>Durabilidade Máxima:</span>
+                        <span style={{ color: '#eee' }}>{calcularDurabilidadeMax(itemParaReparar.raridade || 'comum')}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85em', color: '#888', marginBottom: 8 }}>
+                        <span>Pontos a Reparar:</span>
+                        <span style={{ color: '#ffd166', fontWeight: 'bold' }}>{reparoPreview.pontosReparar}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85em', color: '#888', marginBottom: 8 }}>
+                        <span>Custo por Ponto:</span>
+                        <span style={{ color: '#ffd166' }}>{calcularCustoReparoPorPonto(itemParaReparar.raridade || 'comum')} bronze</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9em', color: '#eee', fontWeight: 'bold', marginBottom: 8 }}>
+                        <span>Custo Total:</span>
+                        <span style={{ color: '#ffd166' }}>{reparoPreview.custoTotal} bronze</span>
+                      </div>
+                      <button
+                        onClick={handleRepararEquipamento}
+                        disabled={walletCents < reparoPreview.custoTotal}
+                        style={{
+                          width: '100%', padding: '10px', border: 'none', borderRadius: 6,
+                          background: (walletCents >= reparoPreview.custoTotal) ? '#ffd166' : '#444',
+                          color: '#000', fontWeight: 'bold', cursor: (walletCents >= reparoPreview.custoTotal) ? 'pointer' : 'not-allowed',
+                        }}
+                      >
+                        🔧 Reparar Completamente ({reparoPreview.custoTotal} bronze)
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </main>
