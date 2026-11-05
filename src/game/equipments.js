@@ -143,7 +143,7 @@ export const EQUIPAMENTOS = {
   bacamarte: {
     id: 'bacamarte', nome: 'Bacamarte', tipo: 'arma', subcategoria: 'fogo',
     raridade: 'incomum', peso: 3.0, precoBase: 800,
-    categoria: 'utilitaria', usosMax: 1, recargaTurnos: 2, danoBase: 4,
+    categoria: 'distancia', recarga: 2, danoBase: 4,
     materiaisUsados: [{ id: 'ferroForjado', quantidade: 2.0 }],
     slots: 5, bonus: {}, penalidade: { destreza: -1 },
     descricao: 'Arma de fogo antiga de um só tiro, barulhenta e letal.',
@@ -152,7 +152,7 @@ export const EQUIPAMENTOS = {
   nock_gun: {
     id: 'nock_gun', nome: 'Nock Gun', tipo: 'arma', subcategoria: 'fogo',
     raridade: 'rara', peso: 6.0, precoBase: 2200,
-    categoria: 'utilitaria', usosMax: 1, recargaTurnos: 4, danoBase: 8,
+    categoria: 'distancia', recarga: 3, danoBase: 8,
     materiaisUsados: [{ id: 'aco', quantidade: 5.0 }, { id: 'latão', quantidade: 2.0 }],
     slots: 7, bonus: { forca: 2 }, penalidade: { destreza: -2 },
     descricao: 'Canhão de sete canos — dispara múltiplas balas de uma vez. Alto dano, recarga lenta.',
@@ -161,7 +161,7 @@ export const EQUIPAMENTOS = {
   pistola_de_latao: {
     id: 'pistola_de_latao', nome: 'Pistola de Latão', tipo: 'arma', subcategoria: 'fogo',
     raridade: 'incomum', peso: 1.0, precoBase: 450,
-    categoria: 'utilitaria', usosMax: 3, recargaTurnos: 1, danoBase: 3,
+    categoria: 'distancia', recarga: 1, danoBase: 3,
     materiaisUsados: [{ id: 'latão', quantidade: 0.5 }],
     slots: 3, bonus: { destreza: 1 }, penalidade: {},
     descricao: 'Pistola ornamentada de latão, confiável e de recarga rápida.',
@@ -170,7 +170,7 @@ export const EQUIPAMENTOS = {
   pistola_da_marinha: {
     id: 'pistola_da_marinha', nome: 'Pistola da Marinha', tipo: 'arma', subcategoria: 'fogo',
     raridade: 'rara', peso: 1.2, precoBase: 850,
-    categoria: 'utilitaria', usosMax: 2, recargaTurnos: 1, danoBase: 4,
+    categoria: 'distancia', recarga: 1, danoBase: 4,
     materiaisUsados: [{ id: 'prata', quantidade: 0.5 }, { id: 'ferro', quantidade: 0.3 }],
     slots: 4, bonus: { destreza: 2 }, penalidade: {},
     descricao: 'Pistola de serviço naval, precisa e resistente à corrosão.',

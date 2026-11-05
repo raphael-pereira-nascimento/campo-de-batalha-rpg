@@ -163,14 +163,21 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
   const armasAtaque = active
     ? armasDeEquipamento(active.equipment).filter((e) => e.slot !== 'utilitaria' && e.arma)
     : [];
-  // Arma que o ataque vai disparar: a escolhida pelo jogador ou, por padrão, a melhor.
+  // Arma que o ataque vai disparar: a escolhida pelo jogador ou, por padrão, a
+  // melhor arma de ataque (utilitárias têm botão próprio e não entram aqui).
   const armaSel =
-    armasAtaque.find((e) => e.arma.id && e.arma.id === armaSelId)?.arma || armaMelhor;
+    armasAtaque.find((e) => e.arma.id && e.arma.id === armaSelId)?.arma ||
+    (armaMelhor && armaMelhor.categoria !== 'utilitaria' ? armaMelhor : null) ||
+    armasAtaque[0]?.arma ||
+    null;
   const armaUtil = active
     ? (armasDeEquipamento(active.equipment).find((e) => e.slot === 'utilitaria') || {}).arma || null
     : null;
   const utilUsos = armaUtil
     ? (active.wpnUsos && active.wpnUsos[armaUtil.id]) ?? armaUtil.usosMax ?? 1
+    : 0;
+  const utilRecarga = armaUtil && active?.wpnRecarga
+    ? (active.wpnRecarga[armaUtil.id] || 0)
     : 0;
   // Recarga da arma de ataque: turnos restantes até poder atirar de novo.
   const recargaArma =
@@ -251,7 +258,10 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
     const ids = idsDeAlvo(alvoNormalizado(armaSel || {}));
     act({ type: 'attack', weaponId: armaSel?.id || null, targetId: ids[0] || null, targetIds: ids });
   };
-  const doUtility = () => act({ type: 'attackUtility', targetId: targetId || aliveTargets[0]?.characterId });
+  const doUtility = () => {
+    const ids = idsDeAlvo(alvoNormalizado(armaUtil || {}));
+    act({ type: 'attackUtility', targetId: ids[0] || null, targetIds: ids });
+  };
   const doDefend = () => act({ type: 'defend' });
   const doDodge = () => act({ type: 'dodge' });
   const doVoo = (dir) => act({ type: 'voo', dir });
@@ -749,10 +759,18 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                     <button
                       className={busy ? '' : 'ghost'}
                       onClick={doUtility}
-                      disabled={busy || !aliveTargets.length || utilUsos <= 0}
-                      title={utilUsos <= 0 ? 'Sem usos restantes nesta batalha.' : (armaUtil.efeito ? `Efeito: ${armaUtil.efeito.tipo} (${armaUtil.efeito.turnos} turnos)` : '')}
+                      disabled={busy || !aliveTargets.length || utilUsos <= 0 || utilRecarga > 0}
+                      title={
+                        utilRecarga > 0
+                          ? `Recarregando por ${utilRecarga} turno(s).`
+                          : utilUsos <= 0
+                            ? 'Sem usos restantes nesta batalha.'
+                            : (armaUtil.efeito ? `Efeito: ${armaUtil.efeito.tipo} (${armaUtil.efeito.turnos} turnos)` : '')
+                      }
                     >
-                      🧰 {armaUtil.nome} ({utilUsos} uso{utilUsos === 1 ? '' : 's'})
+                      {utilRecarga > 0
+                        ? `⏳ ${armaUtil.nome} (${utilRecarga}t)`
+                        : `🧰 ${armaUtil.nome} (${utilUsos} uso${utilUsos === 1 ? '' : 's'})`}
                     </button>
                   )}
                 </div>

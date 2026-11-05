@@ -1353,8 +1353,18 @@ export class BattleManager {
 
   _consumirRecarga(p) {
     if (!p || !p.wpnRecarga) return;
+    const armas = armasDeEquipamento(p.equipment || {});
     for (const key of Object.keys(p.wpnRecarga)) {
-      if (p.wpnRecarga[key] > 0) p.wpnRecarga[key] -= 1;
+      if (p.wpnRecarga[key] <= 0) continue;
+      p.wpnRecarga[key] -= 1;
+      // Recarga concluída: a arma utilitária volta com a carga cheia.
+      if (p.wpnRecarga[key] === 0) {
+        const arma = (armas.find((e) => e.arma && e.arma.id === key) || {}).arma;
+        if (arma?.usosMax) {
+          p.wpnUsos = p.wpnUsos || {};
+          p.wpnUsos[key] = arma.usosMax;
+        }
+      }
     }
   }
 
@@ -1586,20 +1596,31 @@ export class BattleManager {
         break;
       }
       case 'attackUtility': {
-        // Arma utilitária: causa dano + aplica debuff, consumindo 1 uso.
+        // Arma utilitária: causa dano + aplica debuff, consumindo 1 uso por
+        // disparo (inclusive no erro). Ao esvaziar a carga, entra em recarga.
         if (!target || !target.alive) throw new Error('Escolha um alvo vivo.');
         const util = (armasDeEquipamento(p.equipment) || []).find((e) => e.slot === 'utilitaria');
         if (!util || !util.arma) throw new Error('Nenhuma arma utilitária equipada.');
-        const restante = (p.wpnUsos && p.wpnUsos[util.arma.id]) ?? util.arma.usosMax ?? 1;
-        if (restante <= 0) throw new Error(`${util.arma.nome} está sem usos nesta batalha.`);
+        const arma = util.arma;
+        const recargaAtual = (p.wpnRecarga && p.wpnRecarga[arma.id]) || 0;
+        if (recargaAtual > 0) throw new Error(`${arma.nome} está recarregando (${recargaAtual} turno(s)).`);
+        const restante = (p.wpnUsos && p.wpnUsos[arma.id]) ?? arma.usosMax ?? 1;
+        if (restante <= 0) throw new Error(`${arma.nome} está sem usos.`);
         p.wpnUsos = p.wpnUsos || {};
-        p.wpnUsos[util.arma.id] = restante - 1;
-        if (util.arma.efeito) {
-          battle.log.push(makeLog(`🧰 ${p.charName} usa ${util.arma.nome}.`));
+        p.wpnUsos[arma.id] = restante - 1;
+        const recargaTurnos = Math.max(0, Number(arma.recargaTurnos ?? arma.recarga ?? 0) || 0);
+        if (restante - 1 <= 0 && recargaTurnos > 0) {
+          p.wpnRecarga = p.wpnRecarga || {};
+          p.wpnRecarga[arma.id] = recargaTurnos + 1;
         }
-        this._resolveAttack(battle, p, target, util.arma);
-        if (target.alive && util.arma.efeito) {
-          this._applyStatus(battle, target, util.arma.efeito, p);
+        battle.log.push(makeLog(`🧰 ${p.charName} usa ${arma.nome}.`));
+        const specUtil = alvoNormalizado(arma);
+        const alvosUtil = this._alvosDoGolpe(battle, p, specUtil, target, alvosExtras);
+        this._resolveAttack(battle, p, target, arma, alvosExtras);
+        if (arma.efeito) {
+          for (const t of alvosUtil) {
+            if (t.alive) this._applyStatus(battle, t, arma.efeito, p);
+          }
         }
         break;
       }

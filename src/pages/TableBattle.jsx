@@ -2,7 +2,12 @@ import { useCallback, useMemo, useState } from 'react';
 import { ATTRIBUTE_NAMES } from '../config.js';
 import { danoFisicoAtaque, danoBaseDaArma, danoMagico } from '../game/sistema.js';
 import { MONSTERS } from '../game/monsters.js';
-import { SPELLS, STATUS_DEFS, armasDeEquipamento, melhorArma, skillFromSpell } from '../game/data.js';
+import { SPELLS, STATUS_DEFS, armasDeEquipamento, skillFromSpell } from '../game/data.js';
+
+// Recarga efetiva de uma arma (canhões usam `recargaTurnos`; dados antigos usam `recarga`).
+const recargaDeArma = (arma) => Math.max(0, Number(arma?.recargaTurnos ?? arma?.recarga ?? 0) || 0);
+const armaUsaRecarga = (arma) =>
+  !!arma && (arma.categoria === 'utilitaria' || Number(arma.usosMax) > 0 || recargaDeArma(arma) > 0);
 
 const BUFF_DEBUFF_PRESETS = [
   { id: 'forca_up', name: 'Força+', icon: '💪', type: 'buff', stat: 'forca', value: 2 },
@@ -228,11 +233,13 @@ const [lastRoll, setLastRoll] = useState(null);
   ], [customBuffs, customDebuffs]);
 
   // Lista as armas de um lutador (fallback: desarmado, dano base 2).
+  // Retorna objetos de arma (com `slot`), para o código de ataque/UI usar
+  // `arma.id`, `arma.nome` etc. diretamente.
   const armasDoLutador = useCallback((f) => {
     if (!f) return [];
-    const lista = armasDeEquipamento(f.equipment || {});
+    const lista = armasDeEquipamento(f.equipment || {}).map(({ slot, arma }) => ({ ...arma, slot }));
     if (lista.length === 0) {
-      lista.push({ id: 'desarmado', nome: 'Desarmado', danoBase: 2, slot: 'perto', categoria: 'corpo_a_corpo', recarga: 0 });
+      lista.push({ id: 'desarmado', nome: 'Desarmado', danoBase: 2, slot: 'perto', categoria: 'perto', recarga: 0 });
     }
     return lista;
   }, []);
@@ -281,12 +288,12 @@ const [lastRoll, setLastRoll] = useState(null);
     const armas = armasDoLutador(f);
     const usos = {};
     const recarga = {};
-    for (const { arma } of armas) {
+    for (const arma of armas) {
       if (arma.usosMax) usos[arma.id] = arma.usosMax;
-      if (arma.recargaTurnos) recarga[arma.id] = 0;
+      if (armaUsaRecarga(arma)) recarga[arma.id] = 0;
     }
     return { usos, recarga };
-  }, []);
+  }, [armasDoLutador]);
 
   const addFighter = useCallback(() => {
     if (!newName.trim()) return;
@@ -338,8 +345,10 @@ const [lastRoll, setLastRoll] = useState(null);
     for (const f of fighters) {
       if (novosUsos[f.id] === undefined || novosRec[f.id] === undefined) {
         const { usos, recarga } = initWpnState(f);
-        if (Object.keys(usos).length) novosUsos[f.id] = usos;
-        if (Object.keys(recarga).length) novosRec[f.id] = recarga;
+        // Marca o lutador mesmo sem armas de recarga (evita reinicializar
+        // indefinidamente e o loop de renders).
+        novosUsos[f.id] = usos;
+        novosRec[f.id] = recarga;
         mudou = true;
       }
     }
@@ -444,26 +453,28 @@ const [lastRoll, setLastRoll] = useState(null);
 
     if (actionMode === 'attack') {
       const armas = armasDoLutador(attacker);
-      const arma = armas.find((a) => a.id === selWeaponId) || melhorArma(attacker.equipment) || armas[0];
+      const arma =
+        armas.find((a) => a.id === selWeaponId) ||
+        armas
+          .filter((a) => a.categoria !== 'utilitaria')
+          .sort((a, b) => (danoBaseDaArma(b) || 0) - (danoBaseDaArma(a) || 0))[0] ||
+        armas[0];
       const defender = fighters.find((f) => f.id === actTargets[0]);
       if (!defender || defender.hp <= 0) return;
 
-      // ── Verificação de recarga e usos de canhões/armas utilitárias ──
-      if (arma.categoria === 'utilitaria' || arma.recargaTurnos) {
-        const recargaAtual = wpnRecarga[arma.id] || 0;
-        if (recargaAtual > 0) {
-          addLog(`⏳ ${arma.nome} ainda está recarregando (${recargaAtual} turno(s)).`);
-          setActTargets([]);
-          return;
-        }
-        const usosAtuais = wpnUsos[arma.id] ?? arma.usosMax ?? 0;
-        if (usosAtuais <= 0) {
-          addLog(`🔫 ${arma.nome} sem munição — recarregando por ${arma.recargaTurnos} turno(s).`);
-          setWpnRecarga((prev) => ({ ...prev, [arma.id]: arma.recargaTurnos }));
-          setWpnUsos((prev) => ({ ...prev, [arma.id]: arma.usosMax ?? 0 }));
-          setActTargets([]);
-          return;
-        }
+      // ── Recarga e usos de canhões/armas utilitárias (por lutador e arma) ──
+      const usaRecarga = armaUsaRecarga(arma);
+      const recargaAtual = ((wpnRecarga[attacker.id] || {})[arma.id]) || 0;
+      const usosAtuais = ((wpnUsos[attacker.id] || {})[arma.id]) ?? arma.usosMax ?? 1;
+      if (usaRecarga && recargaAtual > 0) {
+        addLog(`⏳ ${arma.nome} ainda está recarregando (${recargaAtual} turno(s)).`);
+        setActTargets([]);
+        return;
+      }
+      if (usaRecarga && arma.usosMax && usosAtuais <= 0) {
+        addLog(`🔫 ${arma.nome} está sem munição.`);
+        setActTargets([]);
+        return;
       }
 
       const roll = Math.floor(Math.random() * 20) + 1;
@@ -472,18 +483,34 @@ const [lastRoll, setLastRoll] = useState(null);
       const hit = roll >= threshold;
       const isCrit = roll === 20;
 
+      // O disparo consome munição mesmo quando erra. Armas com `usosMax`
+      // (canhões/utilitárias) só recarregam ao esvaziar a carga; as demais
+      // armas de fogo entram em recarga após cada disparo.
+      if (usaRecarga) {
+        const recargaTurnos = recargaDeArma(arma);
+        if (arma.usosMax) {
+          const restante = usosAtuais - 1;
+          setWpnUsos((prev) => ({
+            ...prev,
+            [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: restante },
+          }));
+          if (restante <= 0 && recargaTurnos > 0) {
+            setWpnRecarga((prev) => ({
+              ...prev,
+              [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: recargaTurnos + 1 },
+            }));
+          }
+        } else if (recargaTurnos > 0) {
+          setWpnRecarga((prev) => ({
+            ...prev,
+            [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: recargaTurnos + 1 },
+          }));
+        }
+      }
+
       if (hit) {
         const dmg = Math.round(danoFisicoAtaque(effectiveStat(attacker, 'forca'), danoBaseDaArma(arma)) * (isCrit ? 2 : 1));
         const res = applyDamageWithProtection(defender, dmg);
-
-        // Consumir uso e definir recarga se for arma utilitária
-        if (arma.categoria === 'utilitaria' || arma.recargaTurnos) {
-          const novoUsos = (wpnUsos[arma.id] ?? arma.usosMax ?? 1) - 1;
-          setWpnUsos((prev) => ({ ...prev, [arma.id]: novoUsos }));
-          if (novoUsos <= 0) {
-            setWpnRecarga((prev) => ({ ...prev, [arma.id]: arma.recargaTurnos }));
-          }
-        }
 
         setFighters((prev) => prev.map((f) => {
           if (f.id !== defender.id) return f;
@@ -495,6 +522,21 @@ const [lastRoll, setLastRoll] = useState(null);
         const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano` : '';
         addLog(`⚔️ ${attacker.name} ataca ${defender.name} com ${arma.nome || 'desarmado'} → D20:${roll} (${threshold}+) ${isCrit ? 'CRÍTICO ' : ''}${suffix}`);
         if (res.protecaoQuebrou) addLog(res.msg);
+
+        // Efeito da arma utilitária (ex.: congelamento) no alvo que sobreviveu.
+        if (arma.efeito && defender.hp - res.danoReal > 0) {
+          const ef = arma.efeito;
+          const def = STATUS_DEFS[ef.tipo] || {};
+          const eff = {
+            uid: uid(), name: def.nome || ef.tipo, icon: def.icon || '✦',
+            stat: 'custom', value: ef.dano || 0,
+            duration: ef.turnos || 2, type: 'debuff',
+          };
+          setFighters((prev) => prev.map((f) => (
+            f.id === defender.id ? { ...f, statusEffects: [...f.statusEffects, eff] } : f
+          )));
+          addLog(`✨ ${defender.name} recebe ${eff.name} por ${eff.duration} rodadas`);
+        }
       } else {
         addLog(`⚔️ ${attacker.name} erra ${defender.name} com ${arma.nome || 'desarmado'} → D20:${roll} (${threshold}+)`);
       }
@@ -644,11 +686,51 @@ const [lastRoll, setLastRoll] = useState(null);
     }, 60);
   }, [atkAttacker, atkDefender, fighters, addLog, initiativeRolled, initiativeOrder, currentTurnIndex]);
 
+  // Fim de rodada: avança a recarga de cada arma e recarrega as utilitárias
+  // quando o contador zera (volta ao `usosMax`).
+  const processarRecargas = useCallback(() => {
+    const recNovo = {};
+    const finalizadas = [];
+    let mudou = false;
+    for (const fid of Object.keys(wpnRecarga)) {
+      const mapa = wpnRecarga[fid];
+      if (!mapa || typeof mapa !== 'object') {
+        recNovo[fid] = mapa;
+        continue;
+      }
+      const armasRec = { ...mapa };
+      for (const armaId of Object.keys(armasRec)) {
+        if (armasRec[armaId] > 0) {
+          armasRec[armaId] -= 1;
+          mudou = true;
+          if (armasRec[armaId] === 0) finalizadas.push({ fid, armaId });
+        }
+      }
+      recNovo[fid] = armasRec;
+    }
+    if (mudou) setWpnRecarga(recNovo);
+    if (!finalizadas.length) return;
+    setWpnUsos((prev) => {
+      const next = { ...prev };
+      for (const { fid, armaId } of finalizadas) {
+        const arma = armasDoLutador(fighters.find((f) => f.id === fid)).find((a) => a.id === armaId);
+        if (arma?.usosMax) next[fid] = { ...(next[fid] || {}), [armaId]: arma.usosMax };
+      }
+      return next;
+    });
+    for (const { fid, armaId } of finalizadas) {
+      const f = fighters.find((x) => x.id === fid);
+      const arma = armasDoLutador(f).find((a) => a.id === armaId);
+      if (f && arma) addLog(`🔫 ${f.name} recarregou ${arma.nome}.`);
+    }
+  }, [wpnRecarga, fighters, armasDoLutador, addLog]);
+
   const nextTurn = useCallback(() => {
     if (initiativeOrder.length === 0) {
       // Sem iniciativa rolando: comportamento antigo (próxima rodada)
       setFighters((prev) => processProtectionTick(prev));
       tickEffects();
+      processarRecargas();
       setRound((r) => r + 1);
       setRollResult(null);
       addLog(`═══ Rodada ${round + 1} ═══`);
@@ -660,20 +742,9 @@ const [lastRoll, setLastRoll] = useState(null);
         // Fim da rodada: processa efeitos, proteção e decrementa recarga de armas
         setFighters((prev) => processProtectionTick(prev));
         tickEffects();
+        processarRecargas();
         setRound((r) => r + 1);
         setCurrentTurnIndex(0);
-        // Decrementa recarga de todas as armas de todos os fighters
-        setWpnRecarga((prev) => {
-          const next = { ...prev };
-          let mudou = false;
-          for (const fid of Object.keys(next)) {
-            if (next[fid] > 0) {
-              next[fid] -= 1;
-              mudou = true;
-            }
-          }
-          return mudou ? next : prev;
-        });
         addLog(`═══ Fim da rodada ${round}. Iniciando rodada ${round + 1} ═══`);
       } else {
         const nextFighter = fighters.find((f) => f.id === initiativeOrder[nextIdx]);
@@ -687,7 +758,7 @@ const [lastRoll, setLastRoll] = useState(null);
       setRollResult(null);
     };
     advance(currentTurnIndex);
-  }, [currentTurnIndex, initiativeOrder, round, fighters, tickEffects, addLog]);
+  }, [currentTurnIndex, initiativeOrder, round, fighters, tickEffects, processarRecargas, addLog]);
 
   const doRoll = useCallback(() => {
     const faces = Math.max(2, Math.min(100, Number(diceFaces) || 20));
@@ -785,24 +856,24 @@ const [lastRoll, setLastRoll] = useState(null);
           {/* Recarga/usos de armas utilitárias (canhões etc.) */}
           {(() => {
             const armas = armasDoLutador(f);
-            const armasUtil = armas.filter((a) => a.arma.categoria === 'utilitaria' || a.arma.recargaTurnos);
+            const armasUtil = armas.filter((a) => armaUsaRecarga(a) || a.categoria === 'utilitaria');
             if (armasUtil.length === 0) return null;
             const rec = wpnRecarga[f.id] || {};
             const usos = wpnUsos[f.id] || {};
             return (
               <div className="fighter-card-bar-row wpn-row" style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid #3a2e54' }}>
-                {armasUtil.map((a) => {
-                  const arma = a.arma;
+                {armasUtil.map((arma) => {
                   const r = rec[arma.id] || 0;
                   const u = usos[arma.id] ?? arma.usosMax ?? 0;
                   const emRecarga = r > 0;
+                  const contagem = arma.usosMax ? `${u}/${arma.usosMax}` : 'pronta';
                   return (
                     <span key={arma.id} className="wpn-badge" style={{ 
                       background: emRecarga ? '#3a1a2a' : '#1e142c',
                       border: emRecarga ? '1px solid #ff5c8a' : '1px solid #4a90e2',
                       color: emRecarga ? '#ff5c8a' : '#3ddc84',
                     }}>
-                      {emRecarga ? '⏳' : '🔫'} {arma.nome}: {emRecarga ? `${r}t` : `${u}/${arma.usosMax ?? '∞'}`}
+                      {emRecarga ? '⏳' : '🔫'} {arma.nome}: {emRecarga ? `${r}t` : contagem}
                     </span>
                   );
                 })}
@@ -1072,15 +1143,15 @@ const [lastRoll, setLastRoll] = useState(null);
                   <div className="action-field">
                     <label>Arma</label>
                     <select value={selWeaponId} onChange={(e) => setSelWeaponId(e.target.value)}>
-                      {armasDoLutador(fighters.find((f) => f.id === actAttacker)).map((a) => {
-                        const arma = a.arma;
+                      {armasDoLutador(fighters.find((f) => f.id === actAttacker)).map((arma) => {
                         const r = (wpnRecarga[actAttacker] || {})[arma.id] || 0;
-                        const u = (wpnUsos[actAttacker] || {})[arma.id] ?? arma.usosMax ?? 0;
+                        const u = (wpnUsos[actAttacker] || {})[arma.id] ?? arma.usosMax;
                         const emRecarga = r > 0;
-                        const semMunicao = !emRecarga && u <= 0;
+                        const semMunicao = !emRecarga && !!arma.usosMax && u <= 0;
+                        const contagem = arma.usosMax ? ` — ${u}/${arma.usosMax}` : '';
                         return (
-                          <option key={a.id} value={a.id} disabled={emRecarga || semMunicao}>
-                            {a.nome} (dano base {danoBaseDaArma(a)}){emRecarga ? ` — recarregando ${r}t` : semMunicao ? ` — sem munição` : ` — ${u}/${arma.usosMax ?? '∞'}`}
+                          <option key={arma.id} value={arma.id} disabled={emRecarga || semMunicao}>
+                            {arma.categoria === 'utilitaria' ? '🧰 ' : ''}{arma.nome} (dano base {danoBaseDaArma(arma)}){emRecarga ? ` — recarregando ${r}t` : semMunicao ? ' — sem munição' : contagem}
                           </option>
                         );
                       })}
