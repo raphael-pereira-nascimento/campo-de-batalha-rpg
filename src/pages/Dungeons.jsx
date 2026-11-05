@@ -143,7 +143,7 @@ export default function Dungeons({ player, characters, onBack, onOpenBattle }) {
   const nomeGolpe = (id) => SPELLS[id]?.nome || id;
 
   return (
-    <div className="page">
+    <main className="page">
       <header className="topbar">
         <div>
           <h1>🗺️ Dungeons</h1>
@@ -303,6 +303,6 @@ export default function Dungeons({ player, characters, onBack, onOpenBattle }) {
           })}
         </div>
       </div>
-    </div>
+    </main>
   );
 }

@@ -108,7 +108,7 @@ export default function ShareView({ shareId, player, gameData, onImported, onHom
   };
 
   return (
-    <div className="page-pad">
+    <main className="page-pad">
       <div className="share-toolbar">
         <div>
           <h2 style={{ margin: 0 }}>📋 Ficha Compartilhada</h2>
@@ -234,6 +234,6 @@ export default function ShareView({ shareId, player, gameData, onImported, onHom
           </div>
         )}
       </div>
-    </div>
+    </main>
   );
 }

@@ -433,7 +433,7 @@ export async function equipItem(characterId, slot, itemId) {
   if (itemId) {
     if (categoria) {
       itemId = String(itemId);
-      const preset = EQUIPMENT.armas[itemId];
+      const preset = EQUIPMENT.canoes?.[itemId] || EQUIPMENT.armas[itemId];
       item =
         preset && preset.categoria === categoria
           ? { id: itemId, ...preset }

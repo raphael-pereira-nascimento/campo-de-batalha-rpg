@@ -306,7 +306,7 @@ export default function Rules({ onBack }) {
   const [aberta, setAberta] = useState(null);
 
   return (
-    <div className="page">
+    <main className="page">
       <header className="topbar">
         <div>
           <h1>📖 Contexto Base — RPG</h1>
@@ -333,6 +333,6 @@ export default function Rules({ onBack }) {
           ))}
         </div>
       </div>
-    </div>
+    </main>
   );
 }

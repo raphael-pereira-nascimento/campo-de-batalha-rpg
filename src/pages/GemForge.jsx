@@ -143,12 +143,12 @@ export default function GemForge({ onBack, player, characters = [], onRefresh, w
     carregarInventario(characterId);
   }, [characterId]);
 
-  // Tudo que o personagem realmente possui. Sem personagem (offline/demo),
-  // mostra o catálogo para a página não ficar vazia.
+  // Tudo que o personagem realmente possui. Sem personagem selecionado,
+  // mostra apenas a gem inicial que o personagem receberia — nunca o
+  // catálogo inteiro, que confundia o jogador (p.ex. "483 combinações
+  // prontas no seu inventário" para uma conta sem nenhuma gema).
   const pedras = useMemo(() => {
-    if (!characterId) {
-      return gemasDisponiveis.map((g) => ({ ...g, key: `${g.id}|${g.estado}` }));
-    }
+    if (!characterId) return [];
     return inventario.map((row, i) => {
       const base = getGemaById(row.gem_id);
       const estado = row.estado || 'lapidada';
@@ -302,7 +302,7 @@ export default function GemForge({ onBack, player, characters = [], onRefresh, w
   };
 
   return (
-    <div className="page forge-page">
+    <main className="page forge-page">
       <header className="topbar">
         <div>
           <h1>🔮 Forja de Gemas</h1>
@@ -510,11 +510,12 @@ export default function GemForge({ onBack, player, characters = [], onRefresh, w
         {/* Combinações que já existem no inventário: o jogador não precisa
             adivinhar quais pedras são compatíveis. */}
         <div className="forge-recipes">
-          <h3>🧪 Combinações prontas no seu inventário ({combinacoes.length})</h3>
+          <h3>🧪 Combinações prontas {!characterId ? '(catálogo)' : 'no seu inventário'} ({combinacoes.length})</h3>
           {combinacoes.length === 0 ? (
             <p className="muted" style={{ margin: 0 }}>
-              Nenhuma combinação estável no momento. Polir as gemas (clique nelas), conseguir
-              mais pedras na Loja/mineração ou usar gemas do mesmo tipo também libera fusões.
+              {!characterId
+                ? 'Selecione um personagem para ver as fusões que ele já pode fazer.'
+                : 'Nenhuma combinação estável no momento. Polir as gemas (clique nelas), conseguir mais pedras na Loja/mineração ou usar gemas do mesmo tipo também libera fusões.'}
             </p>
           ) : (
             <div className="forge-recipe-list">
@@ -590,6 +591,6 @@ export default function GemForge({ onBack, player, characters = [], onRefresh, w
           onClose={() => setPolindoGema(null)}
         />
       )}
-    </div>
+    </main>
   );
 }

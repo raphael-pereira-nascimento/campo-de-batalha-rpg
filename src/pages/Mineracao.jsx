@@ -88,7 +88,7 @@ export default function Mineracao({ onBack, player, characters, walletCents, onW
   const limparMensagem = useCallback(() => setMensagem(''), []);
 
   return (
-    <div className="page">
+    <main className="page">
       <header className="topbar">
         <h1>⛏️ Mineração de Materiais</h1>
         <button className="ghost" onClick={() => onBack()}>← Voltar</button>
@@ -237,6 +237,6 @@ export default function Mineracao({ onBack, player, characters, walletCents, onW
           )}
         </div>
       </div>
-    </div>
+    </main>
   );
 }

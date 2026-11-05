@@ -147,7 +147,7 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
   };
 
   return (
-    <div className="page tavern-page">
+    <main className="page tavern-page">
       <header className="topbar">
         <div>
           <h1>🍺 O Último Copo</h1>
@@ -232,8 +232,6 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
           {' '}Comida regenera e sustenta — mas não embriaga.
         </p>
       </div>
-
-      {toast && <div className={`tool-toast ${toast.tipo}`}>{toast.msg}</div>}
-    </div>
+    </main>
   );
 }

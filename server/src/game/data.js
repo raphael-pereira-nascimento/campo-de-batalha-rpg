@@ -275,6 +275,19 @@ export const EQUIPMENT = {
     vestes_sagradas: { preco: 650, nome: 'Vestes Sagradas', tipo: 'armadura', defesa: 3, socketSlots: 2, bonus: { inteligencia: 1 }, descricao: 'Roupas rituais imbuídas de fé divina.' },
     armadura_leve: { preco: 550, nome: 'Armadura Leve', tipo: 'armadura', defesa: 5, socketSlots: 2, bonus: { reflexos: 1 }, descricao: 'Proteção reforçada com mobilidade.' },
   },
+  canoes: {
+    // ── Canhões de artilharia (💣) ───────────────────────────────
+    // Peças de cerco pesadas: tiro lento, dano em área ampla, elemento fogo.
+    // Usam os campos que o motor de batalha já lê: alvo/alvos/splash.
+    canhao_leve: { preco: 4200, nome: 'Canhão Leve', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 10, bonus: { forca: 1 }, socketSlots: 2, alcance: 'medio', recarga: 3, alvo: 'explosao', alvos: 3, splash: 0.5, descricao: 'Peça de artilharia portátil: alvo principal 100%, vizinhos 50%.' },
+    canhao_cerco: { preco: 6100, nome: 'Canhão de Cerco', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 12, bonus: { forca: 2, resistencia: 1 }, socketSlots: 3, alcance: 'medio', recarga: 4, alvo: 'explosao', alvos: 4, splash: 0.6, descricao: 'Canhão pesado de sítio: vizinhos sofrem 60%. Precisa de tripé para recarregar.' },
+    canhao_ferro: { preco: 8500, nome: 'Canhão de Ferro', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 14, bonus: { forca: 3, resistencia: 2 }, socketSlots: 3, alcance: 'medio', recarga: 4, alvo: 'explosao', alvos: 4, splash: 0.7, descricao: 'Ferro maciço e pólvora negra. Splash 70% — devastador contra grupos.' },
+    canhao_de_salto: { preco: 9800, nome: 'Canhão de Salto', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 13, bonus: { destreza: 2, inteligencia: 1 }, socketSlots: 3, alcance: 'longo', recarga: 4, alvo: 'explosao', alvos: 5, splash: 0.6, descricao: 'Precisão com ajuste de elevação: alcance longo e splash 60%.' },
+    canhao_morteiro: { preco: 11000, nome: 'Canhão Morteiro', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 15, bonus: { inteligencia: 2 }, socketSlots: 3, alcance: 'longo', recarga: 5, alvo: 'explosao', alvos: 5, splash: 0.7, descricao: 'Trajetória curva arcana: explode atrás das linhas inimigas, splash 70%.' },
+    canhao_bombasta: { preco: 14500, nome: 'Canhão Bombasta', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 16, bonus: { forca: 3, resistencia: 3 }, socketSlots: 4, alcance: 'medio', recarga: 5, alvo: 'explosao', alvos: 5, splash: 0.75, descricao: 'A besta dos céus: vizinhos sofrem 75%. Peso quase proibitivo.' },
+    canhao_dragoes: { preco: 18500, nome: 'Canhão de Dragões', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 18, bonus: { inteligencia: 3, resistencia: 2 }, socketSlots: 4, alcance: 'longo', recarga: 5, alvo: 'explosao', alvos: 5, splash: 0.8, descricao: 'Cuspe de dragão em cano de bronze: splash 80%, ignora parte da defesa.' },
+    canhao_abismo: { preco: 24000, nome: 'Canhão do Abismo', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'trevas', danoBase: 20, bonus: { inteligencia: 4, resistencia: 2 }, socketSlots: 4, alcance: 'longo', recarga: 6, alvo: 'explosao', alvos: 5, splash: 0.8, descricao: 'Feito dos engenheiros do Eclipse: splash 80%, elemento trevas.' },
+  },
   acessorios: {
     anel_de_forca: { nome: 'Anel de Força', tipo: 'acessorio', categoria: 'acessorio', preco: 350, icone: '💍', bonus: { forca: 1 }, socketSlots: 1, descricao: 'Um anel simples que canaliza a força bruta de quem o usa.' },
     anel_do_vento: { nome: 'Anel do Vento', tipo: 'acessorio', categoria: 'acessorio', preco: 750, icone: '💍', bonus: { reflexos: 2 }, socketSlots: 1, descricao: 'Pequeno redemoinho preso em metal; aguça os reflexos do portador.' },
@@ -976,22 +989,26 @@ export function efeitosDeHabilidades(habilidades) {
 
 // ── Helpers para o Arsenal / Compendium ─────────────────
 
+const CANOES_IDS = new Set(Object.keys(EQUIPMENT.canoes || {}));
+
 export const WEAPON_CATEGORIES = {
-  branca: { nome: 'Armas Brancas', icon: '⚔️', filter: (w) => w.tipo === 'arma' && ['corpo', 'medio'].includes(w.alcance || 'corpo') },
-  fogo:   { nome: 'Armas de Fogo', icon: '🔫', filter: (w) => w.tipo === 'arma_fogo' },
-  magica: { nome: 'Armas Mágicas', icon: '✨', filter: (w) => w.tipo === 'arma' && w.alcance === 'longo' && (w.bonus?.inteligencia || 0) >= 2 },
+  branca:      { nome: 'Armas Brancas', icon: '⚔️', filter: (w) => w.tipo === 'arma' && ['corpo', 'medio'].includes(w.alcance || 'corpo') },
+  fogo:        { nome: 'Armas de Fogo', icon: '🔫', filter: (w) => w.tipo === 'arma_fogo' && !CANOES_IDS.has(w.id) },
+  artilharia:  { nome: 'Artilharia', icon: '💣', filter: (w) => CANOES_IDS.has(w.id) },
+  magica:      { nome: 'Armas Mágicas', icon: '✨', filter: (w) => w.tipo === 'arma' && w.alcance === 'longo' && (w.bonus?.inteligencia || 0) >= 2 },
 };
+
+export function getAllWeapons() {
+  return [
+    ...Object.entries(EQUIPMENT.armas || {}),
+    ...Object.entries(EQUIPMENT.canoes || {}),
+  ].map(([id, w]) => ({ id, ...w }));
+}
 
 export function getWeaponsByCategory(categoryKey) {
   const cat = WEAPON_CATEGORIES[categoryKey];
   if (!cat) return [];
-  return Object.entries(EQUIPMENT.armas)
-    .filter(([, w]) => cat.filter(w))
-    .map(([id, w]) => ({ id, ...w }));
-}
-
-export function getAllWeapons() {
-  return Object.entries(EQUIPMENT.armas).map(([id, w]) => ({ id, ...w }));
+  return getAllWeapons().filter((w) => cat.filter(w));
 }
 
 export function getAllArmors() {

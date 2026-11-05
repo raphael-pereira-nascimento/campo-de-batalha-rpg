@@ -448,7 +448,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
   };
 
   return (
-    <div className="page">
+    <main className="page">
       <header className="topbar">
         <h1>⚒️ Forja de Equipamentos</h1>
         <button className="ghost" onClick={() => onBack()}>← Voltar</button>
@@ -962,6 +962,6 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
           )}
         </div>
       </div>
-    </div>
+    </main>
   );
 }

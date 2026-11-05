@@ -126,7 +126,7 @@ export default function Lobby({ player, characters, gameData, onBack, onOpenBatt
   const monsterList = Object.values(MONSTERS);
 
   return (
-    <div className="page">
+    <main className="page">
       <header className="topbar">
         <div>
           <h1>Campo de Batalha</h1>
@@ -314,6 +314,6 @@ export default function Lobby({ player, characters, gameData, onBack, onOpenBatt
           </>
         )}
       </div>
-    </div>
+    </main>
   );
 }

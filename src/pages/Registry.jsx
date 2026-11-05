@@ -126,7 +126,7 @@ export default function Registry({ player, gameData, onBack }) {
   const Active = registries[tab];
 
   return (
-    <div className="page">
+    <main className="page">
       <header className="topbar">
         <div>
           <h1>📜 Registro do Mundo</h1>
@@ -225,7 +225,7 @@ export default function Registry({ player, gameData, onBack }) {
           </section>
         )}
       </div>
-    </div>
+    </main>
   );
 }
 

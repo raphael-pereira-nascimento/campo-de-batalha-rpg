@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ATTRIBUTE_NAMES } from '../config.js';
 import { danoFisicoAtaque, danoBaseDaArma, danoMagico } from '../game/sistema.js';
 import { MONSTERS } from '../game/monsters.js';
@@ -895,7 +895,7 @@ const [lastRoll, setLastRoll] = useState(null);
   };
 
   return (
-    <div className="page">
+    <main className="page">
       <header className="topbar">
         <div className="topbar-left">
           <h1>📋 Batalha de Mesa</h1>
@@ -1353,6 +1353,6 @@ const [lastRoll, setLastRoll] = useState(null);
           </section>
         </aside>
       </div>
-    </div>
+    </main>
   );
 }

@@ -74,7 +74,7 @@ export default function Characters({ player, characters, gameData, customClasses
       </nav>
       <input type="file" accept=".json,application/json" ref={fileRef} onChange={handleImport} style={{ display: 'none' }} />
 
-      <div className="content">
+      <main className="content">
         <div className="account-banner">
           {isOffline() ? (
             <>
@@ -163,7 +163,7 @@ export default function Characters({ player, characters, gameData, customClasses
             </div>
           ))}
         </div>
-      </div>
+      </main>
 
       {creating && (
         <FichaForm

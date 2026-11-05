@@ -224,7 +224,7 @@ app.post('/api/shop/buy-tool', requireAuth, async (req, res) => {
 // ── Equipamentos: armas, armaduras e acessórios ──
 function findEquipmentCatalogItem(itemId) {
   const id = String(itemId || '');
-  for (const grupo of ['armas', 'armaduras', 'acessorios']) {
+  for (const grupo of ['armas', 'canoes', 'armaduras', 'acessorios']) {
     const item = EQUIPMENT[grupo]?.[id];
     if (item) return { id, grupo, item };
   }

@@ -59,7 +59,7 @@ export default function Home({ onLogin }) {
   };
 
   return (
-    <div className="home">
+    <main className="home">
       <div className="home-shell">
         <section className="home-hero">
           <span className="home-eyebrow">RPG de batalhas em tempo real</span>
@@ -233,6 +233,6 @@ export default function Home({ onLogin }) {
           </p>
         </section>
       </div>
-    </div>
+    </main>
   );
 }

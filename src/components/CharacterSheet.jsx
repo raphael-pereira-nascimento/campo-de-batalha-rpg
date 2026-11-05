@@ -158,6 +158,10 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
         .filter(([, it]) => (it.categoria || categoriaDeArma(it)) === categoria)
         .filter(([id]) => idsEquipamentosPossuidos.has(id) || id === atualId)
         .map(([id, it]) => ({ id, label: `${it.nome} (dano ${it.danoBase}${it.usosMax ? ` · ${it.usosMax} usos` : ''})` })),
+      ...Object.entries(gameData.equipment.canoes || {})
+        .filter(([, it]) => (it.categoria || categoriaDeArma(it)) === categoria)
+        .filter(([id]) => idsEquipamentosPossuidos.has(id) || id === atualId)
+        .map(([id, it]) => ({ id, label: `${it.nome} (dano ${it.danoBase} · 💣 ${it.alvos || 1} alvos)` })),
       ...customEquipment
         .filter((e) => e.tipo === 'arma')
         .filter((e) => (e.categoria || (e.alcance === 'corpo' ? 'perto' : 'distancia')) === categoria)
