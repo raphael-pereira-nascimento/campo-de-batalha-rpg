@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ATTRIBUTE_NAMES } from '../config.js';
-import { danoFisicoAtaque, danoBaseDaArma, danoMagico } from '../game/sistema.js';
+import { danoFisicoAtaque, danoBaseDaArma, danoMagico, alvoNormalizado } from '../game/sistema.js';
 import { MONSTERS } from '../game/monsters.js';
 import { SPELLS, STATUS_DEFS, armasDeEquipamento, skillFromSpell } from '../game/data.js';
 
@@ -48,10 +48,14 @@ function makeProtection(cfg, eclipse = false) {
 }
 
 // Aplica dano a um combatente respeitando a proteção do chefe.
-// Retorna { danoReal, protecaoDano, protecaoQuebrou, vulneravel, msg }.
+// Retorna { danoReal, protecaoDano, protecaoQuebrou, vulneravel, msg, protection }.
+// Não muta o combatente: `protection` já vem como o novo objeto (ou null quando
+// a proteção não mudou), evitando descontar o dano da proteção duas vezes.
 function applyDamageWithProtection(target, dmg) {
   const prot = target.protection;
-  if (!prot) return { danoReal: dmg, protecaoDano: 0, protecaoQuebrou: false, vulneravel: false, msg: '' };
+  if (!prot) {
+    return { danoReal: dmg, protecaoDano: 0, protecaoQuebrou: false, vulneravel: false, msg: '', protection: null };
+  }
 
   if (prot.state === 'active') {
     // Dano vai para a proteção.
@@ -59,28 +63,36 @@ function applyDamageWithProtection(target, dmg) {
     const novoHp = prot.hp - absorvido;
     const quebrou = novoHp <= 0;
     if (quebrou) {
-      prot.state = 'vulnerable';
-      prot.vulnerableTurnsLeft = PROTECTION_CHEFS[target._bossId]?.vulnerableTurns ?? 3;
-      prot.hp = 0;
+      const vulneravelTurns = PROTECTION_CHEFS[target._bossId]?.vulnerableTurns ?? 3;
       return {
         danoReal: 0, protecaoDano: absorvido, protecaoQuebrou: true, vulneravel: true,
-        msg: `🛡️ A proteção de ${target.name} se QUEBROU! Ficará vulnerável por ${prot.vulnerableTurnsLeft} turno(s).`,
+        msg: `🛡️ A proteção de ${target.name} se QUEBROU! Ficará vulnerável por ${vulneravelTurns} turno(s).`,
+        protection: { ...prot, hp: 0, state: 'vulnerable', vulnerableTurnsLeft: vulneravelTurns, rechargeTurnsLeft: 0 },
       };
     }
-    prot.hp = novoHp;
     return {
       danoReal: 0, protecaoDano: absorvido, protecaoQuebrou: false, vulneravel: false,
       msg: `🛡️ ${target.name} absorveu ${absorvido} dano na proteção (${novoHp}/${prot.maxHp}).`,
+      protection: { ...prot, hp: novoHp },
     };
   }
 
   if (prot.state === 'vulnerable') {
     // Dano direto ao chefe.
-    return { danoReal: dmg, protecaoDano: 0, protecaoQuebrou: false, vulneravel: true, msg: '' };
+    return { danoReal: dmg, protecaoDano: 0, protecaoQuebrou: false, vulneravel: true, msg: '', protection: null };
   }
 
   // recharging: proteção não está disponível ainda, dano direto ao chefe.
-  return { danoReal: dmg, protecaoDano: 0, protecaoQuebrou: false, vulneravel: false, msg: '' };
+  return { danoReal: dmg, protecaoDano: 0, protecaoQuebrou: false, vulneravel: false, msg: '', protection: null };
+}
+
+// Aplica o resultado de `applyDamageWithProtection` a um combatente do estado.
+function aplicarDanoAoCombatente(f, res) {
+  return {
+    ...f,
+    hp: Math.max(0, f.hp - res.danoReal),
+    protection: res.protection ?? f.protection,
+  };
 }
 
 // Avança os contadores de proteção de todos os lutadores no início de cada turno.
@@ -255,6 +267,33 @@ const [lastRoll, setLastRoll] = useState(null);
     if (!f) return [];
     return (f.inventory || []).filter((it) => it && it.tipo !== 'equipamento');
   }, []);
+
+  // Resolve o modo de alvo de um golpe (unico/area/cone/explosao) e devolve os
+  // alvos válidos: somente inimigos vivos, com o alvo principal escolhido
+  // primeiro. Em área, todos os inimigos vivos entram automaticamente.
+  const alvosDoGolpe = useCallback((attacker, golpe) => {
+    const spec = alvoNormalizado(golpe || {});
+    if (!attacker) return { spec, alvos: [] };
+    const inimigos = fighters.filter((f) => f.hp > 0 && f.team !== attacker.team);
+    const escolhidos = actTargets
+      .map((id) => fighters.find((f) => f.id === id))
+      .filter((f) => f && f.hp > 0 && f.team !== attacker.team);
+
+    if (spec.tipo === 'area') {
+      const alvos = [];
+      for (const t of escolhidos) if (!alvos.includes(t)) alvos.push(t);
+      for (const t of inimigos) if (!alvos.includes(t)) alvos.push(t);
+      return { spec, alvos };
+    }
+
+    const max = Math.max(1, spec.max || 1);
+    const alvos = [];
+    for (const t of escolhidos) {
+      if (alvos.length >= max) break;
+      if (!alvos.includes(t)) alvos.push(t);
+    }
+    return { spec, alvos };
+  }, [fighters, actTargets]);
 
   const addLog = useCallback((text) => {
     setLog((prev) => [...prev.slice(-50), { id: Date.now() + Math.random(), text, round }]);
@@ -459,8 +498,12 @@ const [lastRoll, setLastRoll] = useState(null);
           .filter((a) => a.categoria !== 'utilitaria')
           .sort((a, b) => (danoBaseDaArma(b) || 0) - (danoBaseDaArma(a) || 0))[0] ||
         armas[0];
-      const defender = fighters.find((f) => f.id === actTargets[0]);
-      if (!defender || defender.hp <= 0) return;
+      const { spec, alvos } = alvosDoGolpe(attacker, arma);
+      if (alvos.length === 0) {
+        addLog(`🎯 ${attacker.name} não encontrou inimigos vivos para atacar.`);
+        setActTargets([]);
+        return;
+      }
 
       // ── Recarga e usos de canhões/armas utilitárias (por lutador e arma) ──
       const usaRecarga = armaUsaRecarga(arma);
@@ -477,15 +520,10 @@ const [lastRoll, setLastRoll] = useState(null);
         return;
       }
 
-      const roll = Math.floor(Math.random() * 20) + 1;
-      const chance = computeHitChance(attacker, defender);
-      const threshold = Math.ceil(chance * 20);
-      const hit = roll >= threshold;
-      const isCrit = roll === 20;
-
-      // O disparo consome munição mesmo quando erra. Armas com `usosMax`
-      // (canhões/utilitárias) só recarregam ao esvaziar a carga; as demais
-      // armas de fogo entram em recarga após cada disparo.
+      // O disparo consome munição uma única vez, mesmo quando erra ou atinge
+      // vários alvos. Armas com `usosMax` (canhões/utilitárias) só recarregam
+      // ao esvaziar a carga; as demais armas de fogo entram em recarga após
+      // cada disparo.
       if (usaRecarga) {
         const recargaTurnos = recargaDeArma(arma);
         if (arma.usosMax) {
@@ -508,23 +546,37 @@ const [lastRoll, setLastRoll] = useState(null);
         }
       }
 
-      if (hit) {
-        const dmg = Math.round(danoFisicoAtaque(effectiveStat(attacker, 'forca'), danoBaseDaArma(arma)) * (isCrit ? 2 : 1));
-        const res = applyDamageWithProtection(defender, dmg);
+      const danoBase = danoFisicoAtaque(effectiveStat(attacker, 'forca'), danoBaseDaArma(arma));
+      const resultados = [];
+      const efeitosPorAlvo = new Map();
 
-        setFighters((prev) => prev.map((f) => {
-          if (f.id !== defender.id) return f;
-          if (res.protecaoDano > 0) {
-            return { ...f, protection: { ...f.protection, hp: Math.max(0, f.protection?.hp - res.protecaoDano) } };
-          }
-          return { ...f, hp: Math.max(0, f.hp - res.danoReal) };
-        }));
-        const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano` : '';
-        addLog(`⚔️ ${attacker.name} ataca ${defender.name} com ${arma.nome || 'desarmado'} → D20:${roll} (${threshold}+) ${isCrit ? 'CRÍTICO ' : ''}${suffix}`);
+      // Cada alvo tem sua própria rolagem de acerto, crítico e multiplicador
+      // de dano (principal usa `danoMult`; secundários usam `splash`).
+      alvos.forEach((alvo, i) => {
+        const roll = Math.floor(Math.random() * 20) + 1;
+        const chance = computeHitChance(attacker, alvo);
+        const threshold = Math.ceil(chance * 20);
+        const hit = roll >= threshold;
+        const isCrit = roll === 20;
+        const mult = i > 0 ? spec.splash : spec.danoMult;
+        const alvoTxt = alvos.length > 1 ? `${alvo.name}${i === 0 ? ' (principal)' : ''}` : alvo.name;
+
+        if (!hit) {
+          addLog(`⚔️ ${attacker.name} erra ${alvoTxt} com ${arma.nome || 'desarmado'} → D20:${roll} (${threshold}+)`);
+          return;
+        }
+
+        const dmg = Math.max(1, Math.round(danoBase * (isCrit ? 2 : 1) * mult));
+        const res = applyDamageWithProtection(alvo, dmg);
+        resultados.push({ id: alvo.id, res });
+        const multTxt = mult < 1 ? ` (${Math.round(mult * 100)}%)` : '';
+        const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${multTxt}` : '';
+        addLog(`⚔️ ${attacker.name} ataca ${alvoTxt} com ${arma.nome || 'desarmado'} → D20:${roll} (${threshold}+) ${isCrit ? 'CRÍTICO ' : ''}${suffix}`);
         if (res.protecaoQuebrou) addLog(res.msg);
 
-        // Efeito da arma utilitária (ex.: congelamento) no alvo que sobreviveu.
-        if (arma.efeito && defender.hp - res.danoReal > 0) {
+        // Efeito da arma (ex.: congelamento) só em quem foi atingido e sobreviveu.
+        const hpDepois = Math.max(0, alvo.hp - res.danoReal);
+        if (arma.efeito && hpDepois > 0) {
           const ef = arma.efeito;
           const def = STATUS_DEFS[ef.tipo] || {};
           const eff = {
@@ -532,13 +584,20 @@ const [lastRoll, setLastRoll] = useState(null);
             stat: 'custom', value: ef.dano || 0,
             duration: ef.turnos || 2, type: 'debuff',
           };
-          setFighters((prev) => prev.map((f) => (
-            f.id === defender.id ? { ...f, statusEffects: [...f.statusEffects, eff] } : f
-          )));
-          addLog(`✨ ${defender.name} recebe ${eff.name} por ${eff.duration} rodadas`);
+          efeitosPorAlvo.set(alvo.id, eff);
+          addLog(`✨ ${alvo.name} recebe ${eff.name} por ${eff.duration} rodadas`);
         }
-      } else {
-        addLog(`⚔️ ${attacker.name} erra ${defender.name} com ${arma.nome || 'desarmado'} → D20:${roll} (${threshold}+)`);
+      });
+
+      if (resultados.length > 0 || efeitosPorAlvo.size > 0) {
+        setFighters((prev) => prev.map((f) => {
+          let nf = f;
+          const r = resultados.find((x) => x.id === f.id);
+          if (r) nf = aplicarDanoAoCombatente(nf, r.res);
+          const eff = efeitosPorAlvo.get(f.id);
+          if (eff) nf = { ...nf, statusEffects: [...nf.statusEffects, eff] };
+          return nf;
+        }));
       }
       setActTargets([]);
       return;
@@ -549,39 +608,71 @@ const [lastRoll, setLastRoll] = useState(null);
       if (!m) return;
       const custo = m.spell.custo || 0;
       if ((attacker.mp || 0) < custo) { addLog(`🔮 ${attacker.name} não tem MP suficiente (${custo})`); return; }
-      const defender = fighters.find((f) => f.id === actTargets[0]);
-      if (!defender || defender.hp <= 0) return;
+      const { spec, alvos } = alvosDoGolpe(attacker, m.spell);
+      if (alvos.length === 0) {
+        addLog(`🎯 ${attacker.name} não encontrou inimigos vivos para ${m.spell.nome}.`);
+        setActTargets([]);
+        return;
+      }
 
       const poder = m.spell.poder || 1.6;
-      const dmg = Math.round(danoMagico(effectiveStat(attacker, 'inteligencia'), poder));
-      const res = applyDamageWithProtection(defender, dmg);
-      setFighters((prev) => prev.map((f) => {
-        if (f.id === attacker.id) return { ...f, mp: Math.max(0, f.mp - custo) };
-        if (f.id === defender.id) {
-          if (res.protecaoDano > 0) {
-            return { ...f, protection: { ...f.protection, hp: Math.max(0, f.protection?.hp - res.protecaoDano) } };
-          }
-          return { ...f, hp: Math.max(0, f.hp - res.danoReal) };
-        }
-        return f;
-      }));
-      const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano` : '';
-      addLog(`🔮 ${attacker.name} lança ${m.spell.nome} em ${defender.name} ${suffix} (MP ${custo})`);
-      if (res.protecaoQuebrou) addLog(res.msg);
+      const danoBase = danoMagico(effectiveStat(attacker, 'inteligencia'), poder);
+      const multi = spec.tipo !== 'unico';
+      const resultados = [];
+      const efeitosPorAlvo = new Map();
 
-      if (m.spell.status) {
-        const st = m.spell.status;
-        const def = STATUS_DEFS[st.tipo] || {};
-        const tipoBuff = st.tipo === 'dot' || st.tipo === 'veneno' ? 'debuff' : st.tipo === 'hot' ? 'buff' : 'debuff';
-        const statMap = { veneno: 'poison', regeneracao: 'regen' };
-        const eff = {
-          uid: uid(), name: def.nome || st.tipo, icon: def.icon || '✦',
-          stat: statMap[st.tipo] || 'custom', value: st.dano || 0,
-          duration: st.turnos || 2, type: tipoBuff,
-        };
-        setFighters((prev) => prev.map((f) => f.id === defender.id ? { ...f, statusEffects: [...f.statusEffects, eff] } : f));
-        addLog(`✨ ${defender.name} recebe ${eff.name} por ${eff.duration} rodadas`);
-      }
+      // Magias de alvo único mantêm o comportamento antigo (sem rolagem de
+      // acerto). Área/cone/explosão rolam acerto e dano por alvo, com o alvo
+      // principal cheio e os secundários reduzidos pelo `splash`.
+      alvos.forEach((alvo, i) => {
+        const roll = multi ? Math.floor(Math.random() * 20) + 1 : null;
+        const chance = multi ? computeHitChance(attacker, alvo) : 1;
+        const threshold = Math.ceil(chance * 20);
+        const hit = !multi || roll >= threshold;
+        const isCrit = multi && roll === 20;
+        const mult = i > 0 ? spec.splash : spec.danoMult;
+        const alvoTxt = alvos.length > 1 ? `${alvo.name}${i === 0 ? ' (principal)' : ''}` : alvo.name;
+
+        if (!hit) {
+          addLog(`🔮 ${attacker.name} erra ${m.spell.nome} em ${alvoTxt} → D20:${roll} (${threshold}+)`);
+          return;
+        }
+
+        const dmg = Math.max(1, Math.round(danoBase * (isCrit ? 2 : 1) * mult));
+        const res = applyDamageWithProtection(alvo, dmg);
+        resultados.push({ id: alvo.id, res });
+        const multTxt = mult < 1 ? ` (${Math.round(mult * 100)}%)` : '';
+        const rollTxt = multi ? ` → D20:${roll} (${threshold}+)${isCrit ? ' CRÍTICO' : ''}` : '';
+        const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${multTxt}` : '';
+        addLog(`🔮 ${attacker.name} lança ${m.spell.nome} em ${alvoTxt}${rollTxt}${suffix}${i === 0 ? ` (MP ${custo})` : ''}`);
+        if (res.protecaoQuebrou) addLog(res.msg);
+
+        // Efeito da magia só em quem foi atingido e sobreviveu.
+        const hpDepois = Math.max(0, alvo.hp - res.danoReal);
+        if (m.spell.status && hpDepois > 0) {
+          const st = m.spell.status;
+          const def = STATUS_DEFS[st.tipo] || {};
+          const tipoBuff = st.tipo === 'dot' || st.tipo === 'veneno' ? 'debuff' : st.tipo === 'hot' ? 'buff' : 'debuff';
+          const statMap = { veneno: 'poison', regeneracao: 'regen' };
+          const eff = {
+            uid: uid(), name: def.nome || st.tipo, icon: def.icon || '✦',
+            stat: statMap[st.tipo] || 'custom', value: st.dano || 0,
+            duration: st.turnos || 2, type: tipoBuff,
+          };
+          efeitosPorAlvo.set(alvo.id, eff);
+          addLog(`✨ ${alvo.name} recebe ${eff.name} por ${eff.duration} rodadas`);
+        }
+      });
+
+      setFighters((prev) => prev.map((f) => {
+        let nf = f;
+        if (f.id === attacker.id) nf = { ...nf, mp: Math.max(0, nf.mp - custo) };
+        const r = resultados.find((x) => x.id === f.id);
+        if (r) nf = aplicarDanoAoCombatente(nf, r.res);
+        const eff = efeitosPorAlvo.get(f.id);
+        if (eff) nf = { ...nf, statusEffects: [...nf.statusEffects, eff] };
+        return nf;
+      }));
       setActTargets([]);
       return;
     }
@@ -606,8 +697,8 @@ const [lastRoll, setLastRoll] = useState(null);
     }
   }, [
     fighters, actAttacker, actTargets, actionMode, selWeaponId, selSpellId, selItemId,
-    armasDoLutador, magiasDoLutador, itensDoLutador, addLog, STATUS_DEFS, SPELLS,
-    initiativeRolled, initiativeOrder, currentTurnIndex,
+    armasDoLutador, magiasDoLutador, itensDoLutador, alvosDoGolpe, addLog, STATUS_DEFS, SPELLS,
+    initiativeRolled, initiativeOrder, currentTurnIndex, wpnRecarga, wpnUsos,
   ]);
 
   const removeCustomEffect = useCallback((type, uid_) => {
@@ -666,13 +757,9 @@ const [lastRoll, setLastRoll] = useState(null);
         if (hit) {
           const dmg = computeDamage(attacker, isCrit);
           const res = applyDamageWithProtection(defender, dmg);
-          setFighters((prev) => prev.map((f) => {
-            if (f.id !== defender.id) return f;
-            if (res.protecaoDano > 0) {
-              return { ...f, protection: { ...f.protection, hp: Math.max(0, f.protection?.hp - res.protecaoDano) } };
-            }
-            return { ...f, hp: Math.max(0, f.hp - res.danoReal) };
-          }));
+          setFighters((prev) => prev.map((f) => (
+            f.id === defender.id ? aplicarDanoAoCombatente(f, res) : f
+          )));
           const critText = isCrit ? ' 🎯 CRÍTICO!' : '';
           const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${isCrit ? ' x2' : ''}` : '';
           addLog(`${attacker.name} ataca ${defender.name} → D20: ${finalRoll} vs ${threshold}+ → ACERTA${critText}${suffix}`);
@@ -1202,7 +1289,7 @@ const [lastRoll, setLastRoll] = useState(null);
                       ))}
                       {alive.length <= 1 && <option disabled>Sem outros alvos vivos</option>}
                     </select>
-                    <small className="muted">Segure Ctrl/Cmd para múltiplos alvos</small>
+                    <small className="muted">Segure Ctrl/Cmd para múltiplos alvos. Armas/magias de área, cone e explosão atingem vários inimigos (cada um rola o próprio acerto).</small>
                   </div>
                 </div>
               )}
