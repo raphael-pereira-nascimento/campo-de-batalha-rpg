@@ -639,6 +639,29 @@ describe('BattleManager — arma utilitária', () => {
     expect(hero.wpnUsos[util.id]).toBe(1);
     expect(boss.statuses.map((s) => s.id)).toContain('lentidao');
   });
+
+  it('consome o uso mas não aplica o debuff quando o disparo utilitário erra', () => {
+    const { manager } = makeManager();
+    const util = {
+      id: 'rede_encantada',
+      nome: 'Rede Encantada',
+      categoria: 'utilitaria',
+      danoBase: 2,
+      usosMax: 2,
+      efeito: { tipo: 'lentidao', turnos: 2 },
+    };
+    const { battle, hero, boss } = montar(manager, util);
+    ateTurnoDoHeroi(manager, battle, hero, boss);
+    manager._rollToHit = () => ({ hit: false, crit: false, roll: 5, chance: 10, dificuldade: 0 });
+    manager.handleAction({
+      battleId: battle.id,
+      characterId: hero.characterId,
+      playerId: hero.playerId,
+      action: { type: 'attackUtility', targetId: boss.uid },
+    });
+    expect(hero.wpnUsos[util.id]).toBe(1);
+    expect(boss.statuses.map((s) => s.id)).not.toContain('lentidao');
+  });
 });
 
 describe('BattleManager — bebidas da taverna em combate', () => {

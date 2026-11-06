@@ -1222,6 +1222,8 @@ export class BattleManager {
       if (dealt > 0) this._lifesteal(battle, p, dealt);
       if (!t.alive && !t.horda) p.kills += 1;
       if (ataqueStatus && t.alive) this._applyStatus(battle, t, ataqueStatus, p);
+      // Efeito próprio da arma (canhões utilitários): só em quem foi atingido.
+      if (weapon?.efeito && t.alive) this._applyStatus(battle, t, weapon.efeito, p);
     // Efeitos de gema no arma
     if (p.equipment && !p.isMonster) {
       for (const { arma } of armasDeEquipamento(p.equipment)) {
@@ -1614,14 +1616,7 @@ export class BattleManager {
           p.wpnRecarga[arma.id] = recargaTurnos + 1;
         }
         battle.log.push(makeLog(`🧰 ${p.charName} usa ${arma.nome}.`));
-        const specUtil = alvoNormalizado(arma);
-        const alvosUtil = this._alvosDoGolpe(battle, p, specUtil, target, alvosExtras);
         this._resolveAttack(battle, p, target, arma, alvosExtras);
-        if (arma.efeito) {
-          for (const t of alvosUtil) {
-            if (t.alive) this._applyStatus(battle, t, arma.efeito, p);
-          }
-        }
         break;
       }
       case 'magic': {
