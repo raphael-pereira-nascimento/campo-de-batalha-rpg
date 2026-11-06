@@ -556,13 +556,15 @@ const [lastRoll, setLastRoll] = useState(null);
         const roll = Math.floor(Math.random() * 20) + 1;
         const chance = computeHitChance(attacker, alvo);
         const threshold = Math.ceil(chance * 20);
-        const hit = roll >= threshold;
+        // Acerto "rolar-menor" (igual ao Campo): 20 é crítico, 1 é falha.
         const isCrit = roll === 20;
+        const isFail = roll === 1;
+        const hit = isCrit || (!isFail && roll <= threshold);
         const mult = i > 0 ? spec.splash : spec.danoMult;
         const alvoTxt = alvos.length > 1 ? `${alvo.name}${i === 0 ? ' (principal)' : ''}` : alvo.name;
 
         if (!hit) {
-          addLog(`⚔️ ${attacker.name} erra ${alvoTxt} com ${arma.nome || 'desarmado'} → D20:${roll} (${threshold}+)`);
+          addLog(`⚔️ ${attacker.name} erra ${alvoTxt} com ${arma.nome || 'desarmado'} → D20:${roll} (≤${threshold})`);
           return;
         }
 
@@ -571,7 +573,7 @@ const [lastRoll, setLastRoll] = useState(null);
         resultados.push({ id: alvo.id, res });
         const multTxt = mult < 1 ? ` (${Math.round(mult * 100)}%)` : '';
         const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${multTxt}` : '';
-        addLog(`⚔️ ${attacker.name} ataca ${alvoTxt} com ${arma.nome || 'desarmado'} → D20:${roll} (${threshold}+) ${isCrit ? 'CRÍTICO ' : ''}${suffix}`);
+        addLog(`⚔️ ${attacker.name} ataca ${alvoTxt} com ${arma.nome || 'desarmado'} → D20:${roll} (≤${threshold}) ${isCrit ? 'CRÍTICO ' : ''}${suffix}`);
         if (res.protecaoQuebrou) addLog(res.msg);
 
         // Efeito da arma (ex.: congelamento) só em quem foi atingido e sobreviveu.
@@ -628,13 +630,15 @@ const [lastRoll, setLastRoll] = useState(null);
         const roll = multi ? Math.floor(Math.random() * 20) + 1 : null;
         const chance = multi ? computeHitChance(attacker, alvo) : 1;
         const threshold = Math.ceil(chance * 20);
-        const hit = !multi || roll >= threshold;
+        // Acerto "rolar-menor" (igual ao Campo): 20 é crítico, 1 é falha.
         const isCrit = multi && roll === 20;
+        const isFail = multi && roll === 1;
+        const hit = !multi || isCrit || (!isFail && roll <= threshold);
         const mult = i > 0 ? spec.splash : spec.danoMult;
         const alvoTxt = alvos.length > 1 ? `${alvo.name}${i === 0 ? ' (principal)' : ''}` : alvo.name;
 
         if (!hit) {
-          addLog(`🔮 ${attacker.name} erra ${m.spell.nome} em ${alvoTxt} → D20:${roll} (${threshold}+)`);
+          addLog(`🔮 ${attacker.name} erra ${m.spell.nome} em ${alvoTxt} → D20:${roll} (≤${threshold})`);
           return;
         }
 
@@ -642,7 +646,7 @@ const [lastRoll, setLastRoll] = useState(null);
         const res = applyDamageWithProtection(alvo, dmg);
         resultados.push({ id: alvo.id, res });
         const multTxt = mult < 1 ? ` (${Math.round(mult * 100)}%)` : '';
-        const rollTxt = multi ? ` → D20:${roll} (${threshold}+)${isCrit ? ' CRÍTICO' : ''}` : '';
+        const rollTxt = multi ? ` → D20:${roll} (≤${threshold})${isCrit ? ' CRÍTICO' : ''}` : '';
         const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${multTxt}` : '';
         addLog(`🔮 ${attacker.name} lança ${m.spell.nome} em ${alvoTxt}${rollTxt}${suffix}${i === 0 ? ` (MP ${custo})` : ''}`);
         if (res.protecaoQuebrou) addLog(res.msg);
@@ -752,8 +756,10 @@ const [lastRoll, setLastRoll] = useState(null);
         setRolling(false);
         const hitChance = computeHitChance(attacker, defender);
         const threshold = Math.ceil(hitChance * 20);
-        const hit = finalRoll >= threshold;
+        // Acerto "rolar-menor" (igual ao Campo): 20 é crítico, 1 é falha.
         const isCrit = finalRoll === 20;
+        const isFail = finalRoll === 1;
+        const hit = isCrit || (!isFail && finalRoll <= threshold);
         if (hit) {
           const dmg = computeDamage(attacker, isCrit);
           const res = applyDamageWithProtection(defender, dmg);
@@ -762,11 +768,11 @@ const [lastRoll, setLastRoll] = useState(null);
           )));
           const critText = isCrit ? ' 🎯 CRÍTICO!' : '';
           const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${isCrit ? ' x2' : ''}` : '';
-          addLog(`${attacker.name} ataca ${defender.name} → D20: ${finalRoll} vs ${threshold}+ → ACERTA${critText}${suffix}`);
+          addLog(`${attacker.name} ataca ${defender.name} → D20: ${finalRoll} (≤${threshold}) → ACERTA${critText}${suffix}`);
           if (res.protecaoQuebrou) addLog(res.msg);
           setRollResult({ roll: finalRoll, threshold, hit: true, isCrit, damage: res.danoReal });
         } else {
-          addLog(`${attacker.name} ataca ${defender.name} → D20: ${finalRoll} vs ${threshold}+ → ERRA`);
+          addLog(`${attacker.name} ataca ${defender.name} → D20: ${finalRoll} (≤${threshold}) → ERRA`);
           setRollResult({ roll: finalRoll, threshold, hit: false, isCrit: false, damage: 0 });
         }
       }
@@ -1171,7 +1177,7 @@ const [lastRoll, setLastRoll] = useState(null);
                     const threshold = Math.ceil(chance * 20);
                     return (
                       <>
-                        <span className="chance-text">Chance: {(chance * 100).toFixed(0)}% (precisa de {threshold}+ no D20)</span>
+                        <span className="chance-text">Chance: {(chance * 100).toFixed(0)}% (precisa de {threshold} ou menos no D20; 20 é crítico)</span>
                         <span className="modifier-text">VEL: {effectiveStat(a, 'destreza')} vs REF: {effectiveStat(d, 'reflexos')}</span>
                       </>
                     );
