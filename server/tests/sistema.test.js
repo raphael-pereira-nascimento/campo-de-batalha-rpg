@@ -41,6 +41,19 @@ import {
   ALVO_LABEL,
   alvoNormalizado,
   desviouParaAliado,
+  SUPERAQUECIMENTO,
+  armaDeFogo,
+  calorDoDisparo,
+  calorEstado,
+  FUMACA,
+  rajadaDaArma,
+  fumacaDoDisparo,
+  fumacaMiraPenalidade,
+  fumacaCamuflagemBonus,
+  fumacaEstado,
+  NIVEIS_DIFICULDADE_D20,
+  nivelDificuldadeD20,
+  rotuloDificuldadeD20,
 } from '../src/game/sistema.js';
 
 describe('Mana — fórmula confirmada ((INT Final) × 10)', () => {
@@ -396,5 +409,130 @@ describe('Multi-alvo — desvio para aliados (fogo amigo)', () => {
     expect(desviouParaAliado(1, 0.9)).toBe(false);
     // exatamente na chance: precisa ser estritamente menor
     expect(desviouParaAliado(1, MULTI_DESVIO_CHANCE)).toBe(false);
+  });
+});
+
+describe('Superaquecimento — armas de fogo', () => {
+  it('reconhece apenas armas de fogo que disparam', () => {
+    expect(armaDeFogo({ tipo: 'arma_fogo', categoria: 'distancia' })).toBe(true);
+    expect(armaDeFogo({ tipo: 'arma_fogo' })).toBe(true);
+    // corpo a corpo (baioneta) não superaquece
+    expect(armaDeFogo({ tipo: 'arma_fogo', categoria: 'perto' })).toBe(false);
+    expect(armaDeFogo({ tipo: 'fisico', categoria: 'distancia' })).toBe(false);
+    expect(armaDeFogo(null)).toBe(false);
+  });
+
+  it('deriva o calor do disparo do dano e da recarga', () => {
+    // 32 base + 9 × 1.2 + 2 × 3 = 48,8 → 49
+    expect(calorDoDisparo({ tipo: 'arma_fogo', danoBase: 9, recarga: 2 })).toBe(49);
+    expect(calorDoDisparo({ tipo: 'arma_fogo', danoBase: 0, recarga: 0 })).toBe(
+      SUPERAQUECIMENTO.calorBasePorDisparo,
+    );
+    expect(calorDoDisparo({ tipo: 'arma_fogo', categoria: 'perto', danoBase: 9 })).toBe(0);
+    expect(calorDoDisparo(null)).toBe(0);
+  });
+
+  it('permite ajustar o calor por arma no campo opcional `calor`', () => {
+    expect(calorDoDisparo({ tipo: 'arma_fogo', danoBase: 9, recarga: 2, calor: 55 })).toBe(55);
+    // valor inválido (0) volta para a fórmula derivada
+    expect(calorDoDisparo({ tipo: 'arma_fogo', danoBase: 9, recarga: 2, calor: 0 })).toBe(49);
+  });
+
+  it('classifica o calor em normal, quente, crítico e superaquecido', () => {
+    expect(calorEstado(0).nivel).toBe('normal');
+    expect(calorEstado(49).nivel).toBe('normal');
+    expect(calorEstado(50).nivel).toBe('quente');
+    expect(calorEstado(SUPERAQUECIMENTO.limiarAviso - 1).nivel).toBe('quente');
+    expect(calorEstado(SUPERAQUECIMENTO.limiarAviso).nivel).toBe('critico');
+    expect(calorEstado(SUPERAQUECIMENTO.calorMax - 1).nivel).toBe('critico');
+    expect(calorEstado(SUPERAQUECIMENTO.calorMax).nivel).toBe('superaquecido');
+    expect(calorEstado(250).nivel).toBe('superaquecido');
+  });
+
+  it('limita o percentual visual entre 0 e 100', () => {
+    expect(calorEstado(-10).pct).toBe(0);
+    expect(calorEstado(50).pct).toBe(50);
+    expect(calorEstado(250).pct).toBe(100);
+  });
+});
+
+describe('Fumaça — armas de fogo', () => {
+  it('conta os projéteis/alvos da rajada (padrão 1)', () => {
+    expect(rajadaDaArma()).toBe(1);
+    expect(rajadaDaArma({})).toBe(1);
+    expect(rajadaDaArma({ alvo: 'cone' })).toBe(MULTI_ALVO_PADRAO);
+    expect(rajadaDaArma({ alvo: 'cone', alvos: 1 })).toBe(2);
+    expect(rajadaDaArma({ alvo: 'cone', alvos: 99 })).toBe(10);
+  });
+
+  it('gera fumaça por disparo, somando extra por projétil', () => {
+    expect(fumacaDoDisparo({ tipo: 'arma_fogo' })).toBe(FUMACA.porDisparo);
+    expect(fumacaDoDisparo({ tipo: 'arma_fogo' }, 3)).toBe(
+      FUMACA.porDisparo + 2 * FUMACA.porRajada,
+    );
+    expect(fumacaDoDisparo({ tipo: 'arma_fogo', fumaca: 40 }, 2)).toBe(
+      40 + FUMACA.porRajada,
+    );
+    expect(fumacaDoDisparo({ tipo: 'arma_fogo', categoria: 'perto' }, 3)).toBe(0);
+    expect(fumacaDoDisparo(null)).toBe(0);
+  });
+
+  it('converte fumaça em penalidade de mira e bônus de camuflagem, com teto', () => {
+    expect(fumacaMiraPenalidade(0)).toBe(0);
+    expect(fumacaMiraPenalidade(100)).toBeCloseTo(0.15);
+    expect(fumacaMiraPenalidade(1000)).toBe(FUMACA.penalidadeMiraMax);
+    expect(fumacaCamuflagemBonus(0)).toBe(0);
+    expect(fumacaCamuflagemBonus(100)).toBeCloseTo(0.12);
+    expect(fumacaCamuflagemBonus(1000)).toBe(FUMACA.bonusCamuflagemMax);
+  });
+
+  it('classifica a fumaça em limpa, leve e densa', () => {
+    expect(fumacaEstado(0).nivel).toBe('limpa');
+    expect(fumacaEstado(FUMACA.limiarVisivel - 1).nivel).toBe('limpa');
+    expect(fumacaEstado(FUMACA.limiarVisivel).nivel).toBe('leve');
+    expect(fumacaEstado(FUMACA.limiarDenso - 1).nivel).toBe('leve');
+    expect(fumacaEstado(FUMACA.limiarDenso).nivel).toBe('espessa');
+    expect(fumacaEstado(250).nivel).toBe('espessa');
+  });
+
+  it('expõe mira, camuflagem e percentual no estado', () => {
+    const estado = fumacaEstado(100);
+    expect(estado.pct).toBe(100);
+    expect(estado.mira).toBeCloseTo(0.15);
+    expect(estado.camuflagem).toBeCloseTo(0.12);
+    expect(fumacaEstado(-5).pct).toBe(0);
+  });
+});
+
+describe('Faixas de dificuldade do d20', () => {
+  it('mapeia 1–4 / 5–10 / 11–16 / 17–20', () => {
+    expect(nivelDificuldadeD20(1).nome).toBe('Fácil');
+    expect(nivelDificuldadeD20(4).nome).toBe('Fácil');
+    expect(nivelDificuldadeD20(5).nome).toBe('Médio');
+    expect(nivelDificuldadeD20(10).nome).toBe('Médio');
+    expect(nivelDificuldadeD20(11).nome).toBe('Difícil');
+    expect(nivelDificuldadeD20(16).nome).toBe('Difícil');
+    expect(nivelDificuldadeD20(17).nome).toBe('Muito Difícil');
+    expect(nivelDificuldadeD20(20).nome).toBe('Muito Difícil');
+  });
+
+  it('cobre todas as faces do d20 sem buracos', () => {
+    for (let n = 1; n <= 20; n += 1) {
+      expect(nivelDificuldadeD20(n)).toBeTruthy();
+    }
+    expect(NIVEIS_DIFICULDADE_D20).toHaveLength(4);
+  });
+
+  it('rejeita valores fora de 1..20', () => {
+    expect(nivelDificuldadeD20(0)).toBeNull();
+    expect(nivelDificuldadeD20(21)).toBeNull();
+    expect(nivelDificuldadeD20(NaN)).toBeNull();
+    expect(nivelDificuldadeD20(undefined)).toBeNull();
+  });
+
+  it('formata um rótulo curto para o log', () => {
+    expect(rotuloDificuldadeD20(15)).toBe('Difícil (11–16)');
+    expect(rotuloDificuldadeD20(1)).toBe('Fácil (1–4)');
+    expect(rotuloDificuldadeD20(99)).toBe('—');
   });
 });

@@ -46,6 +46,15 @@ import {
   VOO,
   ALCANCE_VERTICAL,
   ALTITUDES,
+  armaDeFogo,
+  calorDoDisparo,
+  SUPERAQUECIMENTO,
+  fumacaDoDisparo,
+  fumacaMiraPenalidade,
+  fumacaCamuflagemBonus,
+  rajadaDaArma,
+  FUMACA,
+  nivelDificuldadeD20,
 } from './sistema.js';
 import { estadoEclipse, sortearVarianteEclipse, aplicarEclipseEmChefe, aplicarVarianteEclipseEmChefe } from './eclipse.js';
 import { RACES } from './races.js';
@@ -310,6 +319,11 @@ export class BattleManager {
       cooldowns: {},
       // ── Recarga das armas de fogo (id da arma → turnos de espera) ──
       wpnRecarga: {},
+      // ── Superaquecimento e fumaça das armas de fogo ──
+      wpnCalor: {},          // id da arma → calor acumulado (0..calorMax)
+      wpnSuperaquecido: {},  // id da arma → turnos restantes de bloqueio
+      wpnDisparou: {},       // id da arma → disparou neste turno?
+      fumaca: 0,             // nuvem de fumaça ao redor do participante (0..FUMACA.max)
       // ── Arsenal: usos restantes das armas utilitárias nesta batalha ──
       wpnUsos: (() => {
         const usos = {};
@@ -362,6 +376,11 @@ export class BattleManager {
     }
     const m = buildMonster(def);
     m.uid = uid;
+    // Estado de armas de fogo também para inimigos (armas com tipo arma_fogo).
+    m.wpnCalor = m.wpnCalor || {};
+    m.wpnSuperaquecido = m.wpnSuperaquecido || {};
+    m.wpnDisparou = m.wpnDisparou || {};
+    if (m.fumaca == null) m.fumaca = 0;
     const heroes = battle.participants.filter((q) => !q.isMonster);
     const playerCount = heroes.length;
     const sumHeroHp = heroes.reduce((s, h) => s + h.hpMax, 0);
@@ -740,6 +759,9 @@ export class BattleManager {
     const critThresh = 21 - Math.round(this._critBonus(attacker) * 20);
     const atkA = this._rollAttrs(attacker);
     const defA = this._rollAttrs(defender);
+    // Fumaça: atrapalha a mira de quem está dentro dela e camufla o alvo.
+    const fumacaMira = fumacaMiraPenalidade(attacker.fumaca);
+    const fumacaCamuflagem = fumacaCamuflagemBonus(defender.fumaca);
     let acc, dodge, chance;
     if (kind === 'magic') {
       // INT é o atributo da magia; REF ajuda na mira.
@@ -747,23 +769,33 @@ export class BattleManager {
       dodge = defender.dodge
         ? pesoAtributo('esquiva', defA) + pesoAtributo('esquiva', defA) * 0.5
         : pesoAtributo('esquiva', defA);
-      chance = clamp(0.35 + (acc - dodge) * 0.035 - dodgeBonus - stAtk.accPenalty + stDef.dodgePenalty, 0.15, 0.95);
+      chance = clamp(
+        0.35 + (acc - dodge) * 0.035 - dodgeBonus - stAtk.accPenalty + stDef.dodgePenalty - fumacaMira - fumacaCamuflagem,
+        0.15,
+        0.95,
+      );
     } else {
       // DEX manda na precisão, REF ajuda, FOR dá peso ao golpe.
       acc = pesoAtributo('ataqueFisico', atkA);
       dodge = defender.dodge
         ? defA.destreza + defA.reflexos
         : pesoAtributo('esquiva', defA);
-      chance = clamp(0.35 + (acc - dodge) * 0.03 - dodgeBonus - stAtk.accPenalty + stDef.dodgePenalty, 0.15, 0.95);
+      chance = clamp(
+        0.35 + (acc - dodge) * 0.03 - dodgeBonus - stAtk.accPenalty + stDef.dodgePenalty - fumacaMira - fumacaCamuflagem,
+        0.15,
+        0.95,
+      );
     }
     // Dificuldade do golpe: golpes mais fortes/efeitos mais pesados reduzem o alvo.
     const dificuldade = dificuldadeDoGolpe({ poder, status });
     const threshold = clamp(Math.round(20 * chance) - dificuldade, 1, 19);
     const res = rollAttack();
-    if (res.isCrit) return { hit: true, crit: true, roll: res.rolls[0], chance: threshold, dificuldade };
-    if (res.isFail) return { hit: false, crit: false, roll: res.rolls[0], chance: threshold, dificuldade };
-    if (res.rolls[0] >= critThresh) return { hit: true, crit: true, roll: res.rolls[0], chance: threshold, dificuldade };
-    return { hit: res.rolls[0] <= threshold, crit: false, roll: res.rolls[0], chance: threshold, dificuldade };
+    const nivel = nivelDificuldadeD20(res.rolls[0]);
+    const base = { chance: threshold, dificuldade, nivel, fumacaMira, fumacaCamuflagem };
+    if (res.isCrit) return { ...base, hit: true, crit: true, roll: res.rolls[0] };
+    if (res.isFail) return { ...base, hit: false, crit: false, roll: res.rolls[0] };
+    if (res.rolls[0] >= critThresh) return { ...base, hit: true, crit: true, roll: res.rolls[0] };
+    return { ...base, hit: res.rolls[0] <= threshold, crit: false, roll: res.rolls[0] };
   }
 
   _physMult(p) {
@@ -1124,6 +1156,14 @@ export class BattleManager {
       );
       return;
     }
+    // Superaquecimento: a arma travada não dispara até esfriar.
+    if (this._superaquecida(p, weapon)) {
+      const turnos = Number(p.wpnSuperaquecido?.[weapon.id]) || 0;
+      battle.log.push(
+        makeLog(`🌡️ ${weaponName} está superaquecida e precisa esfriar (${turnos} turno(s)).`, 'miss'),
+      );
+      return;
+    }
     const spec = alvoNormalizado(weapon || {});
     const alvos = this._alvosDoGolpe(battle, p, spec, target, extras);
     const principal = alvos[0];
@@ -1140,8 +1180,11 @@ export class BattleManager {
       return;
     }
     const mira = this._rollToHit(p, principal, 'physical');
-    // O tiro saiu: a arma entra em recarga mesmo se errar (ou sair pela culatra).
+    // O tiro saiu: a arma entra em recarga, esquenta e levanta fumaça mesmo
+    // se errar (ou sair pela culatra).
     this._recarregarArma(p, weapon);
+    this._aquecerArma(battle, p, weapon);
+    this._emitirFumaca(battle, p, weapon);
     const dmg = physicalDamage(
       this._withDrunk(p),
       weapon,
@@ -1158,7 +1201,12 @@ export class BattleManager {
       return;
     }
     if (!mira.hit) {
-      battle.log.push(makeLog(`💨 ${p.charName} erra o ataque em ${principal.charName}. (d20 = ${mira.roll}, precisava de ${mira.chance})`, 'miss'));
+      battle.log.push(
+        makeLog(
+          `💨 ${p.charName} erra o ataque em ${principal.charName}. (d20 = ${mira.roll} · ${mira.nivel?.nome || '—'}, precisava de ${mira.chance})`,
+          'miss',
+        ),
+      );
       return;
     }
     this._marcarAcerto(p);
@@ -1172,7 +1220,9 @@ export class BattleManager {
       }
       const res = i === 0 ? mira : this._rollToHit(p, t, 'physical');
       if (i > 0 && (res.roll === 1 || !res.hit)) {
-        battle.log.push(makeLog(`💨 ${p.charName} erra o ataque em ${t.charName}. (d20 = ${res.roll})`, 'miss'));
+        battle.log.push(
+          makeLog(`💨 ${p.charName} erra o ataque em ${t.charName}. (d20 = ${res.roll} · ${res.nivel?.nome || '—'})`, 'miss'),
+        );
         return;
       }
       const elemM = this._elemMult(atkElem, t);
@@ -1181,7 +1231,7 @@ export class BattleManager {
       const elemTag = elemM > 1 ? ` ⚡${atkElem} fragiliza!` : elemM < 1 ? ` 🛡${atkElem} resistido!` : '';
       battle.log.push(
         makeLog(
-          `${res.crit ? '✨ CRÍTICO! ' : ''}⚔️ ${p.charName} ataca ${t.charName} com ${weaponName}: ${total} de dano.${elemTag}`,
+          `${res.crit ? '✨ CRÍTICO! ' : ''}⚔️ ${p.charName} ataca ${t.charName} com ${weaponName}: ${total} de dano (d20 ${res.roll} · ${res.nivel?.nome || '—'}).${elemTag}`,
           'attack',
         ),
       );
@@ -1233,7 +1283,12 @@ export class BattleManager {
       return;
     }
     if (!mira.hit) {
-      battle.log.push(makeLog(`💨 ${p.charName} erra ${nome} em ${principal.charName}. (d20 = ${mira.roll}, precisava de ${mira.chance}${mira.dificuldade ? `, dificuldade +${mira.dificuldade}` : ''})`, 'miss'));
+      battle.log.push(
+        makeLog(
+          `💨 ${p.charName} erra ${nome} em ${principal.charName}. (d20 = ${mira.roll} · ${mira.nivel?.nome || '—'}, precisava de ${mira.chance}${mira.dificuldade ? `, dificuldade +${mira.dificuldade}` : ''})`,
+          'miss',
+        ),
+      );
       return;
     }
     this._marcarAcerto(p);
@@ -1246,14 +1301,19 @@ export class BattleManager {
       }
       const res = i === 0 ? mira : this._rollToHit(p, t, kind, { poder: skill.poder, status: skill.status });
       if (i > 0 && (res.roll === 1 || !res.hit)) {
-        battle.log.push(makeLog(`💨 ${p.charName} erra ${nome} em ${t.charName}. (d20 = ${res.roll}${res.dificuldade ? `, dificuldade +${res.dificuldade}` : ''})`, 'miss'));
+        battle.log.push(
+          makeLog(
+            `💨 ${p.charName} erra ${nome} em ${t.charName}. (d20 = ${res.roll} · ${res.nivel?.nome || '—'}${res.dificuldade ? `, dificuldade +${res.dificuldade}` : ''})`,
+            'miss',
+          ),
+        );
         return;
       }
       const em = this._elemMult(elem, t);
       const multSec = i > 0 ? spec.splash : spec.danoMult;
       const total = Math.round(danoBase * (res.crit ? 2 : 1) * multSec * em);
       const tag = em > 1 ? ` ⚡${elem} fragiliza!` : em < 1 ? ` 🛡${elem} resistido!` : '';
-      const dif = res.dificuldade ? ` dificuldade +${res.dificuldade}.` : '';
+      const dif = `${res.dificuldade ? ` dificuldade +${res.dificuldade}.` : ''} d20 ${res.roll} · ${res.nivel?.nome || '—'}.`;
       battle.log.push(
         makeLog(
           `${res.crit ? '✨ CRÍTICO! ' : ''}${mega ? '💫' : '✨'} ${p.charName} ${mega ? 'desfere' : 'usa'} ${nome} em ${t.charName}: ${total} de dano (${skill.poder}%)${mega ? '!' : '.'}${dif}${tag}`,
@@ -1281,6 +1341,90 @@ export class BattleManager {
   // próprio dono após cada disparo. O contador diminui no fim do turno do dono
   // (`_advanceTurn`), então gravamos `recarga + 1`: o primeiro turno depois do
   // disparo já consome 1, e "recarga: 1" = exatamente 1 turno de espera.
+  // ── Superaquecimento e fumaça das armas de fogo ──────────────────────────
+  // O calor é por arma: cada disparo aquece, cada turno sem dispará-la esfria.
+  // Ao chegar ao máximo a arma trava por alguns turnos do dono. A fumaça é
+  // por participante e se dissipa nos turnos sem disparo.
+  _superaquecida(p, weapon) {
+    if (!armaDeFogo(weapon) || !weapon.id) return false;
+    return (Number(p?.wpnSuperaquecido?.[weapon.id]) || 0) > 0;
+  }
+
+  _calorDaArma(p, weapon) {
+    if (!weapon?.id) return 0;
+    return Math.max(0, Number(p?.wpnCalor?.[weapon.id]) || 0);
+  }
+
+  _aquecerArma(battle, p, weapon) {
+    if (!armaDeFogo(weapon) || !weapon.id) return;
+    p.wpnCalor = p.wpnCalor || {};
+    p.wpnDisparou = p.wpnDisparou || {};
+    const antes = this._calorDaArma(p, weapon);
+    const calor = Math.min(SUPERAQUECIMENTO.calorMax, antes + calorDoDisparo(weapon));
+    p.wpnCalor[weapon.id] = calor;
+    p.wpnDisparou[weapon.id] = true;
+    if (calor >= SUPERAQUECIMENTO.calorMax) {
+      p.wpnSuperaquecido = p.wpnSuperaquecido || {};
+      p.wpnSuperaquecido[weapon.id] = SUPERAQUECIMENTO.bloqueioTurnos + 1;
+      p.wpnCalor[weapon.id] = SUPERAQUECIMENTO.calorAposBloqueio;
+      battle.log.push(
+        makeLog(
+          `🔥 ${weapon.nome} SUPERAQUECEU! ${p.charName} precisa deixá-la esfriar por ${SUPERAQUECIMENTO.bloqueioTurnos} turno(s).`,
+          'status',
+        ),
+      );
+    } else if (antes < SUPERAQUECIMENTO.limiarAviso && calor >= SUPERAQUECIMENTO.limiarAviso) {
+      battle.log.push(
+        makeLog(`🥵 ${weapon.nome} está muito quente (${Math.round(calor)}/${SUPERAQUECIMENTO.calorMax}).`, 'status'),
+      );
+    }
+  }
+
+  _emitirFumaca(battle, p, weapon) {
+    if (!armaDeFogo(weapon)) return;
+    const antes = Number(p.fumaca) || 0;
+    const ganho = fumacaDoDisparo(weapon, rajadaDaArma(weapon));
+    p.fumaca = Math.min(FUMACA.max, antes + ganho);
+    if (antes < FUMACA.limiarDenso && p.fumaca >= FUMACA.limiarDenso) {
+      battle.log.push(
+        makeLog(
+          `🌫️ A fumaça ao redor de ${p.charName} fica densa: mira −${Math.round(fumacaMiraPenalidade(p.fumaca) * 100)}% e camuflagem −${Math.round(fumacaCamuflagemBonus(p.fumaca) * 100)}% para ser atingido.`,
+          'status',
+        ),
+      );
+    } else if (antes < FUMACA.limiarVisivel && p.fumaca >= FUMACA.limiarVisivel) {
+      battle.log.push(makeLog(`💨 ${p.charName} some parcialmente numa nuvem de fumaça (${Math.round(p.fumaca)}/${FUMACA.max}).`, 'info'));
+    }
+  }
+
+  _resfriarArmas(battle, p) {
+    if (!p) return;
+    const disparou = Object.values(p.wpnDisparou || {}).some(Boolean);
+    for (const key of Object.keys(p.wpnCalor || {})) {
+      if (disparou && p.wpnDisparou?.[key]) continue;
+      p.wpnCalor[key] = Math.max(0, (Number(p.wpnCalor[key]) || 0) - SUPERAQUECIMENTO.resfriamentoPorTurno);
+    }
+    p.wpnDisparou = {};
+    for (const key of Object.keys(p.wpnSuperaquecido || {})) {
+      const restante = Number(p.wpnSuperaquecido[key]) || 0;
+      if (restante <= 0) {
+        delete p.wpnSuperaquecido[key];
+        continue;
+      }
+      p.wpnSuperaquecido[key] = restante - 1;
+      if (p.wpnSuperaquecido[key] <= 0) {
+        delete p.wpnSuperaquecido[key];
+        p.wpnCalor = p.wpnCalor || {};
+        p.wpnCalor[key] = Math.min(Number(p.wpnCalor[key]) || 0, SUPERAQUECIMENTO.calorAposBloqueio);
+        const arma = (armasDeEquipamento(p.equipment || {}).find((e) => e.arma && e.arma.id === key) || {}).arma;
+        battle.log.push(makeLog(`🌡️ ${arma?.nome || key} esfriou e voltou a ficar disponível para ${p.charName}.`, 'info'));
+      }
+    }
+    if (!disparou && p.fumaca > 0) {
+      p.fumaca = Math.max(0, p.fumaca - FUMACA.dissipacaoPorTurno);
+    }
+  }
+
   _armasRecarregaveis(weapon) {
     return !!(weapon && weapon.id && weapon.recarga > 0 && weapon.categoria !== 'utilitaria');
   }
@@ -1296,8 +1440,11 @@ export class BattleManager {
     p.wpnRecarga[weapon.id] = weapon.recarga + 1;
   }
 
-  _consumirRecarga(p) {
-    if (!p || !p.wpnRecarga) return;
+  _consumirRecarga(battle, p) {
+    if (!p) return;
+    // Esfria as armas e dissipa a fumaça antes de avançar a recarga.
+    this._resfriarArmas(battle, p);
+    if (!p.wpnRecarga) return;
     const armas = armasDeEquipamento(p.equipment || {});
     for (const key of Object.keys(p.wpnRecarga)) {
       if (p.wpnRecarga[key] <= 0) continue;
@@ -1549,6 +1696,10 @@ export class BattleManager {
         const arma = util.arma;
         const recargaAtual = (p.wpnRecarga && p.wpnRecarga[arma.id]) || 0;
         if (recargaAtual > 0) throw new Error(`${arma.nome} está recarregando (${recargaAtual} turno(s)).`);
+        if (this._superaquecida(p, arma)) {
+          const turnos = Number(p.wpnSuperaquecido?.[arma.id]) || 0;
+          throw new Error(`${arma.nome} está superaquecida (${turnos} turno(s) para esfriar).`);
+        }
         const restante = (p.wpnUsos && p.wpnUsos[arma.id]) ?? arma.usosMax ?? 1;
         if (restante <= 0) throw new Error(`${arma.nome} está sem usos.`);
         p.wpnUsos = p.wpnUsos || {};
@@ -1691,8 +1842,9 @@ export class BattleManager {
   }
 
   _advanceTurn(battle) {
-    // Fim do turno de quem acabou de agir: avança a recarga das armas de fogo.
-    this._consumirRecarga(this._current(battle));
+    // Fim do turno de quem acabou de agir: esfria armas, dissipa fumaça e
+    // avança a recarga das armas de fogo.
+    this._consumirRecarga(battle, this._current(battle));
     const aliveCount = battle.participants.filter((q) => q.alive).length;
     if (aliveCount <= 1) return;
     battle.turno = (battle.turno || 0) + 1;

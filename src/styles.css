@@ -4444,3 +4444,143 @@ textarea:focus-visible,
   }
 }
 
+
+/* -- Superaquecimento, fumaça e faixas do d20 ----------------------------- */
+.heat-meter {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.heat-meter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.heat-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.heat-track {
+  height: 9px;
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  overflow: hidden;
+}
+.heat-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s;
+  background: linear-gradient(90deg, #4a90e2, #7c5cff);
+}
+.heat-quente .heat-fill {
+  background: linear-gradient(90deg, #ffd166, #ff9f1c);
+}
+.heat-critico .heat-fill {
+  background: linear-gradient(90deg, #ff9f1c, #e63946);
+}
+.heat-superaquecido .heat-fill {
+  background: linear-gradient(90deg, #e63946, #ff006e);
+  animation: pulse-bar 0.8s infinite;
+}
+.heat-hint {
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.overheat-warning {
+  color: #ffb3b3;
+}
+.smoke-warning {
+  color: #cfd8ff;
+}
+.heat-tag {
+  border-color: #ff9f1c;
+  color: #ffd6a5;
+  background: rgba(255, 159, 28, 0.16);
+}
+.heat-tag.heat-critico,
+.heat-tag.heat-superaquecido {
+  border-color: #e63946;
+  color: #ffb3b3;
+  background: rgba(230, 57, 70, 0.18);
+}
+.smoke-tag {
+  border-color: #8b95b5;
+  color: #dbe2ff;
+  background: rgba(139, 149, 181, 0.18);
+}
+.smoke-tag.smoke-espessa {
+  border-color: #b6c2e8;
+  background: rgba(182, 194, 232, 0.24);
+}
+.ff-fighter.fumegando::after {
+  content: '';
+  position: absolute;
+  inset: 6px 0 30%;
+  pointer-events: none;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 30% 55%, rgba(200, 210, 235, 0.24), transparent 42%),
+    radial-gradient(circle at 70% 40%, rgba(180, 195, 225, 0.22), transparent 48%);
+  animation: smoke-drift 3.4s ease-in-out infinite;
+}
+.ff-fighter.fumegando .ff-sprite {
+  filter: blur(0.4px) drop-shadow(0 8px 6px rgba(0, 0, 0, 0.55));
+}
+@keyframes smoke-drift {
+  0%,
+  100% {
+    transform: translateX(-2px) scale(1);
+    opacity: 0.75;
+  }
+  50% {
+    transform: translateX(3px) scale(1.03);
+    opacity: 1;
+  }
+}
+.d20-tiers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 10.5px;
+}
+.d20-tiers-label {
+  color: var(--muted);
+  font-weight: 600;
+  margin-right: 2px;
+}
+.d20-tier {
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  white-space: nowrap;
+}
+.d20-facil {
+  border-color: #2a9d8f;
+  color: #a8e6cf;
+  background: rgba(42, 157, 143, 0.14);
+}
+.d20-medio {
+  border-color: #d4a017;
+  color: #ffe08a;
+  background: rgba(212, 160, 23, 0.14);
+}
+.d20-dificil {
+  border-color: #e07a1f;
+  color: #ffc89b;
+  background: rgba(224, 122, 31, 0.14);
+}
+.d20-muito_dificil {
+  border-color: #e63946;
+  color: #ffb3b3;
+  background: rgba(230, 57, 70, 0.16);
+}

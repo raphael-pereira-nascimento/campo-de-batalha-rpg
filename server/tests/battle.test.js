@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BattleManager } from '../src/game/battleManager.js';
 import { MONSTERS, buildMonster, chefeHpMultPorAdversarios } from '../src/game/monsters.js';
-import { MULTI_AREA_MULT, MULTI_CONE_MULT } from '../src/game/sistema.js';
+import {
+  MULTI_AREA_MULT,
+  MULTI_CONE_MULT,
+  SUPERAQUECIMENTO,
+  FUMACA,
+  fumacaDoDisparo,
+  rajadaDaArma,
+} from '../src/game/sistema.js';
 
 function makeCharacter(overrides = {}) {
   return {
@@ -1235,5 +1242,161 @@ describe('BattleManager — Mestre administra status', () => {
     manager._processStatuses(battle, hero);
     expect(hero.statuses).toHaveLength(0);
     expect(battle.log.some((l) => l.text.includes('acabou'))).toBe(true);
+  });
+});
+
+// ── Superaquecimento e fumaça das armas de fogo ──────────────────────────────
+describe('BattleManager — superaquecimento das armas de fogo', () => {
+  const PISTOLA = {
+    id: 'pistola_calor',
+    nome: 'Pistola Calor',
+    categoria: 'distancia',
+    tipo: 'arma_fogo',
+    danoBase: 5,
+    recarga: 0,
+    calor: 60, // dois disparos chegam ao máximo
+    bonus: {},
+    penalidade: {},
+  };
+  const ESPINGARDA = {
+    id: 'espingarda_fumaca',
+    nome: 'Espingarda Fumaça',
+    categoria: 'distancia',
+    tipo: 'arma_fogo',
+    danoBase: 5,
+    recarga: 0,
+    alvo: 'cone',
+    alvos: 3,
+    bonus: {},
+    penalidade: {},
+  };
+  const ESPADA = {
+    id: 'espada_curta',
+    nome: 'Espada Curta',
+    categoria: 'perto',
+    tipo: 'arma_fogo',
+    danoBase: 4,
+    recarga: 0,
+    bonus: {},
+    penalidade: {},
+  };
+
+  afterEach(() => vi.restoreAllMocks());
+
+  function criarBatalha(weapon) {
+    const { manager } = makeManager();
+    const battle = manager.createBattle({
+      name: 'Calor',
+      mode: 'mestre',
+      host: 'p1',
+      hostName: 'M',
+      character: makeCharacter({
+        equipment: { armas: { distancia: weapon }, arma: weapon },
+      }),
+    });
+    manager.addMonster({ battleId: battle.id, hostId: 'p1', monsterDef: makeMonsterDef() });
+    manager.startBattle({ battleId: battle.id, playerId: 'p1' });
+    const hero = battle.participants.find((q) => !q.isMonster);
+    const boss = battle.participants.find((q) => q.isMonster);
+    return { manager, battle, hero, boss };
+  }
+
+  it('acumula calor por arma e trava ao atingir o máximo', () => {
+    const { manager, battle, hero } = criarBatalha(PISTOLA);
+    manager._aquecerArma(battle, hero, PISTOLA);
+    expect(hero.wpnCalor[PISTOLA.id]).toBe(60);
+    expect(hero.wpnSuperaquecido[PISTOLA.id] || 0).toBe(0);
+
+    manager._aquecerArma(battle, hero, PISTOLA);
+    expect(hero.wpnSuperaquecido[PISTOLA.id]).toBe(SUPERAQUECIMENTO.bloqueioTurnos + 1);
+    expect(hero.wpnCalor[PISTOLA.id]).toBe(SUPERAQUECIMENTO.calorAposBloqueio);
+    expect(battle.log.some((l) => l.text.includes('SUPERAQUECEU'))).toBe(true);
+  });
+
+  it('não esquenta armas de corpo a corpo (baioneta)', () => {
+    const { manager, battle, hero } = criarBatalha(ESPADA);
+    manager._aquecerArma(battle, hero, ESPADA);
+    expect(hero.wpnCalor[ESPADA.id]).toBeUndefined();
+    expect(hero.wpnSuperaquecido[ESPADA.id]).toBeUndefined();
+  });
+
+  it('esfria apenas as armas que não dispararam no turno', () => {
+    const { manager, battle, hero } = criarBatalha(PISTOLA);
+    hero.wpnCalor = { [PISTOLA.id]: 40, outra: 40 };
+    hero.wpnDisparou = { [PISTOLA.id]: true };
+    manager._resfriarArmas(battle, hero);
+    expect(hero.wpnCalor[PISTOLA.id]).toBe(40);
+    expect(hero.wpnCalor.outra).toBe(40 - SUPERAQUECIMENTO.resfriamentoPorTurno);
+    expect(hero.wpnDisparou).toEqual({});
+  });
+
+  it('conta os turnos de bloqueio e libera a arma ao esfriar', () => {
+    const { manager, battle, hero } = criarBatalha(PISTOLA);
+    hero.wpnCalor = { [PISTOLA.id]: 30 };
+    hero.wpnSuperaquecido = { [PISTOLA.id]: 2 };
+    hero.wpnDisparou = {};
+
+    manager._resfriarArmas(battle, hero);
+    expect(hero.wpnSuperaquecido[PISTOLA.id]).toBe(1);
+    expect(hero.wpnCalor[PISTOLA.id]).toBe(22);
+
+    manager._resfriarArmas(battle, hero);
+    expect(hero.wpnSuperaquecido[PISTOLA.id]).toBeUndefined();
+    expect(hero.wpnCalor[PISTOLA.id]).toBe(14);
+    expect(battle.log.some((l) => l.text.includes('esfriou'))).toBe(true);
+  });
+
+  it('bloqueia o disparo de uma arma superaquecida', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.2);
+    const { manager, battle, hero, boss } = criarBatalha(PISTOLA);
+    hero.wpnSuperaquecido = { [PISTOLA.id]: 2 };
+    const hpAntes = boss.hp;
+    manager._resolveAttack(battle, hero, boss, PISTOLA);
+    expect(boss.hp).toBe(hpAntes);
+    expect(battle.log.some((l) => l.text.includes('superaquecida'))).toBe(true);
+  });
+
+  it('o disparo levanta fumaça ao redor do atirador (rajada conta)', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.2);
+    const { manager, battle, hero, boss } = criarBatalha(ESPINGARDA);
+    manager._resolveAttack(battle, hero, boss, ESPINGARDA);
+    expect(hero.fumaca).toBe(fumacaDoDisparo(ESPINGARDA, rajadaDaArma(ESPINGARDA)));
+    expect(hero.fumaca).toBeGreaterThan(FUMACA.limiarVisivel);
+  });
+});
+
+describe('BattleManager — fumaça e dificuldade do d20', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('a fumaça atrapalha a mira do atirador e camufla o alvo', () => {
+    const { manager } = makeManager();
+    const atk = { attributes: { destreza: 5, reflexos: 5, forca: 8, inteligencia: 4 }, statuses: [] };
+    const def = { attributes: { destreza: 5, reflexos: 5, inteligencia: 4 }, dodge: false, statuses: [] };
+
+    const limpo = manager._rollToHit(atk, def, 'physical');
+    const atiradorNaFumaca = manager._rollToHit({ ...atk, fumaca: 100 }, def, 'physical');
+    const alvoCamuflado = manager._rollToHit(atk, { ...def, fumaca: 100 }, 'physical');
+
+    expect(atiradorNaFumaca.fumacaMira).toBeGreaterThan(0);
+    expect(atiradorNaFumaca.chance).toBeLessThan(limpo.chance);
+    expect(alvoCamuflado.fumacaCamuflagem).toBeGreaterThan(0);
+    expect(alvoCamuflado.chance).toBeLessThan(limpo.chance);
+  });
+
+  it('a fumaça se dissipa nos turnos sem disparo', () => {
+    const { manager } = makeManager();
+    const p = { fumaca: 50, wpnCalor: {}, wpnDisparou: {}, wpnSuperaquecido: {} };
+    manager._resfriarArmas({ log: [] }, p);
+    expect(p.fumaca).toBe(50 - FUMACA.dissipacaoPorTurno);
+  });
+
+  it('classifica a rolagem do d20 e devolve a faixa no resultado', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.7); // d20 = 15
+    const { manager } = makeManager();
+    const atk = { attributes: { destreza: 5, reflexos: 5, forca: 8, inteligencia: 4 }, statuses: [] };
+    const def = { attributes: { destreza: 5, reflexos: 5, inteligencia: 4 }, dodge: false, statuses: [] };
+    const mira = manager._rollToHit(atk, def, 'physical');
+    expect(mira.roll).toBe(15);
+    expect(mira.nivel).toMatchObject({ id: 'dificil', nome: 'Difícil' });
   });
 });

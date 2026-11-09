@@ -2,7 +2,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, getSocket, emitAck, isOffline, applyOfflineRewards } from '../api.js';
 import StatBar from '../components/StatBar.jsx';
 import { playLogKind, play, isMuted, toggleMute } from '../utils/sfx.js';
-import { VOO, ALTITUDES, dificuldadeDoGolpe, alvoNormalizado, ALVO_LABEL, ARMA_CATEGORIA_INFO } from '../game/sistema.js';
+import {
+  VOO,
+  ALTITUDES,
+  dificuldadeDoGolpe,
+  alvoNormalizado,
+  ALVO_LABEL,
+  ARMA_CATEGORIA_INFO,
+  NIVEIS_DIFICULDADE_D20,
+  SUPERAQUECIMENTO,
+  FUMACA,
+  armaDeFogo,
+  calorDoDisparo,
+  calorEstado,
+  fumacaEstado,
+} from '../game/sistema.js';
 import { melhorArma, armasDeEquipamento, skillFromSpell } from '../game/data.js';
 
 const CLASS_ICONS = { guerreiro: '🛡️', mago: '🔮', arqueiro: '🏹', clerigo: '✝️', assassino: '🗡️', paladino: '⚔️' };
@@ -184,6 +198,15 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
     active && armaSel && armaSel.id
       ? (active.wpnRecarga && active.wpnRecarga[armaSel.id]) || 0
       : 0;
+  // Superaquecimento e fumaça da arma selecionada / do personagem ativo.
+  const armaSelEhFogo = armaDeFogo(armaSel);
+  const calorArma = active && armaSel?.id ? Number(active.wpnCalor?.[armaSel.id]) || 0 : 0;
+  const superaquecimentoTurnos =
+    active && armaSel?.id ? Number(active.wpnSuperaquecido?.[armaSel.id]) || 0 : 0;
+  const armaSuperaquecida = superaquecimentoTurnos > 0;
+  const calorInfo = calorEstado(calorArma);
+  const fumacaInfo = fumacaEstado(active?.fumaca || 0);
+  const fumacaAtiva = !!active && (Number(active.fumaca) || 0) >= FUMACA.limiarVisivel;
 
   const heroes = useMemo(() => participants.filter((p) => !p.isMonster), [participants]);
   const enemies = useMemo(() => participants.filter((p) => p.isMonster), [participants]);
@@ -715,11 +738,15 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                         {armasAtaque.map(({ slot, arma }) => {
                           const sp = alvoNormalizado(arma);
                           const rec = (active.wpnRecarga && active.wpnRecarga[arma.id]) || 0;
+                          const cal = Number(active.wpnCalor?.[arma.id]) || 0;
+                          const superaquecida = (Number(active.wpnSuperaquecido?.[arma.id]) || 0) > 0;
                           return (
                             <option key={arma.id || arma.nome} value={arma.id || ''}>
                               {ARMA_CATEGORIA_INFO[slot]?.icon || '⚔️'} {arma.nome} (dano {arma.danoBase})
                               {sp.tipo !== 'unico' ? ` · ◎${ALVO_LABEL[sp.tipo]}` : ''}
                               {rec > 0 ? ` · ⏳${rec}` : ''}
+                              {cal > 0 ? ` · 🌡${Math.round(cal)}` : ''}
+                              {superaquecida ? ' · 🔥' : ''}
                             </option>
                           );
                         })}
@@ -743,6 +770,36 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                       {armasAtaque.length > 1 ? ' Escolha outra arma ou use outra ação.' : ' Use outra ação neste turno.'}
                     </p>
                   )}
+                  {active && armaSelEhFogo && (
+                    <div className={`heat-meter heat-${calorInfo.nivel}`}>
+                      <div className="heat-meter-head">
+                        <span>
+                          {calorInfo.icon} Calor de <strong>{armaSel?.nome}</strong>
+                        </span>
+                        <span className="heat-value">
+                          {Math.round(calorArma)}/{SUPERAQUECIMENTO.calorMax}
+                        </span>
+                      </div>
+                      <div className="heat-track" title={`Calor: ${calorInfo.nome}`}>
+                        <div className="heat-fill" style={{ width: `${calorInfo.pct}%` }} />
+                      </div>
+                      <div className="heat-hint">
+                        +{calorDoDisparo(armaSel)} por disparo · esfria {SUPERAQUECIMENTO.resfriamentoPorTurno}/turno sem atirar
+                      </div>
+                    </div>
+                  )}
+                  {active && armaSuperaquecida && (
+                    <p className="muted small overheat-warning">
+                      🔥 <strong>{armaSel?.nome}</strong> superaqueceu — aguarde {superaquecimentoTurnos} turno
+                      {superaquecimentoTurnos === 1 ? '' : 's'} para esfriar ou troque de arma.
+                    </p>
+                  )}
+                  {fumacaAtiva && (
+                    <p className="muted small smoke-warning">
+                      {fumacaInfo.icon} Fumaça {Math.round(fumacaInfo.pct)}%: sua mira cai {Math.round(fumacaInfo.mira * 100)}%
+                      e você ganha {Math.round(fumacaInfo.camuflagem * 100)}% de camuflagem.
+                    </p>
+                  )}
                   <ExtrasDeAlvo
                     spec={specArma}
                     targets={extraTargets(specArma)}
@@ -751,10 +808,24 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                   />
                   <button
                     onClick={doAttack}
-                    disabled={busy || !aliveTargets.length || recargaArma > 0}
+                    disabled={busy || !aliveTargets.length || recargaArma > 0 || armaSuperaquecida}
                   >
-                    {recargaArma > 0 ? `⏳ Recarregando (${recargaArma})` : specArma.tipo === 'area' ? 'Atacar (todos)' : 'Atacar'}
+                    {armaSuperaquecida
+                      ? `🔥 Superaquecida (${superaquecimentoTurnos})`
+                      : recargaArma > 0
+                        ? `⏳ Recarregando (${recargaArma})`
+                        : specArma.tipo === 'area'
+                          ? 'Atacar (todos)'
+                          : 'Atacar'}
                   </button>
+                  <div className="d20-tiers" title="Faixas de dificuldade do d20 (rolar-menor: quanto maior, mais difícil)">
+                    <span className="d20-tiers-label">🎲 d20</span>
+                    {NIVEIS_DIFICULDADE_D20.map((t) => (
+                      <span key={t.id} className={`d20-tier d20-${t.id}`}>
+                        {t.icon} {t.nome} {t.min}–{t.max}
+                      </span>
+                    ))}
+                  </div>
                   {active && armaUtil && (
                     <button
                       className={busy ? '' : 'ghost'}
@@ -1236,6 +1307,10 @@ function FfFighter({ p, index, mirrored, current, gameData, floats = [], selecte
   const isCurrent = !!current && (current.characterId === p.characterId || current.uid === p.uid);
   const icon = p.isMonster ? (p.isBoss ? BOSS_ICON : MONSTER_ICON) : CLASS_ICONS[p.cls] || '🧙';
   const myFloats = floats.filter((f) => f.key === (p.characterId || p.uid));
+  const calorMaxArma = Math.max(0, ...Object.values(p.wpnCalor || {}).map((v) => Number(v) || 0));
+  const calorFighter = calorEstado(calorMaxArma);
+  const fumacaFighter = fumacaEstado(p.fumaca || 0);
+  const fumegando = fumacaFighter.nivel !== 'limpa';
   const races =
     !p.isMonster && Array.isArray(p.races) && p.races.length
       ? p.races
@@ -1251,6 +1326,7 @@ function FfFighter({ p, index, mirrored, current, gameData, floats = [], selecte
         selected ? 'targeted' : '',
         p.isMonster ? 'monster' : '',
         p.isBoss ? 'boss' : '',
+        fumegando ? 'fumegando' : '',
       ].filter(Boolean).join(' ')}
       onClick={selectTarget}
     >
@@ -1286,6 +1362,22 @@ function FfFighter({ p, index, mirrored, current, gameData, floats = [], selecte
         </span>
       )}
       {p.eclipse && <span className="tag eclipse-tag" title="Monstro fortalecido pelo Eclipse.">🩸 Eclipse</span>}
+      {fumegando && (
+        <span
+          className={`tag smoke-tag smoke-${fumacaFighter.nivel}`}
+          title={`${fumacaFighter.nome}: mira −${Math.round(fumacaFighter.mira * 100)}% e camuflagem −${Math.round(fumacaFighter.camuflagem * 100)}% para ser atingido.`}
+        >
+          🌫️ {Math.round(fumacaFighter.pct)}%
+        </span>
+      )}
+      {calorMaxArma > 0 && (
+        <span
+          className={`tag heat-tag heat-${calorFighter.nivel}`}
+          title={`Calor da arma mais quente: ${Math.round(calorMaxArma)}/${SUPERAQUECIMENTO.calorMax}.`}
+        >
+          {calorFighter.icon} {Math.round(calorFighter.pct)}%
+        </span>
+      )}
       {p.alive ? (
         <>
           <StatBar label="HP" value={p.hp} max={p.hpMax} color="#e63946" />

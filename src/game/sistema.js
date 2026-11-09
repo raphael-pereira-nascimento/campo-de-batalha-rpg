@@ -511,3 +511,173 @@ export function desviouParaAliado(
   if (!(Number(d20) <= limiar)) return false;
   return Number(r) < chance;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   9. SUPERAQUECIMENTO DAS ARMAS DE FOGO — PROVISÓRIO
+   Usar uma arma de fogo repetidamente esquenta o cano. Cada disparo soma
+   calor à arma; em turnos sem disparar aquela arma, ela esfria. Ao atingir
+   o máximo, a arma SUPERAQUECE e fica travada por alguns turnos do dono.
+   O calor é por arma e por participante (não é global).
+
+   Valores provisórios — ajuste só aqui. O campo opcional `calor` na arma
+   sobrescreve o calor por disparo; sem ele, o valor é derivado do dano e da
+   recarga da arma (armas mais pesadas esquentam mais).
+   ═══════════════════════════════════════════════════════════════════════════ */
+export const SUPERAQUECIMENTO = {
+  calorMax: 100,
+  calorBasePorDisparo: 32,
+  calorPorDano: 1.2,
+  calorPorRecarga: 3,
+  resfriamentoPorTurno: 8,
+  bloqueioTurnos: 2,
+  limiarAviso: 70,
+  calorAposBloqueio: 30,
+};
+
+/** A arma é uma arma de fogo capaz de disparar (bayoneta corpo a corpo não conta). */
+export function armaDeFogo(arma) {
+  return !!arma && arma.tipo === 'arma_fogo' && arma.categoria !== 'perto';
+}
+
+/** Calor somado por um disparo da arma (ou 0 se não for arma de fogo). */
+export function calorDoDisparo(arma) {
+  if (!armaDeFogo(arma)) return 0;
+  const explicito = Number(arma.calor);
+  if (Number.isFinite(explicito) && explicito > 0) return Math.round(explicito);
+  const dano = Math.max(0, Number(arma.danoBase) || 0);
+  const recarga = Math.max(0, Number(arma.recarga) || 0);
+  return Math.round(
+    SUPERAQUECIMENTO.calorBasePorDisparo + dano * SUPERAQUECIMENTO.calorPorDano + recarga * SUPERAQUECIMENTO.calorPorRecarga,
+  );
+}
+
+/**
+ * Faixa visual do calor da arma:
+ *   normal (0–49) · quente (50–69) · crítico (70–99) · superaquecido (100+).
+ */
+export function calorEstado(calor) {
+  const valor = Math.max(0, Number(calor) || 0);
+  const pct = Math.max(0, Math.min(100, (valor / SUPERAQUECIMENTO.calorMax) * 100));
+  let nivel = 'normal';
+  let nome = 'Normal';
+  let icon = '🌡️';
+  if (valor >= SUPERAQUECIMENTO.calorMax) {
+    nivel = 'superaquecido';
+    nome = 'Superaquecido';
+    icon = '🔥';
+  } else if (valor >= SUPERAQUECIMENTO.limiarAviso) {
+    nivel = 'critico';
+    nome = 'Crítico';
+    icon = '🥵';
+  } else if (valor >= 50) {
+    nivel = 'quente';
+    nome = 'Quente';
+    icon = '🌡️';
+  }
+  return { calor: valor, pct, nivel, nome, icon };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   10. FUMAÇA DAS ARMAS DE FOGO — PROVISÓRIO
+   Cada disparo levanta fumaça ao redor de quem atirou. Disparos repetidos ou
+   rajadas (armas de cone/explosão, vários projéteis) acumulam mais fumaça.
+   A fumaça atrapalha a mira de quem está dentro dela (reduz o acerto) e, ao
+   mesmo tempo, camufla o alvo (aumenta a dificuldade de ser atingido).
+   Ela se dissipa nos turnos em que o personagem não dispara.
+
+   Valores provisórios — ajuste só aqui. O campo opcional `fumaca` na arma
+   sobrescreve a fumaça base por disparo.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export const FUMACA = {
+  max: 100,
+  porDisparo: 22,
+  porRajada: 10,          // fumaça extra por projétil/alvo adicional
+  dissipacaoPorTurno: 12,
+  limiarVisivel: 25,
+  limiarDenso: 60,
+  penalidadeMiraPorPonto: 0.0015, // 100 de fumaça = −15% de acerto
+  bonusCamuflagemPorPonto: 0.0012, // 100 de fumaça = −12% de acerto contra o alvo
+  penalidadeMiraMax: 0.18,
+  bonusCamuflagemMax: 0.15,
+};
+
+/** Quantos projéteis/alvos a arma dispara de uma vez (rajada). */
+export function rajadaDaArma(arma) {
+  const spec = alvoNormalizado(arma || {});
+  return Math.max(1, Math.min(10, Number(spec.max) || 1));
+}
+
+/** Fumaça gerada por um disparo (arma de fogo). */
+export function fumacaDoDisparo(arma, rajada = 1) {
+  if (!armaDeFogo(arma)) return 0;
+  const explicito = Number(arma.fumaca);
+  const base = Number.isFinite(explicito) && explicito > 0 ? explicito : FUMACA.porDisparo;
+  const extra = Math.max(0, (Number(rajada) || 1) - 1) * FUMACA.porRajada;
+  return Math.round(base + extra);
+}
+
+/** Penalidade de mira causada pela própria fumaça (0..penalidadeMiraMax). */
+export function fumacaMiraPenalidade(fumaca) {
+  const valor = Math.max(0, Number(fumaca) || 0);
+  return Math.min(FUMACA.penalidadeMiraMax, valor * FUMACA.penalidadeMiraPorPonto);
+}
+
+/** Bônus de camuflagem que a fumaça dá ao alvo (0..bonusCamuflagemMax). */
+export function fumacaCamuflagemBonus(fumaca) {
+  const valor = Math.max(0, Number(fumaca) || 0);
+  return Math.min(FUMACA.bonusCamuflagemMax, valor * FUMACA.bonusCamuflagemPorPonto);
+}
+
+/** Faixa visual da fumaça: limpa, leve, densa ou espessa. */
+export function fumacaEstado(fumaca) {
+  const valor = Math.max(0, Number(fumaca) || 0);
+  const pct = Math.max(0, Math.min(100, (valor / FUMACA.max) * 100));
+  let nivel = 'limpa';
+  let nome = 'Sem fumaça';
+  let icon = '🌫️';
+  if (valor >= FUMACA.limiarDenso) {
+    nivel = 'espessa';
+    nome = 'Fumaça densa';
+    icon = '🌫️';
+  } else if (valor >= FUMACA.limiarVisivel) {
+    nivel = 'leve';
+    nome = 'Fumaça leve';
+    icon = '💨';
+  }
+  return {
+    fumaca: valor,
+    pct,
+    nivel,
+    nome,
+    icon,
+    mira: fumacaMiraPenalidade(valor),
+    camuflagem: fumacaCamuflagemBonus(valor),
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   11. FAIXAS DE DIFICULDADE DO D20 — CONFIRMADA (direção), PROVISÓRIA (nomes)
+   O acerto é "rolar-menor": quanto MAIOR o d20, mais difícil o resultado.
+   Faixas pedidas pelo criador:
+   - Fácil: 1–4 · Médio: 5–10 · Difícil: 11–16 · Muito Difícil: 17–20.
+   A faixa é informativa: o log mostra em que faixa caiu a rolagem.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export const NIVEIS_DIFICULDADE_D20 = [
+  { id: 'facil', nome: 'Fácil', min: 1, max: 4, icon: '🟢' },
+  { id: 'medio', nome: 'Médio', min: 5, max: 10, icon: '🟡' },
+  { id: 'dificil', nome: 'Difícil', min: 11, max: 16, icon: '🟠' },
+  { id: 'muito_dificil', nome: 'Muito Difícil', min: 17, max: 20, icon: '🔴' },
+];
+
+/** Faixa de dificuldade de uma rolagem de d20 (1..20) ou null se inválida. */
+export function nivelDificuldadeD20(roll) {
+  const n = Math.round(Number(roll));
+  if (!Number.isFinite(n) || n < 1 || n > 20) return null;
+  return NIVEIS_DIFICULDADE_D20.find((t) => n >= t.min && n <= t.max) || null;
+}
+
+/** Rótulo curto da faixa (ex.: "Difícil (11–16)"). */
+export function rotuloDificuldadeD20(roll) {
+  const nivel = nivelDificuldadeD20(roll);
+  return nivel ? `${nivel.nome} (${nivel.min}–${nivel.max})` : '—';
+}
