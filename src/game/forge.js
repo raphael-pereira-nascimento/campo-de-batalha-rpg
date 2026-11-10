@@ -6,6 +6,10 @@
 import { MATERIAIS, getMaterialById, calcularPrecoMaterial } from './materials.js';
 import { EQUIPAMENTOS, getEquipamentoById, calcularPrecoEquipamento as calcPrecoCat } from './equipments.js';
 import { getGemaById } from './gems.js';
+import {
+  getCategoriaEfeitoEquipamento,
+  calcularBonusComposicao,
+} from './materialRules.js';
 
 // ============================================================================
 // CÁLCULO DE PREÇO DE EQUIPAMENTO (delega para equipments.js)
@@ -173,29 +177,21 @@ export function calcularAtributosEquipamento(equipId, materialPrimarioId, materi
   const matPrimario = materialPrimarioId ? getMaterialById(materialPrimarioId) : null;
   const matSecundario = materialSecundarioId ? getMaterialById(materialSecundarioId) : null;
 
-  const atributos = { ...(equip.bonus || {}) };
+  // A categoria de efeito vem do tipo real do equipamento (cajado, varinha, grimório,
+  // orbe, catalisador, armadura, acessório, lâmina, impacto ou fogo) e não mais do
+  // campo `subcategoria` lido diretamente.
+  const categoriaEfeito = getCategoriaEfeitoEquipamento(equip);
 
-  // Material primário = 100% dos efeitos
-  if (matPrimario) {
-    const efeito = matPrimario.efeitos?.[equip.subcategoria || 'armaLamina'];
-    if (efeito && efeito.bonus) {
-      for (const [attr, val] of Object.entries(efeito.bonus)) {
-        atributos[attr] = (atributos[attr] || 0) + val;
-      }
-    }
+  const composicao = calcularBonusComposicao(matPrimario, matSecundario, categoriaEfeito);
+  if (composicao.ok === false) {
+    return { ok: false, motivo: composicao.motivo || 'Composição incompatível.' };
   }
 
-  // Material secundário = até 25% dos efeitos (arredondado para baixo)
-  if (matSecundario) {
-    const efeito = matSecundario.efeitos?.[equip.subcategoria || 'armaLamina'];
-    if (efeito && efeito.bonus) {
-      for (const [attr, val] of Object.entries(efeito.bonus)) {
-        const bonusParcial = Math.floor(val * 0.25);
-        if (bonusParcial !== 0) {
-          atributos[attr] = (atributos[attr] || 0) + bonusParcial;
-        }
-      }
-    }
+  const atributos = { ...(equip.bonus || {}) };
+
+  // Principal 100% / secundário até 25% / mesmo atributo não acumula.
+  for (const [attr, val] of Object.entries(composicao.bonusFinal || {})) {
+    atributos[attr] = (atributos[attr] || 0) + val;
   }
 
   // Gemas slotadas aplicam seus bônus por tipo de equipamento
@@ -220,23 +216,34 @@ export function calcularAtributosEquipamento(equipId, materialPrimarioId, materi
     equip: { ...equip, materialPrimario: matPrimario?.id, materialSecundario: matSecundario?.id },
     atributos,
     materiais: { primario: matPrimario, secundario: matSecundario },
+    categoriaEfeito,
+    composicao,
   };
 }
 
 // ============================================================================
 // CUSTO DE FABRICAÇÃO
 // ============================================================================
-export function calcularCustoFabricacao(equipId, materialPrimarioId, materialSecundarioId, gemasSlotadas = []) {
+export function calcularCustoFabricacao(equipId, materialPrimarioId, materialSecundarioId, gemasSlotadas = [], quantidades = null) {
   const equip = getEquipamentoById(equipId);
   if (!equip) return 0;
 
   let custo = equip.precoBase || 0;
 
+  // Preço por kg oficial. Sem quantidades informadas, mantém a regra anterior
+  // (1 kg do principal e 0,25 kg do secundário) para não alterar a economia atual.
+  const kgPrimario = Number.isFinite(Number(quantidades?.primarioKg))
+    ? Math.max(0, Number(quantidades.primarioKg))
+    : 1;
+  const kgSecundario = Number.isFinite(Number(quantidades?.secundarioKg))
+    ? Math.max(0, Number(quantidades.secundarioKg))
+    : 0.25;
+
   if (materialPrimarioId) {
-    custo += calcularPrecoMaterial(materialPrimarioId, 1);
+    custo += calcularPrecoMaterial(materialPrimarioId, kgPrimario);
   }
   if (materialSecundarioId) {
-    custo += Math.round(calcularPrecoMaterial(materialSecundarioId, 1) * 0.25);
+    custo += calcularPrecoMaterial(materialSecundarioId, kgSecundario);
   }
 
   const GEMA_PRECO = { diamante: 500, obsidiana: 200 };
@@ -281,11 +288,21 @@ export function craftarEquipamento(equipId, materialPrimarioId, materialSecundar
       custo,
       materiais: resultado.materiais,
       atributosFinais: resultado.atributos,
+      categoriaEfeito: resultado.categoriaEfeito,
+      composicao: {
+        categoria: resultado.composicao.categoria,
+        bonusFinal: resultado.composicao.bonusFinal,
+        percentuaisFinal: resultado.composicao.percentuaisFinal,
+        ignorados: resultado.composicao.ignorados,
+        avisos: resultado.composicao.avisos,
+      },
       gemasSlotadas,
       honrineoAplicado: honrineo ? true : false,
     },
     custo,
     atributos: resultado.atributos,
+    categoriaEfeito: resultado.categoriaEfeito,
+    composicao: resultado.composicao,
     honrineo,
   };
 }

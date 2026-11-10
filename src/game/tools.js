@@ -67,6 +67,9 @@ export const CIDADES = [
 
 // Valor em centavos (ℛ) de cada moeda.
 export const MOEDA = {
+  // Bronze é a denominação usada pelo catálogo e pela Forja para a menor moeda.
+  // Cobre é o nome histórico usado internamente; ambos valem a mesma unidade.
+  bronze: 1,
   cobre: 1,
   prata: 100,
   ouro: 1000,
@@ -85,7 +88,7 @@ export function precoEmCents(preco = {}) {
 
 // Formata o preço em moedas de forma legível (ex.: "50 prata").
 export function formatPreco(preco = {}) {
-  const ordem = ['platina', 'ouropla', 'ouro', 'prata', 'cobre'];
+  const ordem = ['platina', 'ouropla', 'ouro', 'prata', 'bronze', 'cobre'];
   const partes = [];
   for (const moeda of ordem) {
     if (preco[moeda]) partes.push(`${preco[moeda]} ${moeda}`);

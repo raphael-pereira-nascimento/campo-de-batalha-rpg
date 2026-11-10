@@ -1,6 +1,6 @@
 # Pendências — Campo de Batalha RPG
 
-Atualizado em 23/10/2026.
+Atualizado em 09/11/2026.
 
 Este arquivo registra regras que ainda precisam de decisão do criador. Nenhuma
 fórmula pendente foi inventada ou implementada nesta etapa. Quando uma regra for
@@ -16,6 +16,60 @@ e só então aplicada no código.
 - `tools/sync-server-game.ps1` foi reduzido aos arquivos realmente sincronizáveis;
   `data.js` e `battleManager.js` não são mais sobrescritos às cegas.
 - `README.md` atualizado para 12 etapas de criação e correções recentes.
+
+## Catálogo de materiais — decisões da Etapa 2
+
+- O catálogo tem 44 fichas, separadas em **Minérios** (17), **Metais** (25) e
+  **Pedras** (2). A categoria `pedra` foi preservada.
+- Os 12 `id`s originais foram mantidos: `ferro`, `cobre`, `estanho`, `chumbo`,
+  `bronze`, `ferroForjado`, `aco`, `prata`, `ouro`, `latão`, `obsidiana` e
+  `diamante`.
+- Ferro, cobre, estanho e chumbo agora são metais refinados. Foram criadas as
+  versões brutas `minerioFerro`, `minerioCobre`, `minerioEstanho` e
+  `minerioChumbo`, todas pendentes.
+- Nomes duplicados usam uma ficha canônica + `aliases`. Exemplos: `obsidiana`
+  (“Vidro de Dragão”), `honrineo` (“Minério de Honra”) e `metalDasAlmas`
+  (“Minério da Alma”).
+- `precoPorKg` passou a ser um objeto de moedas:
+  `{ bronze, prata, ouro, ouropla, platina }`. Números antigos continuam aceitos
+  e são interpretados como bronze. O alias histórico `cobre` é lido como
+  `bronze`. A conversão para centavos e a formatação ficam em
+  `src/game/materialRules.js`.
+- A qualidade é independente da raridade e ficou pendente nos 12 materiais
+  originais. As raridades seguem a ordem do projeto: comum, incomum, rara,
+  épica e lendária.
+- Efeitos são separados por armadura, lâmina, impacto, fogo, acessório,
+  cajado, varinha, grimório, orbe, catalisador e golem. As categorias mágicas
+  usam `equipamentoMagico` como fallback quando não há efeito explícito.
+- Composição: o principal concede 100% dos efeitos e o secundário até 25%,
+  arredondado para baixo. O mesmo atributo não acumula; prevalece o valor do
+  principal.
+- A forja existente continua usando 1 kg do material principal e 25% do preço
+  do secundário. Nenhuma receita ou compatibilidade nova foi aprovada nesta
+  etapa.
+- `Forge.jsx` e `App.jsx` foram ajustados apenas para exibir o novo formato de
+  preço. A interface dedicada do catálogo ainda não foi criada.
+
+### Pendências do catálogo
+
+- **Dados oficiais:** as 32 fichas novas estão sem raridade, qualidade, preço,
+  física, compatibilidade ou efeitos. As 12 originais ainda precisam de
+  qualidade, física e compatibilidade. Não preencher por inferência.
+- **Imagens:** não existem arquivos em `assets/materiais`; a interface futura
+  deve usar o placeholder com a inicial e o selo “Imagem pendente”.
+- **Mineração:** os veios e drops ainda entregam os `id`s refinados (`ferro`,
+  `cobre`, `estanho`, `chumbo`). Falta decidir quando eles passam a entregar os
+  minérios brutos.
+- **Bônus negativos:** `Math.floor(valor * 0.25)` continua valendo para valores
+  negativos. Falta decidir se -4 deve virar -1 ou 0.
+- **Compatibilidade:** o campo existe nas fichas, mas nenhum material tem a
+  lista oficial de categorias de equipamento compatíveis.
+- **Integração da forja:** `src/game/forge.js` ainda lê
+  `equip.subcategoria` diretamente. A troca para `getEfeitoPorEquipamento`,
+  incluindo cajado/varinha/grimório/orbe/catalisador e a regra de não acumular
+  o mesmo atributo, fica para a etapa de integração da forja.
+- **Validação:** os testes novos ficam em `server/tests/materials.test.js` e
+  `server/tests/materialComposition.test.js`; a execução depende de `npm test`.
 
 ## Pendências de regra
 

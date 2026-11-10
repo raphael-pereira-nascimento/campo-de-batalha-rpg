@@ -3,6 +3,9 @@ import {
   MATERIAIS, getMateriaisPorTipo, getMaterialById,
 } from '../game/materials.js';
 import {
+  formatarPrecoPorKg, precoKgEmCents, materialTemEfeitos,
+} from '../game/materialRules.js';
+import {
   EQUIPAMENTOS, getEquipamentosPorTipo, getEquipamentoById,
   EQUIP_TIPO, ARMA_SUBCATEGORIA, EQUIP_RARITY,
 } from '../game/equipments.js';
@@ -85,13 +88,19 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
     getEquipamentosPorTipo(tipoSelecionado), [tipoSelecionado]);
 
   const materiaisDisponiveis = useMemo(() => {
+    // Só oferece materiais que tenham ao menos um efeito definido; fichas
+    // pendentes do catálogo não devem ser selecionáveis na forja.
+    const comEfeitos = (lista) => lista.filter(materialTemEfeitos);
     if (tipoSelecionado === 'arma') {
-      return [...getMateriaisPorTipo('minerio'), ...getMateriaisPorTipo('metal')];
+      return comEfeitos([...getMateriaisPorTipo('minerio'), ...getMateriaisPorTipo('metal')]);
     }
     if (tipoSelecionado === 'armadura') {
-      return [...getMateriaisPorTipo('minerio'), ...getMateriaisPorTipo('metal')];
+      return comEfeitos([...getMateriaisPorTipo('minerio'), ...getMateriaisPorTipo('metal')]);
     }
-    return [...getMateriaisPorTipo('pedra'), ...getMateriaisPorTipo('metal').filter(m => m.raridade !== 'comum')];
+    return comEfeitos([
+      ...getMateriaisPorTipo('pedra'),
+      ...getMateriaisPorTipo('metal').filter(m => m.raridade !== 'comum'),
+    ]);
   }, [tipoSelecionado]);
 
   const equipSelecionado = equipId ? getEquipamentoById(equipId) : null;
@@ -540,7 +549,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
                       }}
                     >
                       {m.nome}<br />
-                      <span style={{ fontSize: '0.7em', color: '#888' }}>{m.precoPorKg} bronze/kg</span>
+                      <span style={{ fontSize: '0.7em', color: '#888' }}>{formatarPrecoPorKg(m)}</span>
                     </button>
                   ))}
                 </div>
@@ -566,7 +575,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
                       }}
                     >
                       {m.nome}<br />
-                      <span style={{ fontSize: '0.7em', color: '#888' }}>{m.precoPorKg} bronze/kg</span>
+                      <span style={{ fontSize: '0.7em', color: '#888' }}>{formatarPrecoPorKg(m)}</span>
                     </button>
                   ))}
                 </div>
@@ -625,12 +634,12 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
                     <div style={{ flex: 1, padding: 10, border: '1px solid #444', borderRadius: 6, background: '#1e142c' }}>
                       <div style={{ fontSize: '0.8em', color: '#888' }}>Primário (100%)</div>
                       <div style={{ fontWeight: 'bold', color: '#eee' }}>{matPrimario?.nome || '—'}</div>
-                      <div style={{ fontSize: '0.8em', color: '#8b5fbf' }}>{matPrimario ? matPrimario.precoPorKg + ' bronze' : ''}</div>
+                      <div style={{ fontSize: '0.8em', color: '#8b5fbf' }}>{matPrimario ? formatarPrecoPorKg(matPrimario) : ''}</div>
                     </div>
                     <div style={{ flex: 1, padding: 10, border: '1px solid #444', borderRadius: 6, background: '#1e142c' }}>
                       <div style={{ fontSize: '0.8em', color: '#888' }}>Secundário (25%)</div>
                       <div style={{ fontWeight: 'bold', color: '#eee' }}>{matSecundario?.nome || '—'}</div>
-                      <div style={{ fontSize: '0.8em', color: '#8b5fbf' }}>{matSecundario ? Math.round(matSecundario.precoPorKg * 0.25) + ' bronze' : ''}</div>
+                      <div style={{ fontSize: '0.8em', color: '#8b5fbf' }}>{matSecundario ? Math.round((precoKgEmCents(matSecundario.precoPorKg) || 0) * 0.25) + ' bronze' : ''}</div>
                     </div>
                   </div>
                 </div>
@@ -654,8 +663,8 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
                       <div style={{ fontSize: '1.2em', fontWeight: 'bold', color: '#ffd166' }}>{custoTotal} bronze</div>
                       <div style={{ fontSize: '0.85em', color: '#888' }}>
                         {equipSelecionado.precoBase} base +
-                        {matPrimario ? matPrimario.precoPorKg : 0} primário +
-                        {matSecundario ? Math.round(matSecundario.precoPorKg * 0.25) : 0} secundário
+                        {matPrimario ? (precoKgEmCents(matPrimario.precoPorKg) || 0) : 0} primário +
+                        {matSecundario ? Math.round((precoKgEmCents(matSecundario.precoPorKg) || 0) * 0.25) : 0} secundário
                       </div>
                     </div>
 
