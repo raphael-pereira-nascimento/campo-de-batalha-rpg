@@ -1893,6 +1893,20 @@ button.danger {
 }
 .fighter-card:hover { border-color: var(--accent); }
 .fighter-card.fighter-dead { opacity: 0.4; }
+
+.fighter-card.fumegando { position: relative; }
+.fighter-card.fumegando::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 25% 45%, rgba(200, 210, 235, 0.2), transparent 45%),
+    radial-gradient(circle at 75% 35%, rgba(180, 195, 225, 0.18), transparent 50%);
+  animation: smoke-drift 3.4s ease-in-out infinite;
+}
+.fighter-card.fumegando > * { position: relative; z-index: 1; }
 .fighter-card-header {
   display: flex;
   justify-content: space-between;

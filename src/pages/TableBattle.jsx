@@ -17,6 +17,7 @@ import {
   rajadaDaArma,
   NIVEIS_DIFICULDADE_D20,
   nivelDificuldadeD20,
+  dificuldadeDoGolpe,
 } from '../game/sistema.js';
 import { MONSTERS } from '../game/monsters.js';
 import { SPELLS, STATUS_DEFS, armasDeEquipamento, skillFromSpell } from '../game/data.js';
@@ -284,6 +285,15 @@ const [lastRoll, setLastRoll] = useState(null);
     }
     return lista;
   }, []);
+
+  // Arma escolhida no painel de ações e se ela está travada por superaquecimento.
+  const armaSelecionada = useMemo(() => {
+    const atk = fighters.find((f) => f.id === actAttacker);
+    return atk ? armasDoLutador(atk).find((a) => a.id === selWeaponId) || null : null;
+  }, [fighters, actAttacker, selWeaponId, armasDoLutador]);
+
+  const armaSelecionadaTravada = !!armaSelecionada
+    && (((wpnSuperaquecido[actAttacker] || {})[armaSelecionada.id]) || 0) > 0;
 
   const magiasDoLutador = useCallback((f) => {
     if (!f) return [];
@@ -673,6 +683,12 @@ const [lastRoll, setLastRoll] = useState(null);
       }
 
       const danoBase = danoFisicoAtaque(effectiveStat(attacker, 'forca'), danoBaseDaArma(arma));
+      // Dificuldade do golpe (rolar-menor): ataque comum = 100% (dif. 0);
+      // armas com efeito pesado (ex.: congelamento) reduzem o alvo de acerto.
+      const dificuldade = dificuldadeDoGolpe({
+        poder: 100,
+        status: arma.efeito ? { turnos: arma.efeito.turnos, dano: arma.efeito.dano } : null,
+      });
       const resultados = [];
       const efeitosPorAlvo = new Map();
 
@@ -686,7 +702,7 @@ const [lastRoll, setLastRoll] = useState(null);
           Number(fumaca[attacker.id]) || 0,
           Number(fumaca[alvo.id]) || 0,
         );
-        const threshold = Math.ceil(chance * 20);
+        const threshold = Math.max(1, Math.min(19, Math.ceil(chance * 20) - dificuldade));
         const nivel = nivelDificuldadeD20(roll);
         // Acerto "rolar-menor" (igual ao Campo): 20 é crítico, 1 é falha.
         const isCrit = roll === 20;
@@ -694,9 +710,10 @@ const [lastRoll, setLastRoll] = useState(null);
         const hit = isCrit || (!isFail && roll <= threshold);
         const mult = i > 0 ? spec.splash : spec.danoMult;
         const alvoTxt = alvos.length > 1 ? `${alvo.name}${i === 0 ? ' (principal)' : ''}` : alvo.name;
+        const difTxt = dificuldade > 0 ? ` · dif. +${dificuldade}` : '';
 
         if (!hit) {
-          addLog(`⚔️ ${attacker.name} erra ${alvoTxt} com ${arma.nome || 'desarmado'} → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold})`);
+          addLog(`⚔️ ${attacker.name} erra ${alvoTxt} com ${arma.nome || 'desarmado'} → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold}${difTxt})`);
           return;
         }
 
@@ -705,7 +722,7 @@ const [lastRoll, setLastRoll] = useState(null);
         resultados.push({ id: alvo.id, res });
         const multTxt = mult < 1 ? ` (${Math.round(mult * 100)}%)` : '';
         const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${multTxt}` : '';
-        addLog(`⚔️ ${attacker.name} ataca ${alvoTxt} com ${arma.nome || 'desarmado'} → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold}) ${isCrit ? 'CRÍTICO ' : ''}${suffix}`);
+        addLog(`⚔️ ${attacker.name} ataca ${alvoTxt} com ${arma.nome || 'desarmado'} → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold}${difTxt}) ${isCrit ? 'CRÍTICO ' : ''}${suffix}`);
         if (res.protecaoQuebrou) addLog(res.msg);
 
         // Efeito da arma (ex.: congelamento) só em quem foi atingido e sobreviveu.
@@ -752,6 +769,13 @@ const [lastRoll, setLastRoll] = useState(null);
       const poder = m.spell.poder || 1.6;
       const danoBase = danoMagico(effectiveStat(attacker, 'inteligencia'), poder);
       const multi = spec.tipo !== 'unico';
+      // Dificuldade da magia só pesa quando há rolagem de acerto (multi-alvo).
+      const dificuldade = multi
+        ? dificuldadeDoGolpe({
+          poder: Math.round(poder * 100),
+          status: m.spell.status || null,
+        })
+        : 0;
       const resultados = [];
       const efeitosPorAlvo = new Map();
 
@@ -768,7 +792,7 @@ const [lastRoll, setLastRoll] = useState(null);
             Number(fumaca[alvo.id]) || 0,
           )
           : 1;
-        const threshold = Math.ceil(chance * 20);
+        const threshold = Math.max(1, Math.min(19, Math.ceil(chance * 20) - dificuldade));
         const nivel = multi ? nivelDificuldadeD20(roll) : null;
         // Acerto "rolar-menor" (igual ao Campo): 20 é crítico, 1 é falha.
         const isCrit = multi && roll === 20;
@@ -776,9 +800,10 @@ const [lastRoll, setLastRoll] = useState(null);
         const hit = !multi || isCrit || (!isFail && roll <= threshold);
         const mult = i > 0 ? spec.splash : spec.danoMult;
         const alvoTxt = alvos.length > 1 ? `${alvo.name}${i === 0 ? ' (principal)' : ''}` : alvo.name;
+        const difTxt = dificuldade > 0 ? ` · dif. +${dificuldade}` : '';
 
         if (!hit) {
-          addLog(`🔮 ${attacker.name} erra ${m.spell.nome} em ${alvoTxt} → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold})`);
+          addLog(`🔮 ${attacker.name} erra ${m.spell.nome} em ${alvoTxt} → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold}${difTxt})${i === 0 ? ` (MP ${custo})` : ''}`);
           return;
         }
 
@@ -786,7 +811,7 @@ const [lastRoll, setLastRoll] = useState(null);
         const res = applyDamageWithProtection(alvo, dmg);
         resultados.push({ id: alvo.id, res });
         const multTxt = mult < 1 ? ` (${Math.round(mult * 100)}%)` : '';
-        const rollTxt = multi ? ` → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold})${isCrit ? ' CRÍTICO' : ''}` : '';
+        const rollTxt = multi ? ` → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold}${difTxt})${isCrit ? ' CRÍTICO' : ''}` : '';
         const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${multTxt}` : '';
         addLog(`🔮 ${attacker.name} lança ${m.spell.nome} em ${alvoTxt}${rollTxt}${suffix}${i === 0 ? ` (MP ${custo})` : ''}`);
         if (res.protecaoQuebrou) addLog(res.msg);
@@ -1090,8 +1115,9 @@ const [lastRoll, setLastRoll] = useState(null);
     const dead = f.hp <= 0;
     const isTurn = initiativeRolled && initiativeOrder.length > 0 && initiativeOrder[currentTurnIndex] === f.id;
     const turnPos = initiativeRolled ? initiativeOrder.indexOf(f.id) + 1 : null;
+    const fumegando = (Number(fumaca[f.id]) || 0) >= FUMACA.limiarVisivel;
     return (
-      <div key={f.id} className={`fighter-card ${dead ? 'fighter-dead' : ''} ${isTurn ? 'fighter-turn' : ''}`}>
+      <div key={f.id} className={`fighter-card ${dead ? 'fighter-dead' : ''} ${isTurn ? 'fighter-turn' : ''} ${fumegando ? 'fumegando' : ''}`}>
         <div className="fighter-card-header">
           <span className="fighter-card-name">{dead && '☠️ '}{f.name}{isTurn ? ' ◀── vez' : ''}</span>
           {turnPos && <span className="turn-pos">#{turnPos}</span>}
@@ -1500,12 +1526,16 @@ const [lastRoll, setLastRoll] = useState(null);
                       {armasDoLutador(fighters.find((f) => f.id === actAttacker)).map((arma) => {
                         const r = (wpnRecarga[actAttacker] || {})[arma.id] || 0;
                         const u = (wpnUsos[actAttacker] || {})[arma.id] ?? arma.usosMax;
+                        const cal = Number((wpnCalor[actAttacker] || {})[arma.id]) || 0;
+                        const infoCalor = calorEstado(cal);
+                        const travada = (Number((wpnSuperaquecido[actAttacker] || {})[arma.id]) || 0);
                         const emRecarga = r > 0;
                         const semMunicao = !emRecarga && !!arma.usosMax && u <= 0;
                         const contagem = arma.usosMax ? ` — ${u}/${arma.usosMax}` : '';
+                        const calorTxt = armaDeFogo(arma) && cal > 0 ? ` — ${infoCalor.icon}${Math.round(infoCalor.pct)}%` : '';
                         return (
-                          <option key={arma.id} value={arma.id} disabled={emRecarga || semMunicao}>
-                            {arma.categoria === 'utilitaria' ? '🧰 ' : ''}{arma.nome} (dano base {danoBaseDaArma(arma)}){emRecarga ? ` — recarregando ${r}t` : semMunicao ? ' — sem munição' : contagem}
+                          <option key={arma.id} value={arma.id} disabled={emRecarga || semMunicao || travada > 0}>
+                            {arma.categoria === 'utilitaria' ? '🧰 ' : ''}{arma.nome} (dano base {danoBaseDaArma(arma)}){travada > 0 ? ` — 🔥 superaquecida (${travada}t)` : emRecarga ? ` — recarregando ${r}t` : semMunicao ? ' — sem munição' : contagem}{calorTxt}
                           </option>
                         );
                       })}
@@ -1513,6 +1543,37 @@ const [lastRoll, setLastRoll] = useState(null);
                   </div>
                 </div>
               )}
+
+              {/* Calor e fumaça da arma selecionada (armas de fogo) */}
+              {actAttacker && actionMode === 'attack' && armaSelecionada && armaDeFogo(armaSelecionada) && (() => {
+                const cal = Number((wpnCalor[actAttacker] || {})[armaSelecionada.id]) || 0;
+                const travada = Number((wpnSuperaquecido[actAttacker] || {})[armaSelecionada.id]) || 0;
+                const info = calorEstado(cal);
+                const fumaAtirador = Number(fumaca[actAttacker]) || 0;
+                const fumaInfo = fumacaEstado(fumaAtirador);
+                return (
+                  <div className={`heat-meter heat-${info.nivel}`}>
+                    <div className="heat-meter-head">
+                      <span>{info.icon} Calor — {armaSelecionada.nome}</span>
+                      <span className={`heat-value ${travada > 0 ? 'overheat-warning' : ''}`}>
+                        {Math.round(cal)}/{SUPERAQUECIMENTO.calorMax}{travada > 0 ? ` · travada ${travada}t` : ''}
+                      </span>
+                    </div>
+                    <div className="heat-track">
+                      <div className="heat-fill" style={{ width: `${info.pct}%` }} />
+                    </div>
+                    <div className="heat-hint">
+                      +{calorDoDisparo(armaSelecionada)} por disparo · esfria {SUPERAQUECIMENTO.resfriamentoPorTurno}/rodada sem atirar
+                      {travada > 0 && ' · ⚠️ troque de arma ou aguarde para esfriar'}
+                    </div>
+                    {fumaAtirador > 0 && (
+                      <div className="heat-hint smoke-warning">
+                        🌫️ Fumaça {Math.round(fumaInfo.pct)}% — mira −{Math.round(fumaInfo.mira * 100)}% · camuflagem −{Math.round(fumaInfo.camuflagem * 100)}%
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {actAttacker && actionMode === 'spell' && (
                 <div className="actions-row">
@@ -1563,7 +1624,7 @@ const [lastRoll, setLastRoll] = useState(null);
 
               {/* Botão executar */}
               <div className="actions-row actions-row-execute">
-                <button className="dice-btn dice-btn-execute" onClick={executarAcao} disabled={!actAttacker || actTargets.length === 0 || (actionMode === 'spell' && !selSpellId) || (actionMode === 'item' && !selItemId)}>
+                <button className="dice-btn dice-btn-execute" onClick={executarAcao} disabled={!actAttacker || actTargets.length === 0 || (actionMode === 'spell' && !selSpellId) || (actionMode === 'item' && !selItemId) || (actionMode === 'attack' && armaSelecionadaTravada)}>
                   ▶ Executar Ação
                 </button>
               </div>
