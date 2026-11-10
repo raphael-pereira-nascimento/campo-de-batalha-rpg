@@ -292,6 +292,23 @@ const [lastRoll, setLastRoll] = useState(null);
     return atk ? armasDoLutador(atk).find((a) => a.id === selWeaponId) || null : null;
   }, [fighters, actAttacker, selWeaponId, armasDoLutador]);
 
+  // O seletor visual sempre mostra uma arma, mas o estado começa vazio. Sem
+  // isto a barra de calor e o bloqueio por superaquecimento só apareceriam
+  // depois de trocar a arma manualmente.
+  useEffect(() => {
+    if (!actAttacker) {
+      if (selWeaponId) setSelWeaponId('');
+      return;
+    }
+    const atk = fighters.find((f) => f.id === actAttacker);
+    const armas = armasDoLutador(atk);
+    if (armas.some((a) => a.id === selWeaponId)) return;
+    const melhor = armas
+      .filter((a) => a.categoria !== 'utilitaria')
+      .sort((a, b) => (danoBaseDaArma(b) || 0) - (danoBaseDaArma(a) || 0))[0] || armas[0];
+    setSelWeaponId(melhor ? melhor.id : '');
+  }, [actAttacker, fighters, selWeaponId, armasDoLutador]);
+
   const armaSelecionadaTravada = !!armaSelecionada
     && (((wpnSuperaquecido[actAttacker] || {})[armaSelecionada.id]) || 0) > 0;
 
