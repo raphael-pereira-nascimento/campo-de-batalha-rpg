@@ -9,6 +9,7 @@ import {
   aplicarLevelUpManual,
   definirNivelManual,
   syncArmasComGemas,
+  sanitizarItemCraftado,
 } from '../src/services/characters.js';
 
 const ATTRS = { forca: 8, inteligencia: 4, resistencia: 8, destreza: 5, reflexos: 5 }; // soma 30
@@ -346,5 +347,102 @@ describe('syncArmasComGemas — gemas presas ao equipamento', () => {
     expect(updated.armadura).toBe(novaArmadura);
     expect(updated.arma.socketedGems).toEqual(['rubi']);
     expect(updated.armas.perto.socketedGems).toEqual(['rubi']);
+  });
+});
+
+describe('sanitizarItemCraftado — forja online', () => {
+  const base = {
+    id: 'espada_longa',
+    nome: 'Espada Longa',
+    tipo: 'arma',
+    categoria: 'perto',
+    raridade: 'rara',
+    peso: 3,
+    slots: 2,
+    bonus: { forca: 2 },
+    penalidade: { destreza: -1 },
+    atributosFinais: { forca: 5, resistencia: 2 },
+    materiais: { primario: { id: 'aco' }, secundario: { id: 'prata' } },
+    gemasSlotadas: [{ slot: 0, gemaId: 'rubi' }],
+    durabilidade: 40,
+    durabilidadeMax: 40,
+    custo: 657,
+  };
+
+  it('gera um id único e preserva os atributos finais', () => {
+    const primeiro = sanitizarItemCraftado(base, []);
+    const segundo = sanitizarItemCraftado(base, [{ id: primeiro.id }]);
+    expect(primeiro.id).not.toBe(segundo.id);
+    expect(primeiro.id.startsWith('espada_longa-')).toBe(true);
+    expect(primeiro.atributosFinais).toEqual({ forca: 5, resistencia: 2 });
+    expect(primeiro.materiais).toEqual(base.materiais);
+    expect(primeiro.durabilidade).toBe(40);
+  });
+
+  it('não grava o campo de controle "modo"', () => {
+    const salvo = sanitizarItemCraftado({ ...base, modo: 'atualizar' }, [], { atualizar: true });
+    expect(salvo.modo).toBeUndefined();
+    expect(salvo.id).toBe('espada_longa');
+  });
+
+  it('limita bônus e descarta atributos desconhecidos', () => {
+    const salvo = sanitizarItemCraftado({
+      ...base,
+      bonus: { forca: 999, poderIlimitado: 50 },
+    }, []);
+    expect(salvo.bonus).toEqual({ forca: 99 });
+  });
+
+  it('preserva socketSlots quando a peça informa os slots de gema', () => {
+    const salvo = sanitizarItemCraftado({ ...base, socketSlots: 2 }, []);
+    expect(salvo.socketSlots).toBe(2);
+    expect(salvo.slots).toBe(2);
+  });
+
+  it('preserva os campos de combate do equipamento-base', () => {
+    const salvo = sanitizarItemCraftado({
+      ...base,
+      tipo: 'arma_fogo',
+      defesa: 6,
+      alcance: 'longo',
+      elemento: 'fogo',
+      efeito: { tipo: 'queimadura', dano: 50, turnos: 3 },
+      alvo: 'explosao',
+      alvos: 3,
+      splash: 0.5,
+      recarga: 2,
+    }, []);
+    expect(salvo.defesa).toBe(6);
+    expect(salvo.alcance).toBe('longo');
+    expect(salvo.elemento).toBe('fogo');
+    expect(salvo.efeito).toEqual({ tipo: 'queimadura', dano: 50, turnos: 3 });
+    expect(salvo.alvo).toBe('explosao');
+    expect(salvo.alvos).toBe(3);
+    expect(salvo.splash).toBe(0.5);
+    expect(salvo.recarga).toBe(2);
+  });
+
+  it('descarta alcance, elemento, alvo e efeito fora do domínio', () => {
+    const salvo = sanitizarItemCraftado({
+      ...base,
+      alcance: 'orbital',
+      elemento: 'raio',
+      alvo: 'todos',
+      efeito: 'queimadura',
+    }, []);
+    expect(salvo.alcance).toBeUndefined();
+    expect(salvo.elemento).toBeUndefined();
+    expect(salvo.alvo).toBeUndefined();
+    expect(salvo.efeito).toBeUndefined();
+  });
+
+  it('rejeita item sem nome, tipo inválido ou arma sem categoria', () => {
+    expect(() => sanitizarItemCraftado({ ...base, nome: '' }, [])).toThrow();
+    expect(() => sanitizarItemCraftado({ ...base, tipo: 'poção' }, [])).toThrow();
+    expect(() => sanitizarItemCraftado({ ...base, categoria: 'qualquer' }, [])).toThrow();
+  });
+
+  it('exige que o item exista para atualização', () => {
+    expect(() => sanitizarItemCraftado({ ...base, id: '' }, [], { atualizar: true })).toThrow();
   });
 });

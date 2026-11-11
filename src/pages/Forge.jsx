@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
-  MATERIAIS, getMateriaisPorTipo, getMaterialById,
+  getMateriaisPorCategoria, getMaterialById,
 } from '../game/materials.js';
 import {
   formatarPrecoPorKg, precoKgEmCents, materialTemEfeitos,
@@ -89,19 +89,24 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
     getEquipamentosPorTipo(tipoSelecionado), [tipoSelecionado]);
 
   const materiaisDisponiveis = useMemo(() => {
-    // Só oferece materiais que tenham ao menos um efeito definido; fichas
-    // pendentes do catálogo não devem ser selecionáveis na forja.
-    const comEfeitos = (lista) => lista.filter(materialTemEfeitos);
-    if (tipoSelecionado === 'arma') {
-      return comEfeitos([...getMateriaisPorTipo('minerio'), ...getMateriaisPorTipo('metal')]);
+    // Inclui todas as categorias de dados (minério, metal, especial e mágico).
+    // Antes, fichas de `especial`/`magico` com efeitos podiam ficar de fora da
+    // seleção; o filtro final é apenas "tem algum efeito definido".
+    const porCategoria = (categoria) => getMateriaisPorCategoria(categoria);
+    let lista;
+    if (tipoSelecionado === 'arma' || tipoSelecionado === 'armadura') {
+      lista = ['minerio', 'metal', 'especial', 'magico'].flatMap(porCategoria);
+    } else {
+      lista = [
+        ...porCategoria('especial'),
+        ...porCategoria('magico'),
+        ...porCategoria('metal').filter((m) => m.raridade !== 'comum'),
+      ];
     }
-    if (tipoSelecionado === 'armadura') {
-      return comEfeitos([...getMateriaisPorTipo('minerio'), ...getMateriaisPorTipo('metal')]);
-    }
-    return comEfeitos([
-      ...getMateriaisPorTipo('pedra'),
-      ...getMateriaisPorTipo('metal').filter(m => m.raridade !== 'comum'),
-    ]);
+    // Evita duplicatas (obsidiana/diamante aparecem em `especial`) e fichas
+    // pendentes do catálogo, que não devem ser selecionáveis na forja.
+    const unicos = [...new Map(lista.map((m) => [m.id, m])).values()];
+    return unicos.filter(materialTemEfeitos);
   }, [tipoSelecionado]);
 
   const equipSelecionado = equipId ? getEquipamentoById(equipId) : null;
@@ -233,6 +238,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
         raridade: equipSelecionado.raridade,
         peso: equipSelecionado.peso,
         slots: equipSelecionado.slots,
+        socketSlots: equipSelecionado.slots || 0,
         bonus: equipSelecionado.bonus,
         penalidade: equipSelecionado.penalidade,
         atributosFinais: resultadoCraft.atributos,
@@ -246,6 +252,16 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
         usosMax: equipSelecionado.usosMax,
         recargaTurnos: equipSelecionado.recargaTurnos,
         danoBase: equipSelecionado.danoBase,
+        // Campos de combate da definição-base: sem eles a peça craftada perde
+        // defesa (armadura), alcance/elemento/efeito (armas) ao ser equipada.
+        defesa: equipSelecionado.defesa,
+        alcance: equipSelecionado.alcance,
+        elemento: equipSelecionado.elemento,
+        efeito: equipSelecionado.efeito,
+        alvo: equipSelecionado.alvo,
+        alvos: equipSelecionado.alvos,
+        splash: equipSelecionado.splash,
+        recarga: equipSelecionado.recarga,
         durabilidade: inicializarDurabilidade(equipSelecionado),
         durabilidadeMax: calcularDurabilidadeMax(equipSelecionado.raridade || 'comum'),
       };
@@ -357,6 +373,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
 
       const itemMelhorado = {
         ...equipParaMelhorar,
+        modo: 'atualizar',
         melhoriaNivel: resultado.nivelNovo,
         atributosFinais: resultado.equip.atributosFinais,
         custoMelhoria: resultado.custo,
@@ -424,6 +441,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
 
       const itemReparado = {
         ...itemParaReparar,
+        modo: 'atualizar',
         durabilidade: resultado.durabilidadeNova,
       };
 

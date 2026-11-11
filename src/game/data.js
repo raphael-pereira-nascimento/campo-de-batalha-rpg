@@ -865,8 +865,14 @@ export function effectiveAttributes(attributes, equipment = {}, races = null, cl
   // A arma legada equipment.arma entra via armasDeEquipamento sem duplicar.
   for (const item of armasDeEquipamento(equipment).map((e) => e.arma).concat([equipment.armadura, equipment.acessorio]).filter(Boolean)) {
     if (!item) continue;
-    if (item.bonus) {
-      for (const [k, v] of Object.entries(item.bonus)) eff[k] = (eff[k] || 0) + v;
+    // Itens craftados guardam em `atributosFinais` o bônus-base já somado aos
+    // efeitos dos materiais. Quando presente, ele substitui `bonus` para não
+    // contar o mesmo bônus duas vezes.
+    const atributosDoItem = item.atributosFinais && typeof item.atributosFinais === 'object'
+      ? item.atributosFinais
+      : item.bonus;
+    if (atributosDoItem) {
+      for (const [k, v] of Object.entries(atributosDoItem)) eff[k] = (eff[k] || 0) + v;
     }
     if (item.penalidade) {
       // Malefícios sempre reduzem o atributo (armaduras do catálogo guardam

@@ -472,8 +472,29 @@ export const api = {
         const categoria = SLOT_ARMA[slot] || (slot === 'arma' ? 'perto' : null);
         const isAcessorio = slot === 'acessorio';
         c.equipment = c.equipment || {};
+        c.inventory = Array.isArray(c.inventory) ? [...c.inventory] : [];
         let item = null;
+        let itemFromInventoryIndex = -1;
         if (itemId) {
+          // Equipamento craftado: usa a cópia do inventário, que guarda os
+          // atributos finais, materiais, durabilidade, gemas e slots.
+          const wanted = String(itemId);
+          const idx = c.inventory.findIndex((it) => it && String(it.id) === wanted);
+          if (idx >= 0) {
+            const invItem = c.inventory[idx];
+            const categoriaItem = invItem.categoria
+              || (invItem.alcance === 'corpo' ? 'perto' : 'distancia');
+            const tipoOk = categoria
+              ? (invItem.tipo === 'arma' || invItem.tipo === 'arma_fogo') && categoriaItem === categoria
+              : isAcessorio
+                ? invItem.tipo === 'acessorio'
+                : invItem.tipo === 'armadura';
+            if (!tipoOk) return Promise.reject(new Error('Este item não pode ser equipado neste slot.'));
+            item = JSON.parse(JSON.stringify(invItem));
+            itemFromInventoryIndex = idx;
+          }
+        }
+        if (!item && itemId) {
           if (categoria) {
             // Guarda a definição COMPLETA do item (dano/bônus/slots de gema).
             const def = EQUIPMENT.canoes?.[itemId] || EQUIPMENT.armas[itemId];
@@ -509,11 +530,13 @@ export const api = {
         // Mantém no inventário equipamentos de fichas antigas ao trocar/remover.
         if (oldItem?.id && (!item || item.id !== oldItem.id)) {
           c.inventory = Array.isArray(c.inventory) ? c.inventory : [];
-          if (!c.inventory.some((it) => it.id === oldItem.id)) {
+          if (!c.inventory.some((it) => it && it.id === oldItem.id)) {
             const { socketedGems: _sg, socketedGemEstados: _sge, ...oldCopy } = oldItem;
             c.inventory.push(oldCopy);
           }
         }
+        // O item equipado sai do inventário; ao desequipar, a cópia volta.
+        if (itemFromInventoryIndex >= 0) c.inventory.splice(itemFromInventoryIndex, 1);
         if (categoria) {
           const armas = { ...(c.equipment.armas || {}) };
           armas[categoria] = item;
@@ -1162,10 +1185,35 @@ export const api = {
       const chars = getOfflineCharacters();
       const c = chars.find((ch) => ch.id === characterId);
       if (!c) return Promise.reject(new Error('Personagem não encontrado.'));
-      c.inventory = Array.isArray(c.inventory) ? c.inventory : [];
-      c.inventory.push({ ...item, id: item.id || 'crafted-' + Date.now() });
+      if (!item || typeof item !== 'object') return Promise.reject(new Error('Item inválido.'));
+
+      c.inventory = Array.isArray(c.inventory) ? [...c.inventory] : [];
+      const { modo, ...dados } = item;
+      const atualizar = modo === 'atualizar';
+      const indice = atualizar
+        ? c.inventory.findIndex((it) => it && String(it.id) === String(item.id))
+        : -1;
+      if (atualizar && indice < 0) return Promise.reject(new Error('Item não encontrado no inventário.'));
+
+      let salvo;
+      if (indice >= 0) {
+        salvo = { ...dados, id: c.inventory[indice].id };
+        c.inventory[indice] = salvo;
+      } else {
+        // Duas peças do mesmo equipamento não podem compartilhar o mesmo id.
+        const base = String(dados.id || 'crafted').replace(/[^a-zA-Z0-9_-]/g, '') || 'crafted';
+        let novoId = `${base}-${Date.now()}`;
+        let sufixo = 1;
+        while (c.inventory.some((it) => it && it.id === novoId)) {
+          novoId = `${base}-${Date.now()}-${sufixo}`;
+          sufixo += 1;
+        }
+        salvo = { ...dados, id: novoId };
+        c.inventory.push(salvo);
+      }
+
       localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
-      return Promise.resolve({ ok: true, item: c.inventory[c.inventory.length - 1], offline: true });
+      return Promise.resolve({ ok: true, item: salvo, offline: true });
     }
     return auth('/api/characters/craft', {
       method: 'POST',

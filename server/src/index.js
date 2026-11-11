@@ -17,6 +17,7 @@ import {
   levelUpCharacter,
   setCharacterLevel,
   equipItem,
+  craftItem,
   getWallet,
   formatCoins,
   SHOP_ITEMS,
@@ -117,6 +118,30 @@ app.get('/api/wallet', requireAuth, async (req, res) => {
   try {
     const wallet = await getWallet(req.player.id);
     res.json({ ok: true, wallet });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+// Debita um custo calculado no cliente (forja: craft, melhoria e reparo).
+app.post('/api/wallet/spend', requireAuth, async (req, res) => {
+  try {
+    const cents = Math.floor(Number(req.body?.cents));
+    if (!Number.isFinite(cents) || cents <= 0) throw new Error('Valor inválido.');
+    if (cents > 1e9) throw new Error('Valor acima do permitido.');
+
+    const { rows } = await query(
+      'SELECT wallet_cents FROM players WHERE id = $1 FOR UPDATE',
+      [req.player.id],
+    );
+    const carteira = Number(rows[0]?.wallet_cents || 0);
+    if (carteira < cents) throw new Error('Ouro insuficiente.');
+
+    await query('UPDATE players SET wallet_cents = wallet_cents - $1 WHERE id = $2', [
+      cents,
+      req.player.id,
+    ]);
+    res.json({ ok: true, walletCents: carteira - cents });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
@@ -396,6 +421,18 @@ app.post('/api/characters/:id/equip', requireAuth, async (req, res) => {
     const { slot, itemId } = req.body;
     const character = await equipItem(req.params.id, slot, itemId);
     res.json({ ok: true, character });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+// ── Forja: grava o item craftado no inventário do personagem ───────────────
+app.post('/api/characters/craft', requireAuth, async (req, res) => {
+  try {
+    const { characterId, item } = req.body || {};
+    if (!characterId) throw new Error('Informe o personagem.');
+    const salvo = await craftItem(characterId, req.player.id, item);
+    res.json({ ok: true, item: salvo });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }

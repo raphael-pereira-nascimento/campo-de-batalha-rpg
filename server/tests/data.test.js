@@ -511,3 +511,38 @@ describe('Fusão no servidor — receitas + pares compatíveis', () => {
     expect(r.ok).toBe(false);
   });
 });
+
+describe('equipamento craftado — atributosFinais', () => {
+  const attrs = { forca: 5, inteligencia: 3, resistencia: 4, destreza: 3, reflexos: 3 };
+
+  it('usa atributosFinais no lugar de bonus, sem somar os dois', () => {
+    const equipment = {
+      arma: {
+        id: 'espada_longa-1',
+        bonus: { forca: 2 },
+        atributosFinais: { forca: 4, resistencia: 3 },
+      },
+    };
+    const eff = effectiveAttributes(attrs, equipment);
+    expect(eff.forca).toBe(9); // 5 + 4 (e não 5 + 2 + 4)
+    expect(eff.resistencia).toBe(7); // 4 + 3
+  });
+
+  it('mantém o bônus normal quando o item não tem atributosFinais', () => {
+    const equipment = { arma: { id: 'espada_curta', bonus: { forca: 2 } } };
+    expect(effectiveAttributes(attrs, equipment).forca).toBe(7);
+  });
+
+  it('deriveStats calcula vida/mana pelos atributos finais da peça', () => {
+    const equipment = {
+      armadura: {
+        id: 'couro-1',
+        bonus: { resistencia: 1 },
+        atributosFinais: { resistencia: 5, inteligencia: 2 },
+      },
+    };
+    const stats = deriveStats([], 1, attrs, equipment);
+    expect(stats.hpMax).toBe(500 + (4 + 5) * 10);
+    expect(stats.mpMax).toBe((3 + 2) * 10);
+  });
+});

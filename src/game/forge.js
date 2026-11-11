@@ -148,8 +148,13 @@ export function calcularAtributosPersonagem(personagem, equipamentoEquipado = {}
     if (!slot) continue;
     // Item quebrado (durabilidade 0) não concede bônus
     if (slot.durabilidade != null && slot.durabilidade <= 0) continue;
-    if (slot.bonus) {
-      for (const [attr, val] of Object.entries(slot.bonus)) {
+    // `atributosFinais` (item craftado) já inclui o bônus-base e os efeitos dos
+    // materiais; usar `bonus` junto duplicaria os atributos.
+    const atributosDoItem = slot.atributosFinais && typeof slot.atributosFinais === 'object'
+      ? slot.atributosFinais
+      : slot.bonus;
+    if (atributosDoItem) {
+      for (const [attr, val] of Object.entries(atributosDoItem)) {
         atributos[attr] = (atributos[attr] || 0) + val;
       }
     }
