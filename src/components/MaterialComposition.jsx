@@ -39,11 +39,19 @@ export default function MaterialComposition({ materiais = [] }) {
   const efeitoPrincipal = getEfeitoPorEquipamento(principal, categoria);
   const efeitoSecundario = getEfeitoPorEquipamento(secundario, categoria);
 
-  const kg = Number(quantidadeKg) || 0;
+  const kgBruto = Number(quantidadeKg);
+  const kg = Number.isFinite(kgBruto) ? Math.max(0, kgBruto) : 0;
   const custoPrincipal = calcularPrecoPorQuantidade(principal?.precoPorKg, kg);
   const custoSecundario = calcularPrecoPorQuantidade(secundario?.precoPorKg, kg * 0.25);
   const custoTotal = (custoPrincipal || 0) + (custoSecundario || 0);
   const temPreco = custoPrincipal != null || custoSecundario != null;
+  const precoPrincipalPendente = Boolean(principal) && custoPrincipal == null;
+  const precoSecundarioPendente = Boolean(secundario) && custoSecundario == null;
+  const precoIncompleto = precoPrincipalPendente || precoSecundarioPendente;
+  const materiaisSemPreco = [
+    precoPrincipalPendente ? principal.nome : null,
+    precoSecundarioPendente ? secundario.nome : null,
+  ].filter(Boolean);
 
   const opcoes = materiais
     .slice()
@@ -160,11 +168,18 @@ export default function MaterialComposition({ materiais = [] }) {
 
           <div className="material-custo">
             <span className="muted">Custo do material</span>
-            {temPreco
+            {precoIncompleto ? (
+              <>
+                <strong>{temPreco ? `Parcial: ${formatarCents(custoTotal)}` : 'Preço pendente'}</strong>
+                <span className="material-alerta">
+                  Sem preço por kg: {materiaisSemPreco.join(' e ')}.
+                </span>
+              </>
+            ) : temPreco
               ? <strong>{formatarCents(custoTotal)}</strong>
               : <span className="material-pendente-texto">Preço pendente</span>}
             <span className="material-custo-detalhe">
-              {quantidadeKg || 0} kg do principal
+              {kg} kg do principal
               {secundario ? ` + ${(kg * 0.25).toFixed(2)} kg do secundário` : ''}
             </span>
             <span className="material-custo-detalhe">

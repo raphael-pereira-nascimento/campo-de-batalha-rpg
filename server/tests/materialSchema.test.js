@@ -195,6 +195,58 @@ describe('schema — validação', () => {
     }).ok).toBe(false);
   });
 
+  it('aceita os campos estendidos de efeito', () => {
+    const material = {
+      ...base,
+      efeitos: {
+        armadura: {
+          desc: 'Efeito completo',
+          bonus: { resistencia: 1 },
+          percentuais: { vidaMaxima: 5 },
+          penalidades: { destreza: -1 },
+          condicoes: ['contra fogo'],
+          especial: 'Imunidade a calor.',
+        },
+      },
+    };
+    expect(validarMaterial(material).ok).toBe(true);
+  });
+
+  it('rejeita percentuais e penalidades não numéricos', () => {
+    const comPercentualInvalido = {
+      ...base,
+      efeitos: {
+        armadura: { desc: 'x', bonus: {}, percentuais: { vidaMaxima: 'muito' } },
+      },
+    };
+    const comPenalidadeInvalida = {
+      ...base,
+      efeitos: {
+        armadura: { desc: 'x', bonus: {}, penalidades: { destreza: 'muita' } },
+      },
+    };
+    expect(validarMaterial(comPercentualInvalido).ok).toBe(false);
+    expect(validarMaterial(comPenalidadeInvalida).ok).toBe(false);
+  });
+
+  it('rejeita condições que não são lista e especial de tipo inválido', () => {
+    expect(validarMaterial({
+      ...base,
+      efeitos: { armadura: { desc: 'x', bonus: {}, condicoes: 'contra fogo' } },
+    }).ok).toBe(false);
+    expect(validarMaterial({
+      ...base,
+      efeitos: { armadura: { desc: 'x', bonus: {}, especial: ['a'] } },
+    }).ok).toBe(false);
+  });
+
+  it('aceita especial como objeto', () => {
+    expect(validarMaterial({
+      ...base,
+      efeitos: { armadura: { desc: 'x', bonus: {}, especial: { tipo: 'aura' } } },
+    }).ok).toBe(true);
+  });
+
   it('lista pendências sem bloquear a validação', () => {
     const pendentes = camposPendentes(base);
     expect(pendentes).toContain('raridade');

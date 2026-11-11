@@ -527,6 +527,28 @@ export function validarMaterial(material) {
             }
           }
         }
+        for (const campo of ['percentuais', 'penalidades']) {
+          if (efeito[campo] == null) continue;
+          if (typeof efeito[campo] !== 'object' || Array.isArray(efeito[campo])) {
+            erros.push(`${campo} do efeito "${chave}" deve ser um objeto.`);
+            continue;
+          }
+          for (const [atributo, valor] of Object.entries(efeito[campo])) {
+            if (!Number.isFinite(Number(valor))) {
+              erros.push(`${campo} "${chave}.${atributo}" deve ser numérico.`);
+            }
+          }
+        }
+        if (efeito.condicoes != null && !Array.isArray(efeito.condicoes)) {
+          erros.push(`condições do efeito "${chave}" devem ser uma lista.`);
+        }
+        if (
+          efeito.especial != null
+          && typeof efeito.especial !== 'string'
+          && (typeof efeito.especial !== 'object' || Array.isArray(efeito.especial))
+        ) {
+          erros.push(`efeito especial "${chave}" deve ser texto ou objeto.`);
+        }
       }
     }
   }

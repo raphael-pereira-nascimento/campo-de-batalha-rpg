@@ -14,6 +14,7 @@ import {
   podeUsarFerroEstigio, aplicarHonrineo, melhorarEquipamento, calcularCustoMelhoria,
   inicializarDurabilidade, calcularDurabilidadeMax, calcularCustoReparoPorPonto,
   calcularCustoReparoCompleto, repararEquipamento, desmontarEquipamento,
+  tipoInventarioEquipamento,
 } from '../game/forge.js';
 import { getGemaById, GEM_LIST } from '../game/gems.js';
 import { api } from '../api.js';
@@ -228,7 +229,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
       const itemParaInventario = {
         id: resultadoCraft.equip.id || equipId,
         nome: equipSelecionado.nome,
-        tipo: equipSelecionado.tipo === 'arma' ? 'arma_fogo' : equipSelecionado.tipo,
+        tipo: tipoInventarioEquipamento(equipSelecionado),
         raridade: equipSelecionado.raridade,
         peso: equipSelecionado.peso,
         slots: equipSelecionado.slots,

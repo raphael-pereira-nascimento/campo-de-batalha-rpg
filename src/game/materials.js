@@ -5,6 +5,7 @@
 
 import {
   normalizarMaterial,
+  normalizarTexto,
   getBiomas,
   precoKgEmCents,
 } from './materialRules.js';
@@ -475,11 +476,11 @@ export function getMateriaisCompletos() {
 }
 
 export function getMaterialPorAlias(nomeOuAlias) {
-  const alvo = String(nomeOuAlias || '').trim().toLowerCase();
+  const alvo = normalizarTexto(nomeOuAlias);
   if (!alvo) return null;
   return MATERIAL_LIST.find((material) => (
-    material.nome.toLowerCase() === alvo
-    || (material.aliases || []).some((alias) => String(alias).toLowerCase() === alvo)
+    normalizarTexto(material.nome) === alvo
+    || (material.aliases || []).some((alias) => normalizarTexto(alias) === alvo)
   )) || null;
 }
 

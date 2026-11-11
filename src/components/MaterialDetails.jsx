@@ -8,6 +8,7 @@ import {
   formatarPrecoPorKg,
   getEfeitoPorEquipamento,
 } from '../game/materialRules.js';
+import MaterialThumb from './MaterialThumb.jsx';
 
 const ROTULOS_PENDENTES = {
   id: 'Identificador',
@@ -130,11 +131,7 @@ export default function MaterialDetails({ material, onClose }) {
       >
         <header className="material-detalhe-head">
           <div className="material-detalhe-identidade">
-            <div className="material-thumb material-thumb-grande" aria-hidden="true">
-              {material.imagem
-                ? <img src={material.imagem} alt="" />
-                : <span className="material-thumb-inicial">{material.nome.charAt(0).toUpperCase()}</span>}
-            </div>
+            <MaterialThumb material={material} grande />
             <div>
               <h2>{material.nome}</h2>
               <div className="material-card-tags">

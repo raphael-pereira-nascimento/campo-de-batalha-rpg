@@ -4,6 +4,8 @@ import {
   calcularCustoFabricacao,
   craftarEquipamento,
   podeUsarFerroEstigio,
+  calcularBonusConjunto,
+  tipoInventarioEquipamento,
 } from '../../src/game/forge.js';
 import { getMaterialById } from '../../src/game/materials.js';
 import {
@@ -226,5 +228,84 @@ describe('forja — mapeamento direto', () => {
     expect(getCategoriaEfeitoEquipamento({ tipo: 'cajado' })).toBe('cajado');
     expect(getCategoriaEfeitoEquipamento({ tipo: 'arma', subcategoria: 'fogo' })).toBe('armaFogo');
     expect(getCategoriaEfeitoEquipamento({ tipo: 'arma', subcategoria: 'impacto' })).toBe('armaImpacto');
+  });
+});
+
+describe('forja — tipo gravado no inventário', () => {
+  it('mantém arma_fogo apenas para armas de fogo', () => {
+    expect(tipoInventarioEquipamento({ tipo: 'arma', subcategoria: 'fogo' })).toBe('arma_fogo');
+    expect(tipoInventarioEquipamento({ tipo: 'arma', subcategoria: 'lâmina' })).toBe('arma');
+    expect(tipoInventarioEquipamento({ tipo: 'arma', subcategoria: 'impacto' })).toBe('arma');
+  });
+
+  it('preserva os demais tipos', () => {
+    expect(tipoInventarioEquipamento({ tipo: 'armadura' })).toBe('armadura');
+    expect(tipoInventarioEquipamento({ tipo: 'acessorio' })).toBe('acessorio');
+    expect(tipoInventarioEquipamento({ tipo: 'cajado' })).toBe('cajado');
+  });
+
+  it('usa equipamento como fallback para entrada vazia', () => {
+    expect(tipoInventarioEquipamento(null)).toBe('equipamento');
+    expect(tipoInventarioEquipamento(undefined)).toBe('equipamento');
+  });
+});
+
+describe('forja — craftarEquipamento repassa quantidades', () => {
+  it('usa as quantidades informadas no custo e no item', () => {
+    const padrao = craftarEquipamento('espada_longa', 'ferro', 'estanho');
+    const custom = craftarEquipamento(
+      'espada_longa',
+      'ferro',
+      'estanho',
+      [],
+      null,
+      { primarioKg: 2, secundarioKg: 1 },
+    );
+
+    expect(padrao.ok).toBe(true);
+    expect(custom.ok).toBe(true);
+    expect(padrao.custo).toBe(657);
+    expect(custom.custo).toBe(666);
+    expect(custom.equip.custo).toBe(666);
+  });
+
+  it('mantém o padrão de 1 kg + 0,25 kg quando quantidades não são informadas', () => {
+    expect(craftarEquipamento('espada_longa', 'ferro', 'estanho').custo).toBe(657);
+  });
+});
+
+describe('forja — bônus de conjunto', () => {
+  it('aceita o material principal como id (fichas antigas)', () => {
+    const bonus = calcularBonusConjunto({
+      arma: { materiais: { primario: 'ferro' } },
+      armadura: { materiais: { primario: 'ferro' } },
+    });
+    expect(bonus).toEqual({ forca: 1 });
+  });
+
+  it('aceita o material principal como objeto (item craftado)', () => {
+    const bonus = calcularBonusConjunto({
+      arma: { materiais: { primario: getMaterialById('ferro') } },
+      armadura: { materiais: { primario: getMaterialById('ferro') } },
+    });
+    expect(bonus).toEqual({ forca: 1 });
+  });
+
+  it('não conta item quebrado nem slot sem materiais', () => {
+    const bonus = calcularBonusConjunto({
+      arma: { materiais: { primario: getMaterialById('ferro') } },
+      armadura: { materiais: { primario: getMaterialById('ferro') }, durabilidade: 0 },
+      acessorio: null,
+    });
+    expect(bonus).toEqual({});
+  });
+
+  it('combina id e objeto no mesmo conjunto', () => {
+    const bonus = calcularBonusConjunto({
+      arma: { materiais: { primario: 'aco' } },
+      armadura: { materiais: { primario: getMaterialById('aco') } },
+      acessorio: { materiais: { primario: getMaterialById('aco') } },
+    });
+    expect(bonus).toEqual({ forca: 3, resistencia: 1 });
   });
 });

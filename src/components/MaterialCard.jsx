@@ -5,21 +5,7 @@ import {
   formatarPrecoPorKg,
   precoKgEmCents,
 } from '../game/materialRules.js';
-
-// Placeholder com a inicial do material + selo "Imagem pendente" (decisão C-10).
-function MaterialThumb({ material }) {
-  const inicial = (material.nome || '?').trim().charAt(0).toUpperCase();
-  const temImagem = Boolean(material.imagem);
-
-  return (
-    <div className="material-thumb" aria-hidden="true">
-      {temImagem
-        ? <img src={material.imagem} alt="" onError={(evento) => { evento.currentTarget.style.display = 'none'; }} />
-        : <span className="material-thumb-inicial">{inicial}</span>}
-      {!temImagem && <span className="material-thumb-selo">Imagem pendente</span>}
-    </div>
-  );
-}
+import MaterialThumb from './MaterialThumb.jsx';
 
 export default function MaterialCard({ material, onSelect }) {
   const categoria = getCategoriaInfo(material);

@@ -211,6 +211,36 @@ describe('Podridão — tratamentos', () => {
     expect(turno.danoAplicado).toBe(0);
     expect(turno.turnosAcumulados).toBe(0);
   });
+
+  it('não transforma vida atual 0 em vida cheia ao tratar', () => {
+    const estado = calcularEstadoPodridao({
+      vidaMaximaOriginal: 1000,
+      vidaAtual: 0,
+      turnosAcumulados: 2,
+    });
+    expect(estado.vidaAtual).toBe(0);
+
+    const curado = tratarPodridao(estado, 'basico').estado;
+    expect(curado.vidaMaximaReduzida).toBe(1000);
+    expect(curado.vidaAtual).toBe(0);
+  });
+
+  it('limita vida atual negativa a zero, antes e depois do tratamento', () => {
+    const estado = calcularEstadoPodridao({
+      vidaMaximaOriginal: 1000,
+      vidaAtual: -50,
+      turnosAcumulados: 2,
+    });
+    expect(estado.vidaAtual).toBe(0);
+
+    const curado = tratarPodridao(estado, 'basico').estado;
+    expect(curado.vidaAtual).toBe(0);
+  });
+
+  it('sem vida atual informada, considera a vida máxima', () => {
+    const estado = calcularEstadoPodridao({ vidaMaximaOriginal: 1000, turnosAcumulados: 2 });
+    expect(estado.vidaAtual).toBe(850);
+  });
 });
 
 describe('Podridão — efeito das armas (documento oficial)', () => {

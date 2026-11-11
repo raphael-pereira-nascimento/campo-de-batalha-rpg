@@ -111,9 +111,12 @@ export function calcularBonusConjunto(equipamentoEquipado = {}) {
     if (!slot || !slot.materiais) continue;
     // Item quebrado não conta para o conjunto
     if (slot.durabilidade != null && slot.durabilidade <= 0) continue;
+    // `materiais.primario` pode ser o id (fichas antigas) ou o objeto completo
+    // devolvido pela forja; o bônus de conjunto usa sempre o id.
     const matPrimario = slot.materiais.primario;
-    if (matPrimario) {
-      contagemMateriais[matPrimario] = (contagemMateriais[matPrimario] || 0) + 1;
+    const materialId = typeof matPrimario === 'string' ? matPrimario : matPrimario?.id;
+    if (materialId) {
+      contagemMateriais[materialId] = (contagemMateriais[materialId] || 0) + 1;
     }
   }
 
@@ -260,7 +263,15 @@ export function calcularCustoFabricacao(equipId, materialPrimarioId, materialSec
 // CRAFTING DE EQUIPAMENTO
 // ============================================================================
 
-export function craftarEquipamento(equipId, materialPrimarioId, materialSecundarioId, gemasSlotadas = [], personagem = null) {
+// Tipo gravado no inventário: armas de fogo continuam identificadas como
+// `arma_fogo`; as demais armas (lâmina/impacto) mantêm `arma`.
+export function tipoInventarioEquipamento(equipamento) {
+  if (!equipamento) return 'equipamento';
+  if (equipamento.tipo === 'arma' && equipamento.subcategoria === 'fogo') return 'arma_fogo';
+  return equipamento.tipo;
+}
+
+export function craftarEquipamento(equipId, materialPrimarioId, materialSecundarioId, gemasSlotadas = [], personagem = null, quantidades = null) {
   const equip = getEquipamentoById(equipId);
   if (!equip) return { ok: false, motivo: 'Equipamento não encontrado.' };
 
@@ -274,7 +285,7 @@ export function craftarEquipamento(equipId, materialPrimarioId, materialSecundar
   const resultado = calcularAtributosEquipamento(equipId, materialPrimarioId, materialSecundarioId, gemasSlotadas);
   if (!resultado.ok) return resultado;
 
-  const custo = calcularCustoFabricacao(equipId, materialPrimarioId, materialSecundarioId, gemasSlotadas);
+  const custo = calcularCustoFabricacao(equipId, materialPrimarioId, materialSecundarioId, gemasSlotadas, quantidades);
 
   let honrineo = null;
   if (personagem) {

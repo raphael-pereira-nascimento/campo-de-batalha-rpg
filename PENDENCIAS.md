@@ -1,6 +1,6 @@
 # Pendências — Materiais, Metais e Podridão
 
-Atualizado em 10/11/2026 — Etapa 6 (testes e documentação).
+Atualizado em 10/11/2026 — Etapa 7 (auditoria e correções).
 
 Este arquivo separa o que já foi **aprovado**, o que foi implementado como
 **provisório**, o que continua **pendente** e o que é apenas **sugestão**.
@@ -294,15 +294,24 @@ criador antes de virarem regra definitiva.
 #### D-14 — Commit e limpeza do pacote final
 
 - O commit-base `1c13525` (“parte 1 de implementação de minérios e metais”) já
-  existe e inclui a maior parte da implementação.
-- **Fora do commit atual:** `server/tests/forgeMaterials.test.js` e a versão
-  final deste `PENDENCIAS.md`; `server/tests/harness-navegador.js` também tem
-  uma alteração não commitada.
+  existe e inclui a maior parte da implementação; `b4ea563` é o commit mais
+  recente (“parte 2”).
+- **Fora do commit atual:** `server/tests/forgeMaterials.test.js`, a versão
+  final deste `PENDENCIAS.md`, a alteração de
+  `server/tests/harness-navegador.js` e as correções da auditoria (etapa 7).
+- As correções da auditoria tocam `src/game/forge.js`, `src/game/materials.js`,
+  `src/game/materialRules.js`, `src/game/podridao.js`,
+  `src/components/MaterialThumb.jsx`, `src/components/MaterialCard.jsx`,
+  `src/components/MaterialDetails.jsx`, `src/components/MaterialComposition.jsx`
+  e `src/pages/Forge.jsx`.
+- Os testes de regressão da auditoria estão em
+  `server/tests/forgeMaterials.test.js`, `materialCatalog.test.js`,
+  `materialSchema.test.js` e `podridao.test.js`.
 - O arquivo temporário `server/tests/preview-materiais.jsx` foi removido do
   pacote final por ser apenas uma prévia local da interface.
-- **Decisão necessária:** commitar o teste de integração da forja e este
-  `PENDENCIAS.md`; decidir se os arquivos de harness continuam no repositório
-  ou viram ferramentas locais descartáveis.
+- **Decisão necessária:** commitar as correções, os testes de integração da
+  forja e este `PENDENCIAS.md`; decidir se os arquivos de harness continuam no
+  repositório ou viram ferramentas locais descartáveis.
 
 ### 3.2 Dados oficiais ainda ausentes
 
@@ -356,6 +365,23 @@ O que falta preencher com o criador/documentação:
   exposição acumula, quando o dano é aplicado e como o tratamento é usado.
 - **Paridade offline/online:** a forja e o combate têm caminhos separados; falta
   garantir que os mesmos efeitos valham nos dois.
+- **Salvar item craftado no modo online:** `src/api.js` chama
+  `POST /api/characters/craft`, mas essa rota não existe em
+  `server/src/index.js`. No modo offline o item é gravado; no modo online o
+  salvamento falha. Falta criar a rota (com validação de personagem, item e
+  custo) ou alterar o cliente para usar uma rota existente.
+- **Equipar item craftado:** `equipItem` (online e offline) procura o item pelo
+  `id` nos presets de equipamento e ignora a cópia do inventário. Com isso,
+  `atributosFinais`, materiais, durabilidade e gemas do item craftado são
+  descartados ao equipar. Falta fazer `equipItem` preferir o item do inventário
+  quando o `id` corresponder a um equipamento craftado.
+- **Atributos finais no personagem:** `calcularAtributosPersonagem` soma
+  `slot.bonus`, mas não usa `slot.atributosFinais`. Mesmo depois de corrigir o
+  `equipItem`, os bônus de composição não chegariam à ficha sem esse ajuste.
+- **Seleção de materiais na forja:** `Forge.jsx` monta as listas com
+  `getMateriaisPorTipo`/raridade. Materiais futuros de categoria `magico` ou
+  `especial` com efeitos podem ficar de fora da seleção; falta revisar o filtro
+  quando novas fichas forem cadastradas.
 
 ### 3.4 Validação e limitações do ambiente
 
@@ -364,9 +390,10 @@ O que falta preencher com o criador/documentação:
   executados.
 - A validação foi feita com o binário do esbuild já presente em
   `node_modules`, um servidor estático em PowerShell e o harness de navegador.
-- Resultado do harness: **115/115 testes passam**, sem falhas.
+- Resultado do harness após a auditoria: **135/135 testes passam**, sem falhas.
 - A interface foi validada no navegador: catálogo com 49 fichas, filtros,
-  busca por alias, ficha detalhada e composição com custo.
+  busca por alias (inclusive sem acento), ficha detalhada e composição com custo
+  parcial e limitação de kg.
 - A prévia registrou apenas respostas HTTP 404 para as imagens ausentes; não
   houve erro de aplicação no console.
 - **Build de produção, teste E2E oficial, responsividade e acessibilidade
@@ -375,7 +402,25 @@ O que falta preencher com o criador/documentação:
   GitHub Desktop. O commit-base já foi criado, mas os arquivos citados em D-14
   continuam fora dele.
 
-### 3.5 Regras gerais do RPG ainda pendentes (P-01 a P-18)
+### 3.5 Correções aplicadas na auditoria
+
+Estas correções foram feitas sobre a implementação já commitada. Não alteram
+nomes, valores, fórmulas nem efeitos oficiais; apenas corrigem o comportamento
+do código.
+
+| Área | Correção |
+| --- | --- |
+| Imagem do material | `MaterialThumb.jsx` centraliza o fallback com inicial e selo “Imagem pendente” para cards e ficha; a imagem que falha ao carregar também cai no fallback |
+| Composição — kg | Quantidade negativa é limitada a zero; o valor exibido usa o kg já normalizado |
+| Composição — preço | Custo parcial é identificado como “Parcial” e lista os materiais sem preço por kg |
+| Custo da forja | `craftarEquipamento` repassa `quantidades` para `calcularCustoFabricacao` |
+| Inventário | `tipoInventarioEquipamento` grava `arma_fogo` somente para armas de fogo e preserva `arma`, `armadura` e `acessorio` |
+| Aliases | `getMaterialPorAlias` usa `normalizarTexto`, encontrando aliases com ou sem acento; o import ausente em `materials.js` foi corrigido |
+| Bônus de conjunto | `calcularBonusConjunto` aceita `materiais.primario` como id ou objeto |
+| Podridão — vida atual | Vida 0 permanece 0 (personagem caído) e valores negativos são limitados a zero, antes e depois do tratamento |
+| Validação de efeitos | `validarMaterial` confere `percentuais`, `penalidades`, `condicoes` e `especial` |
+
+### 3.6 Regras gerais do RPG ainda pendentes (P-01 a P-18)
 
 Estas pendências já existiam antes da etapa de materiais e continuam válidas.
 Foram mantidas aqui para não se perderem.

@@ -5,6 +5,7 @@ import {
   getMaterialById,
   getMateriaisPorCategoria,
   getMateriaisParaGolem,
+  getMaterialPorAlias,
   calcularPrecoMaterial,
 } from '../../src/game/materials.js';
 import {
@@ -179,5 +180,30 @@ describe('catálogo — categorias e golems', () => {
       'aco', 'prata', 'ouro', 'latão', 'obsidiana', 'diamante',
     ];
     for (const id of esperados) expect(MATERIAIS[id], id).toBeTruthy();
+  });
+});
+
+describe('catálogo — busca por nome e alias', () => {
+  it('encontra pelo nome exato', () => {
+    expect(getMaterialPorAlias('Ferro')?.id).toBe('ferro');
+    expect(getMaterialPorAlias('Aço-Rubi')?.id).toBe('acoRubi');
+  });
+
+  it('encontra por alias com e sem acento', () => {
+    // O alias "Honrineo" (sem acento) aponta para "Honríneo".
+    expect(getMaterialPorAlias('Honrineo')?.id).toBe('honrineo');
+    expect(getMaterialPorAlias('Honríneo')?.id).toBe('honrineo');
+    expect(getMaterialPorAlias('aco rubi')?.id).toBe('acoRubi');
+    expect(getMaterialPorAlias('Aço Rubi')?.id).toBe('acoRubi');
+  });
+
+  it('ignora caixa e espaços nas pontas', () => {
+    expect(getMaterialPorAlias('  FERRO FRIO  ')?.id).toBe('ferroFrio');
+  });
+
+  it('retorna null para nome vazio ou desconhecido', () => {
+    expect(getMaterialPorAlias('')).toBeNull();
+    expect(getMaterialPorAlias('   ')).toBeNull();
+    expect(getMaterialPorAlias('material inexistente')).toBeNull();
   });
 });

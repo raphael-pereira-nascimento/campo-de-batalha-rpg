@@ -92,6 +92,15 @@ export function getEstagioPodridao(estagioId) {
   return PODRIDAO_ESTAGIOS.find((estagio) => estagio.id === Number(estagioId)) || null;
 }
 
+// Vida atual nunca fica negativa nem passa do máximo informado.
+// Zero é um valor válido (personagem caído) e não pode virar "vida cheia".
+function limitarVidaAtual(vidaAtual, vidaMaxima) {
+  if (vidaAtual == null) return vidaMaxima;
+  const valor = Number(vidaAtual);
+  if (!Number.isFinite(valor)) return vidaMaxima;
+  return Math.max(0, Math.min(valor, vidaMaxima));
+}
+
 export function getEstagioPorTurnos(turnosAcumulados) {
   const turnos = Math.max(0, Number(turnosAcumulados) || 0);
   let atual = PODRIDAO_ESTAGIOS[0];
@@ -126,7 +135,7 @@ export function calcularEstadoPodridao({
       vidaMaximaReduzida: vidaMax,
       danoPorTurno: 0,
       danoPorTurnoValor: 0,
-      vidaAtual: vidaAtual == null ? vidaMax : Math.min(Number(vidaAtual) || vidaMax, vidaMax),
+      vidaAtual: limitarVidaAtual(vidaAtual, vidaMax),
     };
   }
 
@@ -145,7 +154,7 @@ export function calcularEstadoPodridao({
     vidaMaximaReduzida,
     danoPorTurno: estagio.danoPorTurno,
     danoPorTurnoValor: dano,
-    vidaAtual: vidaAtual == null ? vidaMaximaReduzida : Math.min(Number(vidaAtual) || 0, vidaMaximaReduzida),
+    vidaAtual: limitarVidaAtual(vidaAtual, vidaMaximaReduzida),
   };
 }
 
