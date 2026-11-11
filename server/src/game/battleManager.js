@@ -18,6 +18,7 @@ import {
   armaParaAtaque,
   skillFromSpell,
   gemsAttrs,
+  itensComGemas,
 } from './data.js';
 import { GEMS } from './gems.js';
 import { getGemDef } from './forgeGems.js';
@@ -563,14 +564,13 @@ export class BattleManager {
       p.mp = clamp(p.mp + extra, 0, p.mpMax);
       if (p.mp > before) battle.log.push(makeLog(`✨ ${p.charName} recupera mais ${p.mp - before} de MP (passiva).`, 'heal'));
     }
-    // Efeitos de gemas socketadas (acessório/armadura)
+    // Efeitos de gemas socketadas (arma/armadura/acessório)
     if (!p.isMonster && p.equipment) {
-      for (const [slot, item] of Object.entries(p.equipment)) {
-        if (!item) continue;
+      for (const { categoria, item } of itensComGemas(p.equipment)) {
         for (const gemId of item.socketedGems || []) {
           const g = getGemDef(gemId) || GEMS[gemId];
           if (!g) continue;
-          const fx = g.efeitos?.[slot];
+          const fx = g.efeitos?.[categoria];
           if (fx?.regen && p.alive) {
             const h = Math.max(1, fx.regen);
             const b = p.hp;
@@ -810,12 +810,11 @@ export class BattleManager {
     if (efeito.furia && p.alive && p.hp < p.hpMax * 0.5) mult *= 1.2;
     if (p.ultimateMode) mult *= 1 + (p.ultimateModeMult || 0);
     if (!p.isMonster && p.equipment) {
-      for (const [slot, item] of Object.entries(p.equipment)) {
-        if (!item) continue;
+      for (const { categoria, item } of itensComGemas(p.equipment)) {
         for (const gemId of item.socketedGems || []) {
           const g = getGemDef(gemId) || GEMS[gemId];
           if (!g) continue;
-          const fx = g.efeitos?.[slot];
+          const fx = g.efeitos?.[categoria];
           if (fx?.bonus) {
             if (fx.bonus.forca) mult *= 1.05;
           }
@@ -829,12 +828,11 @@ export class BattleManager {
     let mult = efeitosDe(p).danoMagicoMult || 1;
     if (p.ultimateMode) mult *= 1 + (p.ultimateModeMult || 0);
     if (!p.isMonster && p.equipment) {
-      for (const [slot, item] of Object.entries(p.equipment)) {
-        if (!item) continue;
+      for (const { categoria, item } of itensComGemas(p.equipment)) {
         for (const gemId of item.socketedGems || []) {
           const g = getGemDef(gemId) || GEMS[gemId];
           if (!g) continue;
-          const fx = g.efeitos?.[slot];
+          const fx = g.efeitos?.[categoria];
           if (fx?.bonus) {
             if (fx.bonus.inteligencia) mult *= 1.05;
           }

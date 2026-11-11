@@ -5,6 +5,7 @@ import {
   effectiveAttributes,
   deriveStats,
   gemsAttrs,
+  itensComGemas,
   POTIONS,
   TAVERN_DRINKS,
   TAVERN_FOODS,
@@ -283,6 +284,36 @@ describe('gemas — estado bruto/polido e efeitos por slot', () => {
       armadura: { socketedGems: ['pedraDeSangue'] },        // resistencia 1
     };
     expect(gemsAttrs(equipment)).toEqual({ forca: 3, resistencia: 1 });
+  });
+
+  it('itensComGemas classifica armas aninhadas como arma', () => {
+    const equipment = {
+      arma: { id: 'espada_longa' },
+      armas: {
+        perto: { id: 'espada_longa' },
+        distancia: { id: 'arco_longo' },
+      },
+      armadura: { id: 'couro' },
+      acessorio: { id: 'anel_de_forca' },
+    };
+    expect(itensComGemas(equipment).map(({ categoria, item }) => [categoria, item.id])).toEqual([
+      ['arma', 'espada_longa'],
+      ['arma', 'arco_longo'],
+      ['armadura', 'couro'],
+      ['acessorio', 'anel_de_forca'],
+    ]);
+  });
+
+  it('gemsAttrs lê as gemas das armas em equipment.armas sem duplicar a arma legada', () => {
+    const equipment = {
+      arma: { id: 'espada_longa', socketedGems: ['ametista'] },
+      armas: {
+        perto: { id: 'espada_longa', socketedGems: ['ametista'] },
+        distancia: { id: 'arco_longo', socketedGems: ['diamante'] },
+      },
+      armadura: { socketedGems: ['lapis_lazuli'] },
+    };
+    expect(gemsAttrs(equipment)).toEqual({ inteligencia: 4, forca: 2 });
   });
 
   it('effectiveAttributes aplica efeitos de gemas socketadas', () => {

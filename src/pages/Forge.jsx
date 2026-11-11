@@ -14,7 +14,7 @@ import {
   podeUsarFerroEstigio, aplicarHonrineo, melhorarEquipamento, calcularCustoMelhoria,
   inicializarDurabilidade, calcularDurabilidadeMax, calcularCustoReparoPorPonto,
   calcularCustoReparoCompleto, repararEquipamento, desmontarEquipamento,
-  tipoInventarioEquipamento,
+  tipoInventarioEquipamento, gemasSlotadasParaSocketedGems,
 } from '../game/forge.js';
 import { getGemaById, GEM_LIST } from '../game/gems.js';
 import { api } from '../api.js';
@@ -231,6 +231,10 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
     setResultado(resultadoCraft);
 
     try {
+      const gemasSocketadas = gemasSlotadasParaSocketedGems(
+        resultadoCraft.equip.gemasSlotadas || [],
+        equipSelecionado.slots || 0,
+      );
       const itemParaInventario = {
         id: resultadoCraft.equip.id || equipId,
         nome: equipSelecionado.nome,
@@ -241,11 +245,15 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
         socketSlots: equipSelecionado.slots || 0,
         bonus: equipSelecionado.bonus,
         penalidade: equipSelecionado.penalidade,
-        atributosFinais: resultadoCraft.atributos,
+        // Bônus-base + materiais, sem as gemas: elas entram via `socketedGems`
+        // para não duplicar os atributos no cálculo de combate.
+        atributosFinais: resultadoCraft.atributosSemGemas,
         materiais: resultadoCraft.equip.materiais,
         custo: resultadoCraft.custo,
         honrineoAplicado: resultadoCraft.equip.honrineoAplicado,
         gemasSlotadas: resultadoCraft.equip.gemasSlotadas || [],
+        socketedGems: gemasSocketadas.socketedGems,
+        socketedGemEstados: gemasSocketadas.socketedGemEstados,
         descricao: equipSelecionado.descricao,
         subcategoria: equipSelecionado.subcategoria,
         categoria: equipSelecionado.categoria,

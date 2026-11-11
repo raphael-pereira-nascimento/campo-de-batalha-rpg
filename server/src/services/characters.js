@@ -656,6 +656,25 @@ function mapaAtributos(valor) {
   return limpo;
 }
 
+const ESTADOS_GEMA = new Set(['bruta', 'lapidada', 'polido', 'perfeita', 'destruida']);
+
+// `socketedGems` é indexado por slot: posições vazias viram null. Mantemos o
+// tamanho para não deslocar as gemas já encaixadas.
+function listaGemas(valor, max = 20) {
+  if (!Array.isArray(valor)) return [];
+  return valor.slice(0, max).map((g) => textoLimitado(g, 60) || null);
+}
+
+// Alinha os estados com a lista de gemas; qualquer estado desconhecido vira
+// null e o desencaixe cai no fallback 'polido'.
+function listaEstadosGema(valor, total, max = 20) {
+  const origem = Array.isArray(valor) ? valor : [];
+  const limite = Math.max(0, Math.min(Number(total) || 0, max));
+  const lista = origem.slice(0, limite).map((e) => (ESTADOS_GEMA.has(e) ? e : null));
+  while (lista.length < limite) lista.push(null);
+  return lista;
+}
+
 function objetoLimitado(valor, maxJson = 20000) {
   if (!isObj(valor)) return null;
   try {
@@ -688,6 +707,9 @@ export function sanitizarItemCraftado(item, inventario = [], { atualizar = false
     throw new Error('Categoria de arma inválida.');
   }
 
+  const socketedGems = listaGemas(item.socketedGems);
+  const socketedGemEstados = listaEstadosGema(item.socketedGemEstados, socketedGems.length);
+
   const salvo = {
     id: atualizar
       ? textoLimitado(item.id, 80)
@@ -704,6 +726,8 @@ export function sanitizarItemCraftado(item, inventario = [], { atualizar = false
         gemaId: textoLimitado(g?.gemaId, 60) || null,
       }))
       : [],
+    socketedGems,
+    socketedGemEstados,
     descricao: textoLimitado(item.descricao, 2000) || null,
     subcategoria: textoLimitado(item.subcategoria, 30) || null,
     categoria,

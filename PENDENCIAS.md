@@ -454,8 +454,11 @@ Nenhuma regra, fórmula ou valor oficial foi alterado.
 | Atributos finais | `effectiveAttributes` (cliente e servidor) usa `atributosFinais` no lugar de `bonus`, sem somar os dois; `calcularAtributosPersonagem` segue a mesma regra |
 | Atributos de combate | A peça craftada passa a gravar `defesa`, `alcance`, `elemento`, `efeito`, `alvo`, `alvos`, `splash` e `recarga` da definição-base; sem isso, armaduras perdiam a defesa e armas de fogo viravam corpo a corpo |
 | Slots de gema | O item craftado passa a gravar `socketSlots`, permitindo encaixar gemas depois de equipado |
+| Gemas no craft | As gemas escolhidas na forja viram `socketedGems`/`socketedGemEstados`; `atributosFinais` guarda apenas bônus-base + materiais e `gemsAttrs` aplica os efeitos da gema, sem duplicar atributos |
+| Gemas em armas | `gemsAttrs` e os loops de regeneração/multiplicadores do servidor passam a varrer `equipment.armas` com a categoria `arma`, cobrindo as até três armas equipadas e a arma legada sem duplicar |
+| Arquivo temporário | `preview-materiais-entry.jsx` foi removido por não ser referenciado pelo projeto |
 | Seleção de materiais | `Forge.jsx` passou a montar a lista por `categoria` (minério, metal, especial e mágico), sem depender só do campo legado `tipo` |
-| Testes | 415/415 testes unitários passam; build de produção (`vite build`) conclui sem erro |
+| Testes | 421/421 testes unitários passam; build de produção (`vite build`) conclui sem erro |
 
 ---
 

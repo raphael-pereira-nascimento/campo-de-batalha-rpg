@@ -399,6 +399,26 @@ describe('sanitizarItemCraftado — forja online', () => {
     expect(salvo.slots).toBe(2);
   });
 
+  it('preserva socketedGems e alinha socketedGemEstados ao número de slots', () => {
+    const salvo = sanitizarItemCraftado({
+      ...base,
+      socketedGems: [null, 'rubi', 'diamante'],
+      socketedGemEstados: ['polido', 'qualquer', 'perfeita'],
+    }, []);
+    expect(salvo.socketedGems).toEqual([null, 'rubi', 'diamante']);
+    // Estado desconhecido vira null; os estados informados são preservados.
+    expect(salvo.socketedGemEstados).toEqual(['polido', null, 'perfeita']);
+  });
+
+  it('preenche os estados quando só as gemas socketadas são informadas', () => {
+    const salvo = sanitizarItemCraftado({
+      ...base,
+      socketedGems: ['rubi', null],
+    }, []);
+    expect(salvo.socketedGems).toEqual(['rubi', null]);
+    expect(salvo.socketedGemEstados).toEqual([null, null]);
+  });
+
   it('preserva os campos de combate do equipamento-base', () => {
     const salvo = sanitizarItemCraftado({
       ...base,
