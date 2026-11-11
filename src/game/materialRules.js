@@ -120,6 +120,45 @@ export const EQUIPAMENTO_CATEGORIAS = {
 
 export const CATEGORIAS_MAGICAS = ['cajado', 'varinha', 'grimorio', 'orbe', 'catalisador'];
 
+// ── Tipos de efeito configuráveis ───────────────────────────────────────────────────
+// O tipo descreve a natureza do efeito; o sinal fica implícito no próprio tipo.
+// Ex.: `reducao` com valor 40 significa "reduz 40%", não "-40%".
+export const TIPOS_EFEITO = {
+  bonus:        { nome: 'Bônus',        sinal: 1 },
+  reducao:      { nome: 'Redução',      sinal: -1 },
+  resistencia:  { nome: 'Resistência',  sinal: 1 },
+  chance:       { nome: 'Chance',       sinal: 1 },
+  custo:        { nome: 'Custo',        sinal: -1 },
+  penalidade:   { nome: 'Penalidade',   sinal: -1 },
+  dano:         { nome: 'Dano',         sinal: -1 },
+  cura:         { nome: 'Cura',         sinal: 1 },
+  imunidade:    { nome: 'Imunidade',    sinal: 0 },
+  especial:     { nome: 'Especial',     sinal: 0 },
+  adaptacao:    { nome: 'Adaptação',    sinal: 0 },
+  armazenamento:{ nome: 'Armazenamento', sinal: 0 },
+};
+
+export const UNIDADES_EFEITO = [
+  'percentual',
+  'percentualVidaMaxima',
+  'pontos',
+  'nivel',
+  'dado',
+  'kg',
+  'multiplicador',
+  'texto',
+];
+
+export const SISTEMAS_EFEITO = {
+  podridao:              { nome: 'Podridão do Tenebrium' },
+  corrupcaoRuidium:      { nome: 'Corrupção do Ruidium' },
+  contaminacaoPandemica: { nome: 'Contaminação Pandemônica' },
+};
+
+// Efeitos sem valor numérico escalável. O material secundário não os concede:
+// a regra de 25% só se aplica a valores; imunidade/adaptação são binárias.
+export const TIPOS_EFEITO_BINARIOS = ['imunidade', 'especial', 'adaptacao'];
+
 // Aplicações de ficha: mesmas chaves dos efeitos por equipamento.
 export const MATERIAL_APLICACOES = EQUIPAMENTO_CATEGORIAS;
 
@@ -215,6 +254,87 @@ export function normalizarTexto(valor) {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .trim();
+}
+
+// ── Normalização dos efeitos configuráveis ─────────────────────────────────────────
+export function normalizarModificador(modificador) {
+  if (!modificador || typeof modificador !== 'object' || Array.isArray(modificador)) {
+    return null;
+  }
+
+  const numeroOuNulo = (valor) => {
+    if (valor == null || valor === '') return null;
+    const numero = Number(valor);
+    return Number.isFinite(numero) ? numero : null;
+  };
+
+  const efeitoAplicado = modificador.efeitoAplicado
+    && typeof modificador.efeitoAplicado === 'object'
+    && !Array.isArray(modificador.efeitoAplicado)
+    ? { ...modificador.efeitoAplicado }
+    : null;
+
+  return {
+    ...modificador,
+    tipo: modificador.tipo || 'especial',
+    valor: numeroOuNulo(modificador.valor),
+    unidade: modificador.unidade || null,
+    alvo: modificador.alvo || modificador.descricao || '',
+    condicao: modificador.condicao || null,
+    duracao: modificador.duracao || null,
+    chance: numeroOuNulo(modificador.chance),
+    sistema: modificador.sistema || null,
+    status: modificador.status === 'pendente' ? 'pendente' : 'definido',
+    fonte: modificador.fonte || 'documento',
+    observacao: modificador.observacao || null,
+    duplicavel: modificador.duplicavel !== false,
+    efeitoAplicado,
+  };
+}
+
+export function normalizarEfeito(efeito) {
+  if (!efeito || typeof efeito !== 'object' || Array.isArray(efeito)) return null;
+
+  const objeto = (valor) => (
+    valor && typeof valor === 'object' && !Array.isArray(valor) ? { ...valor } : {}
+  );
+
+  return {
+    ...efeito,
+    desc: efeito.desc ?? efeito.descricao ?? '',
+    bonus: objeto(efeito.bonus),
+    percentuais: objeto(efeito.percentuais),
+    penalidades: objeto(efeito.penalidades),
+    condicoes: Array.isArray(efeito.condicoes) ? efeito.condicoes : [],
+    modificadores: Array.isArray(efeito.modificadores)
+      ? efeito.modificadores.map(normalizarModificador).filter(Boolean)
+      : [],
+  };
+}
+
+// Assinatura usada para "efeitos idênticos não se acumulam".
+export function chaveModificador(modificador) {
+  if (!modificador) return '';
+  return [
+    modificador.tipo,
+    normalizarTexto(modificador.alvo),
+    normalizarTexto(modificador.condicao),
+    normalizarTexto(modificador.sistema),
+    normalizarTexto(modificador.unidade),
+  ].join('|');
+}
+
+// Efeitos gerais entram primeiro; o efeito específico da categoria substitui o
+// geral quando a assinatura é idêntica.
+export function combinarModificadores(gerais = [], especificos = []) {
+  const mapa = new Map();
+  for (const modificador of gerais) {
+    if (modificador) mapa.set(chaveModificador(modificador), modificador);
+  }
+  for (const modificador of especificos) {
+    if (modificador) mapa.set(chaveModificador(modificador), modificador);
+  }
+  return [...mapa.values()];
 }
 
 export function normalizarPrecoPorKg(preco) {
@@ -353,6 +473,9 @@ export function normalizarMaterial(material) {
   for (const [chave, valor] of Object.entries(efeitosBase)) {
     if (!(chave in efeitos)) efeitos[chave] = valor;
   }
+  for (const chave of Object.keys(efeitos)) {
+    if (efeitos[chave]) efeitos[chave] = normalizarEfeito(efeitos[chave]);
+  }
 
   const fisicaBase = material.fisica && typeof material.fisica === 'object'
     ? material.fisica
@@ -396,6 +519,12 @@ export function normalizarMaterial(material) {
     restricoes: Array.isArray(material.restricoes) ? material.restricoes : [],
     observacoes: material.observacoes || null,
     efeitos,
+    efeitosGerais: Array.isArray(material.efeitosGerais)
+      ? material.efeitosGerais.map(normalizarModificador).filter(Boolean)
+      : [],
+    sistemas: Array.isArray(material.sistemas)
+      ? [...new Set(material.sistemas.filter(Boolean))]
+      : [],
     relacoes: Array.isArray(material.relacoes) ? material.relacoes : [],
     aliases: Array.isArray(material.aliases) ? material.aliases : [],
   };
@@ -432,7 +561,9 @@ export function camposPendentes(material) {
   }
 
   const efeitos = material.efeitos || {};
-  if (!Object.values(efeitos).some(Boolean)) pendentes.push('efeitos');
+  const temEfeitoDeCategoria = Object.values(efeitos).some(Boolean);
+  const temEfeitosGerais = Array.isArray(material.efeitosGerais) && material.efeitosGerais.length > 0;
+  if (!temEfeitoDeCategoria && !temEfeitosGerais) pendentes.push('efeitos');
 
   return pendentes;
 }
@@ -440,6 +571,46 @@ export function camposPendentes(material) {
 // ═════════════════════════════════════════════════════════════════════════════════════
 // VALIDAÇÃO
 // ═════════════════════════════════════════════════════════════════════════════════════
+
+export function validarModificador(modificador, contexto, erros) {
+  if (modificador == null) return;
+  if (typeof modificador !== 'object' || Array.isArray(modificador)) {
+    erros.push(`modificador inválido em ${contexto}.`);
+    return;
+  }
+  if (!TIPOS_EFEITO[modificador.tipo]) {
+    erros.push(`tipo de modificador inválido em ${contexto}: ${modificador.tipo ?? 'ausente'}.`);
+  }
+  if (modificador.unidade != null && !UNIDADES_EFEITO.includes(modificador.unidade)) {
+    erros.push(`unidade inválida em ${contexto}: ${modificador.unidade}.`);
+  }
+  if (modificador.valor != null && !Number.isFinite(Number(modificador.valor))) {
+    erros.push(`valor do modificador em ${contexto} deve ser numérico.`);
+  }
+  if (modificador.chance != null && !Number.isFinite(Number(modificador.chance))) {
+    erros.push(`chance do modificador em ${contexto} deve ser numérica.`);
+  }
+  if (modificador.status != null && !['definido', 'pendente'].includes(modificador.status)) {
+    erros.push(`status do modificador em ${contexto} inválido: ${modificador.status}.`);
+  }
+  if (modificador.sistema != null && !SISTEMAS_EFEITO[modificador.sistema]) {
+    erros.push(`sistema do modificador em ${contexto} inválido: ${modificador.sistema}.`);
+  }
+  for (const campo of ['alvo', 'condicao', 'duracao', 'observacao', 'fonte']) {
+    if (modificador[campo] != null && typeof modificador[campo] !== 'string') {
+      erros.push(`${campo} do modificador em ${contexto} deve ser texto.`);
+    }
+  }
+  if (modificador.duplicavel != null && typeof modificador.duplicavel !== 'boolean') {
+    erros.push(`duplicavel do modificador em ${contexto} deve ser booleano.`);
+  }
+  if (
+    modificador.efeitoAplicado != null
+    && (typeof modificador.efeitoAplicado !== 'object' || Array.isArray(modificador.efeitoAplicado))
+  ) {
+    erros.push(`efeitoAplicado do modificador em ${contexto} deve ser um objeto.`);
+  }
+}
 
 export function validarMaterial(material) {
   const pendentes = camposPendentes(material);
@@ -502,6 +673,22 @@ export function validarMaterial(material) {
   if (material.fisica != null && (typeof material.fisica !== 'object' || Array.isArray(material.fisica))) {
     erros.push('fisica deve ser um objeto.');
   }
+  if (material.efeitosGerais != null && !Array.isArray(material.efeitosGerais)) {
+    erros.push('efeitosGerais deve ser uma lista.');
+  } else if (Array.isArray(material.efeitosGerais)) {
+    material.efeitosGerais.forEach((modificador, indice) => {
+      validarModificador(modificador, `efeitosGerais[${indice}]`, erros);
+    });
+  }
+  if (material.sistemas != null) {
+    if (!Array.isArray(material.sistemas)) {
+      erros.push('sistemas deve ser uma lista.');
+    } else {
+      for (const sistema of material.sistemas) {
+        if (!SISTEMAS_EFEITO[sistema]) erros.push(`sistema inválido: ${sistema}.`);
+      }
+    }
+  }
 
   if (material.efeitos != null) {
     if (typeof material.efeitos !== 'object' || Array.isArray(material.efeitos)) {
@@ -541,6 +728,13 @@ export function validarMaterial(material) {
         }
         if (efeito.condicoes != null && !Array.isArray(efeito.condicoes)) {
           erros.push(`condições do efeito "${chave}" devem ser uma lista.`);
+        }
+        if (efeito.modificadores != null && !Array.isArray(efeito.modificadores)) {
+          erros.push(`modificadores do efeito "${chave}" devem ser uma lista.`);
+        } else if (Array.isArray(efeito.modificadores)) {
+          efeito.modificadores.forEach((modificador, indice) => {
+            validarModificador(modificador, `efeitos.${chave}.modificadores[${indice}]`, erros);
+          });
         }
         if (
           efeito.especial != null
@@ -675,34 +869,49 @@ export function ordenarMateriais(materiais, ordenacao = 'nome') {
 // ═════════════════════════════════════════════════════════════════════════════════════
 
 export function materialTemEfeitos(material) {
-  return !!material && Object.values(material.efeitos || {}).some(Boolean);
+  if (!material) return false;
+  return Object.values(material.efeitos || {}).some(Boolean)
+    || (Array.isArray(material.efeitosGerais) && material.efeitosGerais.length > 0);
 }
 
-export function getEfeitoPorEquipamento(material, categoria) {
+export function getEfeitoPorEquipamento(material, categoria, opcoes = {}) {
   if (!material || !categoria) return null;
 
+  const incluirGerais = opcoes.incluirGerais !== false;
   const efeitos = material.efeitos || {};
   const direto = efeitos[categoria];
+  const fallback = !direto && CATEGORIAS_MAGICAS.includes(categoria)
+    ? efeitos.equipamentoMagico
+    : null;
+  const efeito = direto || fallback || null;
 
-  const montar = (efeito, origem) => ({
+  const gerais = incluirGerais && Array.isArray(material.efeitosGerais)
+    ? material.efeitosGerais
+    : [];
+
+  if (!efeito && gerais.length === 0) return null;
+
+  const montar = (base, origem) => ({
     chave: categoria,
     origem,
-    desc: efeito.desc || efeito.descricao || '',
-    bonus: efeito.bonus || {},
-    percentuais: efeito.percentuais || null,
-    penalidades: efeito.penalidades || null,
-    condicoes: Array.isArray(efeito.condicoes) ? efeito.condicoes : [],
-    especial: efeito.especial || null,
+    desc: base.desc || base.descricao || '',
+    bonus: base.bonus || {},
+    percentuais: base.percentuais || null,
+    penalidades: base.penalidades || null,
+    condicoes: Array.isArray(base.condicoes) ? base.condicoes : [],
+    especial: base.especial || null,
+    modificadores: Array.isArray(base.modificadores) ? base.modificadores : [],
     fallback: origem !== categoria,
   });
 
-  if (direto) return montar(direto, categoria);
+  const base = efeito
+    ? montar(efeito, direto ? categoria : 'equipamentoMagico')
+    : montar({}, 'efeitosGerais');
 
-  if (CATEGORIAS_MAGICAS.includes(categoria) && efeitos.equipamentoMagico) {
-    return montar(efeitos.equipamentoMagico, 'equipamentoMagico');
-  }
-
-  return null;
+  return {
+    ...base,
+    modificadores: combinarModificadores(gerais, base.modificadores),
+  };
 }
 
 export function getEfeitosPorCategoria(material) {
