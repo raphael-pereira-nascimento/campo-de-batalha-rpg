@@ -368,11 +368,24 @@ export function normalizarMaterial(material) {
 
   // Aplicações: usadas pela ficha e pelo filtro "Materiais utilizados em golens".
   const aplicacoesBase = Array.isArray(material.aplicacoes) ? material.aplicacoes : null;
+  const aplicacoesDerivadas = Object.entries(efeitos)
+    .filter(([chave, valor]) => valor && MATERIAL_APLICACOES[chave])
+    .map(([chave]) => chave);
+
+  // Propriedades gerais valem para todas as categorias de equipamento, mas não
+  // transformam automaticamente um material em material de golem: golem continua
+  // sendo um filtro por aplicação declarada na ficha (D-02).
+  if (!aplicacoesBase && efeitos.geral) {
+    for (const chave of Object.keys(MATERIAL_APLICACOES)) {
+      if (chave !== 'golem' && !aplicacoesDerivadas.includes(chave)) {
+        aplicacoesDerivadas.push(chave);
+      }
+    }
+  }
+
   const aplicacoes = aplicacoesBase
     ? [...new Set(aplicacoesBase.filter(Boolean))]
-    : Object.entries(efeitos)
-      .filter(([chave, valor]) => valor && MATERIAL_APLICACOES[chave])
-      .map(([chave]) => chave);
+    : aplicacoesDerivadas;
 
   const normalizado = {
     ...material,
@@ -527,7 +540,7 @@ export function validarMaterial(material) {
             }
           }
         }
-        for (const campo of ['percentuais', 'penalidades']) {
+        for (const campo of ['percentuais', 'penalidades', 'ajustes']) {
           if (efeito[campo] == null) continue;
           if (typeof efeito[campo] !== 'object' || Array.isArray(efeito[campo])) {
             erros.push(`${campo} do efeito "${chave}" deve ser um objeto.`);
@@ -541,6 +554,25 @@ export function validarMaterial(material) {
         }
         if (efeito.condicoes != null && !Array.isArray(efeito.condicoes)) {
           erros.push(`condições do efeito "${chave}" devem ser uma lista.`);
+        }
+        if (efeito.chance != null) {
+          const chance = Number(efeito.chance);
+          if (!Number.isFinite(chance) || chance < 0 || chance > 100) {
+            erros.push(`chance do efeito "${chave}" deve ser um número entre 0 e 100.`);
+          }
+        }
+        if (efeito.duracao != null && typeof efeito.duracao !== 'string') {
+          erros.push(`duração do efeito "${chave}" deve ser texto.`);
+        }
+        if (
+          efeito.alvo != null
+          && typeof efeito.alvo !== 'string'
+          && !Array.isArray(efeito.alvo)
+        ) {
+          erros.push(`alvo do efeito "${chave}" deve ser texto ou lista.`);
+        }
+        if (efeito.status != null && typeof efeito.status !== 'string') {
+          erros.push(`status do efeito "${chave}" deve ser texto.`);
         }
         if (
           efeito.especial != null
@@ -691,7 +723,12 @@ export function getEfeitoPorEquipamento(material, categoria) {
     bonus: efeito.bonus || {},
     percentuais: efeito.percentuais || null,
     penalidades: efeito.penalidades || null,
+    ajustes: efeito.ajustes || null,
     condicoes: Array.isArray(efeito.condicoes) ? efeito.condicoes : [],
+    chance: efeito.chance ?? null,
+    duracao: efeito.duracao ?? null,
+    alvo: efeito.alvo ?? null,
+    status: efeito.status ?? null,
     especial: efeito.especial || null,
     fallback: origem !== categoria,
   });
@@ -700,6 +737,12 @@ export function getEfeitoPorEquipamento(material, categoria) {
 
   if (CATEGORIAS_MAGICAS.includes(categoria) && efeitos.equipamentoMagico) {
     return montar(efeitos.equipamentoMagico, 'equipamentoMagico');
+  }
+
+  // Efeitos gerais não exigem repetição em todas as categorias. Golens ficam de
+  // fora do fallback porque dependem de aplicação declarada na ficha.
+  if (categoria !== 'golem' && efeitos.geral) {
+    return montar(efeitos.geral, 'geral');
   }
 
   return null;
@@ -779,27 +822,94 @@ export function calcularBonusComposicao(materialPrincipal, materialSecundario, c
     bonusFinal[atributo] = (bonusFinal[atributo] || 0) + valor;
   }
 
-  // Percentuais seguem a mesma regra: idêntico não acumula e o secundário entra com 25%.
+  // Mapa numérico do secundário: chave idêntica não acumula e o valor entra com 25%,
+  // truncado em direção a zero (D-07).
+  const aplicarParcial = (principalMap, secundarioMap, tipo, motivoDuplicado) => {
+    const aplicado = {};
+    for (const [chave, valor] of Object.entries(secundarioMap)) {
+      if (Object.prototype.hasOwnProperty.call(principalMap, chave)) {
+        ignorados.push({
+          atributo: chave,
+          tipo,
+          motivo: motivoDuplicado,
+          valorPrincipal: principalMap[chave],
+          valorSecundario: valor,
+        });
+        continue;
+      }
+      const parcial = Math.trunc(Number(valor) * 0.25);
+      if (parcial !== 0) {
+        aplicado[chave] = parcial;
+      } else {
+        ignorados.push({
+          atributo: chave,
+          tipo,
+          motivo: 'O valor de 25% foi arredondado para zero.',
+          valorPrincipal: undefined,
+          valorSecundario: valor,
+        });
+      }
+    }
+    return aplicado;
+  };
+
   const percentuaisPrincipal = { ...(efeitoPrincipal?.percentuais || {}) };
   const percentuaisSecundarioOriginal = { ...(efeitoSecundario?.percentuais || {}) };
-  const percentuaisSecundarioAplicado = {};
-
-  for (const [chave, valor] of Object.entries(percentuaisSecundarioOriginal)) {
-    if (Object.prototype.hasOwnProperty.call(percentuaisPrincipal, chave)) {
-      ignorados.push({
-        atributo: chave,
-        tipo: 'percentual',
-        motivo: 'O percentual já é concedido pelo material principal.',
-        valorPrincipal: percentuaisPrincipal[chave],
-        valorSecundario: valor,
-      });
-      continue;
-    }
-    const parcial = Math.trunc(Number(valor) * 0.25);
-    if (parcial !== 0) percentuaisSecundarioAplicado[chave] = parcial;
-  }
-
+  const percentuaisSecundarioAplicado = aplicarParcial(
+    percentuaisPrincipal,
+    percentuaisSecundarioOriginal,
+    'percentual',
+    'O percentual já é concedido pelo material principal.',
+  );
   const percentuaisFinal = { ...percentuaisPrincipal, ...percentuaisSecundarioAplicado };
+
+  const ajustesPrincipal = { ...(efeitoPrincipal?.ajustes || {}) };
+  const ajustesSecundarioOriginal = { ...(efeitoSecundario?.ajustes || {}) };
+  const ajustesSecundarioAplicado = aplicarParcial(
+    ajustesPrincipal,
+    ajustesSecundarioOriginal,
+    'ajuste',
+    'O ajuste já é concedido pelo material principal.',
+  );
+  const ajustesFinal = { ...ajustesPrincipal, ...ajustesSecundarioAplicado };
+
+  const penalidadesPrincipal = { ...(efeitoPrincipal?.penalidades || {}) };
+  const penalidadesSecundarioOriginal = { ...(efeitoSecundario?.penalidades || {}) };
+  const penalidadesSecundarioAplicado = aplicarParcial(
+    penalidadesPrincipal,
+    penalidadesSecundarioOriginal,
+    'penalidade',
+    'A penalidade já é concedida pelo material principal.',
+  );
+  const penalidadesFinal = { ...penalidadesPrincipal, ...penalidadesSecundarioAplicado };
+
+  // Textos, condições e efeitos especiais do secundário não têm escala numérica
+  // oficial; ficam registrados, mas não são aplicados automaticamente.
+  if (efeitoSecundario) {
+    if ((efeitoSecundario.condicoes || []).length) {
+      ignorados.push({
+        atributo: 'condicoes',
+        tipo: 'condicao',
+        motivo: 'Condições do material secundário não são escaladas automaticamente.',
+      });
+    }
+    if (efeitoSecundario.especial != null) {
+      ignorados.push({
+        atributo: 'especial',
+        tipo: 'especial',
+        motivo: 'Efeito especial do material secundário não é escalado automaticamente.',
+      });
+    }
+    for (const campo of ['chance', 'duracao', 'alvo', 'status']) {
+      if (efeitoSecundario[campo] != null) {
+        ignorados.push({
+          atributo: campo,
+          tipo: campo,
+          motivo: 'Efeito condicional/temporário do secundário não é escalado automaticamente.',
+        });
+      }
+    }
+  }
 
   const nomeCategoria = EQUIPAMENTO_CATEGORIAS[categoria]?.nome || categoria;
   const incompatibilidades = [];
@@ -822,6 +932,10 @@ export function calcularBonusComposicao(materialPrincipal, materialSecundario, c
       efeito: efeitoPrincipal,
       bonus: bonusPrincipal,
       percentuais: percentuaisPrincipal,
+      ajustes: ajustesPrincipal,
+      penalidades: penalidadesPrincipal,
+      condicoes: efeitoPrincipal?.condicoes || [],
+      especial: efeitoPrincipal?.especial || null,
     },
     secundario: {
       materialId: materialSecundario?.id || null,
@@ -831,10 +945,30 @@ export function calcularBonusComposicao(materialPrincipal, materialSecundario, c
       bonusAplicado: bonusSecundarioAplicado,
       percentuaisOriginal: percentuaisSecundarioOriginal,
       percentuaisAplicado: percentuaisSecundarioAplicado,
+      ajustesOriginal: ajustesSecundarioOriginal,
+      ajustesAplicado: ajustesSecundarioAplicado,
+      penalidadesOriginal: penalidadesSecundarioOriginal,
+      penalidadesAplicado: penalidadesSecundarioAplicado,
+      condicoes: efeitoSecundario?.condicoes || [],
+      especial: efeitoSecundario?.especial || null,
+      chance: efeitoSecundario?.chance ?? null,
+      duracao: efeitoSecundario?.duracao ?? null,
+      alvo: efeitoSecundario?.alvo ?? null,
+      status: efeitoSecundario?.status ?? null,
       ignorados,
     },
     bonusFinal,
     percentuaisFinal,
+    ajustesFinal,
+    penalidadesFinal,
+    condicoes: {
+      principal: efeitoPrincipal?.condicoes || [],
+      secundario: efeitoSecundario?.condicoes || [],
+    },
+    especiais: {
+      principal: efeitoPrincipal?.especial || null,
+      secundario: efeitoSecundario?.especial || null,
+    },
     compatibilidade: { ok: incompatibilidades.length === 0, avisos: incompatibilidades },
     avisos,
   };

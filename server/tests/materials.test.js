@@ -35,13 +35,13 @@ describe('materials.js — catálogo normalizado', () => {
     }
   });
 
-  it('contém 49 fichas: 5 minérios, 35 metais, 5 especiais e 4 mágicos', () => {
-    expect(MATERIAL_LIST).toHaveLength(49);
-    expect(getMateriaisPorTipo('minerio')).toHaveLength(5);
+  it('contém 52 fichas: 7 minérios, 35 metais, 5 especiais e 5 mágicos', () => {
+    expect(MATERIAL_LIST).toHaveLength(52);
+    expect(getMateriaisPorTipo('minerio')).toHaveLength(7);
     expect(getMateriaisPorTipo('metal')).toHaveLength(35);
     expect(getMateriaisPorTipo('pedra')).toHaveLength(2);
     expect(MATERIAL_LIST.filter((m) => m.categoria === 'especial')).toHaveLength(5);
-    expect(MATERIAL_LIST.filter((m) => m.categoria === 'magico')).toHaveLength(4);
+    expect(MATERIAL_LIST.filter((m) => m.categoria === 'magico')).toHaveLength(5);
   });
 
   it('toda ficha tem categoria oficial e campos normalizados', () => {
@@ -140,7 +140,8 @@ describe('materials.js — aliases e relações', () => {
     expect(getMaterialPorAlias('Minério de Mithril')?.id).toBe('mithril');
     expect(getMaterialPorAlias('Minério de Honra')?.id).toBe('minerioDeHonra');
     expect(getMaterialPorAlias('Honrineo')?.id).toBe('honrineo');
-    expect(getMaterialPorAlias('Minério da Alma')?.id).toBe('metalDasAlmas');
+    expect(getMaterialPorAlias('Minério da Alma')?.id).toBe('minerioDaAlma');
+    expect(getMaterialPorAlias('Metal da Alma')?.id).toBe('metalDasAlmas');
     expect(getMaterialPorAlias('Aço Rubi')?.id).toBe('acoRubi');
   });
 
@@ -153,11 +154,11 @@ describe('materials.js — aliases e relações', () => {
 describe('materialRules.js — filtros e ordenação', () => {
   it('filtra por categoria oficial, incluindo o filtro de golens', () => {
     expect(filtrarMateriais(MATERIAL_LIST, { categoria: 'metal' })).toHaveLength(35);
-    expect(filtrarMateriais(MATERIAL_LIST, { categoria: 'minerio' })).toHaveLength(5);
+    expect(filtrarMateriais(MATERIAL_LIST, { categoria: 'minerio' })).toHaveLength(7);
     expect(filtrarMateriais(MATERIAL_LIST, { categoria: 'especial' })).toHaveLength(5);
-    expect(filtrarMateriais(MATERIAL_LIST, { categoria: 'magico' })).toHaveLength(4);
+    expect(filtrarMateriais(MATERIAL_LIST, { categoria: 'magico' })).toHaveLength(5);
     const golem = filtrarMateriais(MATERIAL_LIST, { categoria: 'golem' });
-    expect(golem).toHaveLength(13);
+    expect(golem).toHaveLength(25);
     expect(golem.some((m) => m.id === 'uru')).toBe(true);
     expect(golem.every((m) => m.aplicacoes.includes('golem'))).toBe(true);
   });
@@ -173,8 +174,8 @@ describe('materialRules.js — filtros e ordenação', () => {
     expect(lendarios).toHaveLength(5);
     expect(lendarios).toContain('diamante');
     expect(lendarios).toContain('tenebrium');
-    expect(filtrarMateriais(MATERIAL_LIST, { raridade: 'mitica' })).toHaveLength(4);
-    expect(filtrarMateriais(MATERIAL_LIST, { raridade: 'pendente' })).toHaveLength(18);
+    expect(filtrarMateriais(MATERIAL_LIST, { raridade: 'mitica' })).toHaveLength(5);
+    expect(filtrarMateriais(MATERIAL_LIST, { raridade: 'pendente' })).toHaveLength(19);
     expect(filtrarMateriais(MATERIAL_LIST, { bioma: 'vulcao' }).map((m) => m.id)).toEqual(['obsidiana']);
     for (const material of filtrarMateriais(MATERIAL_LIST, { qualidade: 'pendente' })) {
       expect(material.qualidade).toBeNull();

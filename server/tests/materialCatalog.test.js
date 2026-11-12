@@ -34,8 +34,12 @@ const OFICIAIS = {
   honrineo: { raridade: 'mitica', qualidade: 'perfeito', precoCents: 250000 },
   minerioDeHonra: { raridade: 'mitica', qualidade: 'perfeito', precoCents: 180000 },
   obsidiana: { raridade: 'incomum', qualidade: 'superior', precoCents: 8000 },
-  ouroImperial: { raridade: 'muitoRara', qualidade: 'excepcional', precoCents: null },
-  bronzeCelestial: { raridade: 'epica', qualidade: 'excepcional', precoCents: null },
+  ouroImperial: { raridade: 'muitoRara', qualidade: 'excepcional', precoCents: 50000 },
+  bronzeCelestial: { raridade: 'epica', qualidade: 'excepcional', precoCents: 25000 },
+  adamantino: { raridade: null, qualidade: null, precoCents: 20000 },
+  ferroDeFebre: { raridade: 'rara', qualidade: 'superior', precoCents: 18000 },
+  mournlode: { raridade: null, qualidade: null, precoCents: 70000 },
+  ruidium: { raridade: 'mitica', qualidade: 'perfeito', precoCents: 90000 },
   carvaoVegetal: { raridade: null, qualidade: null, precoCents: 2 },
   carvaoMineral: { raridade: null, qualidade: null, precoCents: 4 },
   antracito: { raridade: null, qualidade: null, precoCents: 15 },
@@ -44,8 +48,7 @@ const OFICIAIS = {
 
 const SEM_PRECO = [
   'minerioFerro', 'minerioCobre', 'minerioEstanho', 'minerioChumbo',
-  'ferroDeFebre', 'ouroImperial', 'bronzeCelestial', 'prataSagrada',
-  'mournrlode', 'geloEterno', 'ebano', 'stalhrim', 'ruidium', 'adamantino',
+  'prataSagrada', 'geloEterno', 'ebano', 'stalhrim',
   'ferroEstigio', 'metalDasAlmas',
 ];
 
@@ -120,7 +123,10 @@ describe('catálogo — integridade das fichas', () => {
   });
 
   it('mantém pendentes os materiais cujos efeitos ainda não foram definidos', () => {
-    for (const id of ['tenebrium', 'uru', 'vibranium', 'ruidium', 'ferroEstigio', 'metalDasAlmas']) {
+    for (const id of [
+      'ruidium', 'ferroEstigio', 'ferroDeFebre', 'ouroImperial', 'bronzeCelestial',
+      'mournlode', 'minerioDeHonra', 'minerioDaAlma', 'aurorum', 'prataSagrada',
+    ]) {
       const material = getMaterialById(id);
       expect(Object.values(material.efeitos).some(Boolean), `${id}.efeitos`).toBe(false);
     }
@@ -143,20 +149,161 @@ describe('catálogo — integridade das fichas', () => {
     const vibranium = getMaterialById('vibranium');
     expect(vibranium.caracteristicasEspeciais.some((t) => t.includes('cinética'))).toBe(true);
   });
+
+  it('Vibranium registra a direção dos efeitos sem percentuais', () => {
+    const vibranium = getMaterialById('vibranium');
+    expect(vibranium.efeitos.armadura.desc).toContain('Absorve');
+    expect(vibranium.efeitos.golem.desc).toContain('devolve a energia');
+    for (const efeito of Object.values(vibranium.efeitos).filter(Boolean)) {
+      expect(efeito.percentuais).toBeFalsy();
+      expect(efeito.bonus).toBeFalsy();
+    }
+    expect(vibranium.efeitosNegativos.some((t) => t.includes('sobrecarga'))).toBe(true);
+  });
+
+  it('Adamantino tem preço aprovado e percentuais por categoria', () => {
+    const adamantino = getMaterialById('adamantino');
+    expect(precoKgEmCents(adamantino.precoPorKg)).toBe(20000);
+    expect(adamantino.efeitos.armadura.percentuais['resistência estrutural']).toBe(30);
+    expect(adamantino.efeitos.armaLamina.percentuais).toEqual({ dano: 20, perfuração: 15 });
+    expect(adamantino.efeitos.golem.percentuais).toEqual({ defesa: 40, ataque: 20, velocidade: -20 });
+  });
+
+  it('Honríneo descreve a adaptação automática sem inventar percentuais', () => {
+    const honrineo = getMaterialById('honrineo');
+    expect(honrineo.raridade).toBe('mitica');
+    expect(honrineo.qualidade).toBe('perfeito');
+    expect(precoKgEmCents(honrineo.precoPorKg)).toBe(250000);
+    for (const chave of ['armadura', 'armaLamina', 'armaImpacto', 'armaFogo', 'acessorio', 'equipamentoMagico']) {
+      expect(honrineo.efeitos[chave].desc, chave).toContain('Adaptação automática');
+      expect(honrineo.efeitos[chave].percentuais, chave).toBeFalsy();
+    }
+    expect(honrineo.efeitos.golem).toBeFalsy();
+  });
+
+  it('Mournlode usa a chave correta e fica pendente de efeitos', () => {
+    expect(getMaterialById('mournlode')).toBeTruthy();
+    expect(getMaterialById('mournlode').nome).toBe('Mournlode');
+    expect(MATERIAIS.mournrlode).toBeUndefined();
+    expect(precoKgEmCents(getMaterialById('mournlode').precoPorKg)).toBe(70000);
+  });
+
+  it('Ruidium tem preço e sistema de Corrupção, sem efeitos numéricos por categoria', () => {
+    const ruidium = getMaterialById('ruidium');
+    expect(precoKgEmCents(ruidium.precoPorKg)).toBe(90000);
+    expect(ruidium.raridade).toBe('mitica');
+    expect(ruidium.qualidade).toBe('perfeito');
+    expect(ruidium.observacoes).toContain('corrupcao.js');
+    expect(Object.values(ruidium.efeitos).some(Boolean)).toBe(false);
+  });
+
+  it('Ouro Imperial e Bronze Celestial preservam classificação e preço', () => {
+    expect(precoKgEmCents(getMaterialById('ouroImperial').precoPorKg)).toBe(50000);
+    expect(precoKgEmCents(getMaterialById('bronzeCelestial').precoPorKg)).toBe(25000);
+    expect(Object.values(getMaterialById('ouroImperial').efeitos).some(Boolean)).toBe(false);
+    expect(Object.values(getMaterialById('bronzeCelestial').efeitos).some(Boolean)).toBe(false);
+  });
+
+  it('metais convencionais registram as propriedades aprovadas no complemento', () => {
+    expect(getMaterialById('ouro').caracteristicasEspeciais).toContain('+15% de experiência.');
+    expect(getMaterialById('prata').caracteristicasEspeciais)
+      .toContain('+20% nos efeitos medicinais e de cura.');
+    expect(getMaterialById('cobre').caracteristicasEspeciais)
+      .toContain('Conduz eletricidade sem necessidade de revestimento.');
+    expect(getMaterialById('chumbo').caracteristicasEspeciais)
+      .toContain('Possui 30% de chance de causar envenenamento.');
+    expect(getMaterialById('platina').caracteristicasEspeciais).toContain('+25% em efeitos de catalisadores.');
+    expect(getMaterialById('electrum').caracteristicasEspeciais)
+      .toContain('+5% em bônus de experiência.');
+    expect(getMaterialById('electrum').caracteristicasEspeciais)
+      .toContain('+5% em efeitos medicinais e de cura.');
+    expect(getMaterialById('electrum').caracteristicasEspeciais.join(' ')).not.toContain('aprimoramento físico');
+  });
+
+  it('Prata usa os efeitos oficiais de anti-fantasma e anti-maldição', () => {
+    const prata = getMaterialById('prata');
+    expect(prata.efeitos.armadura.percentuais).toEqual({
+      'redução de dano anti-fantasma': 50,
+      'redução de dano anti-maldição': 50,
+    });
+    expect(prata.efeitos.armaLamina.percentuais).toEqual({
+      'dano contra fantasmas': 100,
+      'dano contra maldições': 100,
+    });
+    expect(prata.efeitos.geral.percentuais).toEqual({ 'efeitos medicinais e de cura': 20 });
+  });
+
+  it('Tenebrium define efeitos por categoria e mantém a Podridão fora dos efeitos', () => {
+    const tenebrium = getMaterialById('tenebrium');
+    expect(tenebrium.efeitos.armadura.desc).toContain('imunidade');
+    expect(tenebrium.efeitos.acessorio.percentuais).toEqual({ 'eficácia de equipamentos de Tenebrium': 10 });
+    expect(tenebrium.efeitos.armaLamina.status).toBe('podridao');
+    expect(tenebrium.efeitos.golem.especial.modos).toHaveLength(2);
+    expect(tenebrium.efeitosNegativos.join(' ')).toContain('curam em 50%');
+  });
+
+  it('Uru descreve os efeitos e o Núcleo de Energia sem duplicar a ficha', () => {
+    const uru = getMaterialById('uru');
+    expect(uru.efeitos.armadura.percentuais['resistência física']).toBe(45);
+    expect(uru.efeitos.armaLamina.especial).toContain('Descarga Arcana');
+    expect(uru.efeitos.golem.especial).toContain('Núcleo de Uru');
+    expect(uru.efeitosNegativos.some((t) => t.includes('mais pesado'))).toBe(true);
+  });
+
+  it('Thinaun captura almas sem consumir suas habilidades', () => {
+    const thinaun = getMaterialById('thinaum');
+    expect(thinaun.efeitos.armaLamina.especial).toContain('Captura de Alma');
+    expect(thinaun.efeitos.armadura.percentuais['resistência contra possessão']).toBe(30);
+    expect(thinaun.efeitosNegativos.some((t) => t.includes('não utiliza as habilidades'))).toBe(true);
+  });
+
+  it('Prata Pandemônica aplica Contaminação Pandemônica, não Podridão nem Corrupção', () => {
+    const prata = getMaterialById('prataPandemomico');
+    expect(prata.nome).toBe('Prata Pandemônica');
+    expect(prata.efeitos.armadura.status).toBe('contaminacaoPandemonica');
+    expect(prata.efeitos.armaLamina.chance).toBe(25);
+    expect(prata.efeitos.armaLamina.especial).toContain('10% da vida máxima');
+    expect(prata.observacoes).toContain('separada da Podridão e da Corrupção');
+    expect(prata.efeitos.geral).toBeFalsy();
+  });
+
+  it('Obsidiana define efeitos oficiais com penalidades explícitas', () => {
+    const obsidiana = getMaterialById('obsidiana');
+    expect(obsidiana.efeitos.armadura.percentuais['resistência contra fogo']).toBe(30);
+    expect(obsidiana.efeitos.armadura.penalidades['resistência contra impactos contundentes']).toBe(-25);
+    expect(obsidiana.efeitos.armaLamina.especial).toContain('sangramento');
+    expect(obsidiana.efeitos.golem.penalidades['resistência contra impactos contundentes']).toBe(-20);
+  });
+
+  it('Metal das Almas duplica os percentuais da Pedra da Alma e preserva as regras de combate', () => {
+    const pedra = getMaterialById('pedraDaAlma');
+    const metal = getMaterialById('metalDasAlmas');
+
+    expect(metal.efeitos.armadura.percentuais['resistência a danos espirituais']).toBe(60);
+    expect(metal.efeitos.armaLamina.percentuais['dano contra fantasmas e espíritos']).toBe(70);
+    expect(metal.efeitos.golem.percentuais['resistência a danos espirituais']).toBe(70);
+    expect(metal.efeitos.armadura.percentuais['resistência a danos espirituais'])
+      .toBe(pedra.efeitos.armadura.percentuais['resistência a danos espirituais'] * 2);
+
+    expect(metal.regrasCombate).toHaveLength(3);
+    expect(metal.regrasCombate.every((regra) => regra.naoDuplicar)).toBe(true);
+    expect(metal.regrasCombate.map((regra) => regra.id)).toEqual(['dano', 'protecao', 'potenciaMagica']);
+    expect(metal.relacoes).toContainEqual({ materialId: 'minerioDaAlma', tipo: 'origem' });
+  });
 });
 
 describe('catálogo — categorias e golems', () => {
   it('separa minérios, metais, especiais e mágicos', () => {
-    expect(MATERIAL_LIST.filter((m) => m.categoria === 'minerio')).toHaveLength(5);
+    expect(MATERIAL_LIST.filter((m) => m.categoria === 'minerio')).toHaveLength(7);
     expect(MATERIAL_LIST.filter((m) => m.categoria === 'metal')).toHaveLength(35);
     expect(MATERIAL_LIST.filter((m) => m.categoria === 'especial')).toHaveLength(5);
-    expect(MATERIAL_LIST.filter((m) => m.categoria === 'magico')).toHaveLength(4);
-    expect(MATERIAL_LIST).toHaveLength(49);
+    expect(MATERIAL_LIST.filter((m) => m.categoria === 'magico')).toHaveLength(5);
+    expect(MATERIAL_LIST).toHaveLength(52);
   });
 
   it('lista os materiais usados em golens por aplicação', () => {
     const golem = getMateriaisParaGolem();
-    expect(golem).toHaveLength(13);
+    expect(golem).toHaveLength(25);
     expect(golem.every((m) => m.aplicacoes.includes('golem'))).toBe(true);
     expect(golem.map((m) => m.id)).toContain('uru');
     expect(getMateriaisPorCategoria('golem').map((m) => m.id)).toEqual(golem.map((m) => m.id));
@@ -169,7 +316,7 @@ describe('catálogo — categorias e golems', () => {
     for (const id of ['obsidiana', 'diamante', 'carvaoVegetal', 'carvaoMineral', 'antracito']) {
       expect(getMaterialById(id).categoria, id).toBe('especial');
     }
-    for (const id of ['geloEterno', 'ebano', 'stalhrim', 'carvaoMagico']) {
+    for (const id of ['geloEterno', 'ebano', 'stalhrim', 'carvaoMagico', 'pedraDaAlma']) {
       expect(getMaterialById(id).categoria, id).toBe('magico');
     }
   });

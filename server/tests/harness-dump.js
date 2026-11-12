@@ -30,7 +30,8 @@ const dump = {
     honrineo: getMaterialPorAlias('Honrineo')?.id ?? null,
     vidro: getMaterialPorAlias('Vidro de Dragão')?.id ?? null,
     mithril: getMaterialPorAlias('Minério de Mithril')?.id ?? null,
-    alma: getMaterialPorAlias('Minério da Alma')?.id ?? null,
+    alma: getMaterialPorAlias('Metal da Alma')?.id ?? null,
+    minerioAlma: getMaterialPorAlias('Minério da Alma')?.id ?? null,
     rubi: getMaterialPorAlias('Aço Rubi')?.id ?? null,
   },
   precoMaisBarato: [...MATERIAL_LIST]

@@ -55,10 +55,38 @@ function BonusList({ bonus }) {
   );
 }
 
+function EspecialTexto({ especial }) {
+  if (!especial) return null;
+  if (typeof especial === 'string') {
+    return <p className="material-efeito-especial">Efeito especial: {especial}</p>;
+  }
+
+  return (
+    <div className="material-efeito-especial">
+      {especial.descricao && <p>Efeito especial: {especial.descricao}</p>}
+      {Array.isArray(especial.modos) && (
+        <ul className="material-bonus-list">
+          {especial.modos.map((modo) => (
+            <li key={modo.nome}>
+              <strong>{modo.nome}</strong>
+              {modo.descricao ? `: ${modo.descricao}` : ''}
+              {modo.percentuais && ` — ${Object.entries(modo.percentuais)
+                .map(([nome, valor]) => `${Number(valor) > 0 ? '+' : ''}${valor}% ${nome}`)
+                .join(', ')}`}
+              {modo.observacao ? ` (${modo.observacao})` : ''}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function EfeitoBloco({ chave, info, material }) {
   const efeito = getEfeitoPorEquipamento(material, chave);
   const temPercentuais = efeito?.percentuais && Object.keys(efeito.percentuais).length > 0;
   const temPenalidades = efeito?.penalidades && Object.keys(efeito.penalidades).length > 0;
+  const temAjustes = efeito?.ajustes && Object.keys(efeito.ajustes).length > 0;
   const temCondicoes = efeito?.condicoes?.length > 0;
   const temEspecial = Boolean(efeito?.especial);
 
@@ -66,7 +94,9 @@ function EfeitoBloco({ chave, info, material }) {
     <div className={`material-efeito${efeito ? '' : ' material-efeito-vazio'}`}>
       <div className="material-efeito-head">
         <span>{info.icone} {info.nome}</span>
-        {efeito?.fallback && <span className="tag">fallback mágico</span>}
+        {efeito?.fallback && (
+          <span className="tag">{efeito.origem === 'geral' ? 'efeito geral' : 'fallback mágico'}</span>
+        )}
       </div>
 
       {!efeito && <span className="material-pendente-texto">Efeito pendente para esta categoria.</span>}
@@ -86,6 +116,16 @@ function EfeitoBloco({ chave, info, material }) {
             </ul>
           )}
 
+          {temAjustes && (
+            <ul className="material-bonus-list">
+              {Object.entries(efeito.ajustes).map(([nome, valor]) => (
+                <li key={nome} className={Number(valor) >= 0 ? 'material-bonus-positivo' : 'material-bonus-negativo'}>
+                  {Number(valor) > 0 ? '+' : ''}{valor} {nome}
+                </li>
+              ))}
+            </ul>
+          )}
+
           {temPenalidades && (
             <ul className="material-bonus-list">
               {Object.entries(efeito.penalidades).map(([nome, valor]) => (
@@ -96,15 +136,24 @@ function EfeitoBloco({ chave, info, material }) {
             </ul>
           )}
 
+          {efeito.chance != null && (
+            <p className="material-efeito-condicao">Chance: {efeito.chance}%</p>
+          )}
+          {efeito.duracao && (
+            <p className="material-efeito-condicao">Duração: {efeito.duracao}</p>
+          )}
+          {efeito.alvo && (
+            <p className="material-efeito-condicao">Alvo: {Array.isArray(efeito.alvo) ? efeito.alvo.join('; ') : efeito.alvo}</p>
+          )}
+          {efeito.status && (
+            <p className="material-efeito-condicao">Status: {efeito.status}</p>
+          )}
+
           {temCondicoes && (
             <p className="material-efeito-condicao">Condição: {efeito.condicoes.join('; ')}</p>
           )}
 
-          {temEspecial && (
-            <p className="material-efeito-especial">
-              Efeito especial: {typeof efeito.especial === 'string' ? efeito.especial : efeito.especial.descricao}
-            </p>
-          )}
+          {temEspecial && <EspecialTexto especial={efeito.especial} />}
         </>
       )}
     </div>
