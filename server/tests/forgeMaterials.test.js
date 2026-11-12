@@ -6,6 +6,7 @@ import {
   podeUsarFerroEstigio,
   calcularBonusConjunto,
   tipoInventarioEquipamento,
+  gemasSlotadasParaSocketedGems,
 } from '../../src/game/forge.js';
 import { getMaterialById } from '../../src/game/materials.js';
 import {
@@ -146,6 +147,37 @@ describe('forja — composição principal/secundário', () => {
     expect(resultado.equip.materiais.primario.id).toBe('aco');
     expect(resultado.equip.materiais.secundario.id).toBe('estanho');
     expect(resultado.equip.composicao.bonusFinal).toEqual({ forca: 2 });
+  });
+
+  it('não embute o bônus das gemas em atributosFinais', () => {
+    const gemas = [{ slot: 0, gemaId: 'diamante' }];
+    const resultado = craftarEquipamento('espada_longa', 'aco', null, gemas);
+
+    expect(resultado.ok).toBe(true);
+    // base 2 + aço 2 + diamante (arma) 2
+    expect(resultado.atributos).toEqual({ forca: 6 });
+    expect(resultado.atributosSemGemas).toEqual({ forca: 4 });
+    expect(resultado.equip.atributosFinais).toEqual({ forca: 4 });
+  });
+
+  it('converte gemas slotadas em socketedGems indexado por slot', () => {
+    expect(gemasSlotadasParaSocketedGems([{ slot: 0, gemaId: 'diamante' }], 2)).toEqual({
+      socketedGems: ['diamante', null],
+      socketedGemEstados: ['polido', null],
+    });
+    // O slot informado manda no tamanho quando é maior que o total conhecido.
+    expect(gemasSlotadasParaSocketedGems([{ slot: 2, gemaId: 'rubi' }], 1)).toEqual({
+      socketedGems: [null, null, 'rubi'],
+      socketedGemEstados: [null, null, 'polido'],
+    });
+    expect(gemasSlotadasParaSocketedGems([], 0)).toEqual({
+      socketedGems: [],
+      socketedGemEstados: [],
+    });
+    expect(gemasSlotadasParaSocketedGems([{ slot: 0 }, { slot: 1, gemaId: 'rubi' }], 2)).toEqual({
+      socketedGems: [null, 'rubi'],
+      socketedGemEstados: [null, 'polido'],
+    });
   });
 
   it('rejeita equipamento inexistente', () => {

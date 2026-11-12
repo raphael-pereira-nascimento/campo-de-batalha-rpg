@@ -829,19 +829,32 @@ export function applyRaceBonus(raceId, attributes) {
   return res;
 }
 
+// Lista os itens equipados que podem receber gemas, já com a categoria usada
+// pelas definições das gemas (arma/armadura/acessorio). As armas vivem em
+// `equipment.armas`; `armasDeEquipamento` também cobre a arma legada
+// `equipment.arma` sem duplicar.
+export function itensComGemas(equipment = {}) {
+  const itens = [];
+  for (const { arma } of armasDeEquipamento(equipment)) {
+    if (arma) itens.push({ categoria: 'arma', item: arma });
+  }
+  if (equipment.armadura) itens.push({ categoria: 'armadura', item: equipment.armadura });
+  if (equipment.acessorio) itens.push({ categoria: 'acessorio', item: equipment.acessorio });
+  return itens;
+}
+
 // Soma dos bônus de atributos das gemas socketadas. Uma gema só chega a ser
 // encaixada depois de passar pela validação de polimento, então aqui aplicamos
 // os efeitos de qualquer gema do catálogo (inclusive as da Forja).
-// Cada gema aplica efeitos conforme o slot do equipamento (arma/armadura/acessorio).
+// Cada gema aplica efeitos conforme a categoria do equipamento (arma/armadura/acessorio).
 export function gemsAttrs(equipment = {}, gems = GEMS) {
   const acc = {};
-  for (const [slot, item] of Object.entries(equipment)) {
-    if (!item) continue;
+  for (const { categoria, item } of itensComGemas(equipment)) {
     for (const gemId of item.socketedGems || []) {
       // As gemas da Forja têm prioridade (mesma resolução usada na ficha).
       const gem = getGemaById(gemId) || gems[gemId];
       if (!gem) continue;
-      const fx = gem.efeitos?.[slot];
+      const fx = gem.efeitos?.[categoria];
       if (!fx?.bonus) continue;
       for (const [k, v] of Object.entries(fx.bonus)) {
         if (k.startsWith('_')) continue;
@@ -865,8 +878,14 @@ export function effectiveAttributes(attributes, equipment = {}, races = null, cl
   // A arma legada equipment.arma entra via armasDeEquipamento sem duplicar.
   for (const item of armasDeEquipamento(equipment).map((e) => e.arma).concat([equipment.armadura, equipment.acessorio]).filter(Boolean)) {
     if (!item) continue;
-    if (item.bonus) {
-      for (const [k, v] of Object.entries(item.bonus)) eff[k] = (eff[k] || 0) + v;
+    // Itens craftados guardam em `atributosFinais` o bônus-base já somado aos
+    // efeitos dos materiais. Quando presente, ele substitui `bonus` para não
+    // contar o mesmo bônus duas vezes.
+    const atributosDoItem = item.atributosFinais && typeof item.atributosFinais === 'object'
+      ? item.atributosFinais
+      : item.bonus;
+    if (atributosDoItem) {
+      for (const [k, v] of Object.entries(atributosDoItem)) eff[k] = (eff[k] || 0) + v;
     }
     if (item.penalidade) {
       // Malefícios sempre reduzem o atributo (armaduras do catálogo guardam

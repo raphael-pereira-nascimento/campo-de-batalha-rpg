@@ -148,8 +148,13 @@ export function calcularAtributosPersonagem(personagem, equipamentoEquipado = {}
     if (!slot) continue;
     // Item quebrado (durabilidade 0) não concede bônus
     if (slot.durabilidade != null && slot.durabilidade <= 0) continue;
-    if (slot.bonus) {
-      for (const [attr, val] of Object.entries(slot.bonus)) {
+    // `atributosFinais` (item craftado) já inclui o bônus-base e os efeitos dos
+    // materiais; usar `bonus` junto duplicaria os atributos.
+    const atributosDoItem = slot.atributosFinais && typeof slot.atributosFinais === 'object'
+      ? slot.atributosFinais
+      : slot.bonus;
+    if (atributosDoItem) {
+      for (const [attr, val] of Object.entries(atributosDoItem)) {
         atributos[attr] = (atributos[attr] || 0) + val;
       }
     }
@@ -197,11 +202,16 @@ export function calcularAtributosEquipamento(equipId, materialPrimarioId, materi
     atributos[attr] = (atributos[attr] || 0) + val;
   }
 
-  // Gemas slotadas aplicam seus bônus por tipo de equipamento
+  // Gemas slotadas aplicam seus bônus por tipo de equipamento. Guardamos a
+  // versão sem gemas em `atributosSemGemas`: o item craftado não deve embutir
+  // os bônus das gemas em `atributosFinais`, pois `gemsAttrs` já os aplica a
+  // partir de `socketedGems` (cliente e servidor).
   const gemaEquipTipo = equip.tipo === 'arma' ? 'arma'
     : equip.tipo === 'armadura' ? 'armadura'
     : equip.tipo === 'acessorio' ? 'acessorio'
     : null;
+
+  const atributosSemGemas = { ...atributos };
 
   for (const g of gemasSlotadas) {
     if (!g || !g.gemaId) continue;
@@ -218,10 +228,32 @@ export function calcularAtributosEquipamento(equipId, materialPrimarioId, materi
     ok: true,
     equip: { ...equip, materialPrimario: matPrimario?.id, materialSecundario: matSecundario?.id },
     atributos,
+    atributosSemGemas,
     materiais: { primario: matPrimario, secundario: matSecundario },
     categoriaEfeito,
     composicao,
   };
+}
+
+// Converte as gemas escolhidas na forja ({ slot, gemaId }) para o formato do
+// equipamento (`socketedGems`/`socketedGemEstados`, indexados pelo slot).
+// Só gemas polidas podem ser instaladas, então o estado gravado é 'polido'.
+export function gemasSlotadasParaSocketedGems(gemasSlotadas = [], totalSlots = 0) {
+  const maiorSlot = gemasSlotadas.reduce(
+    (maior, g) => Math.max(maior, (Number(g?.slot) || 0) + 1),
+    0,
+  );
+  const total = Math.max(Number(totalSlots) || 0, maiorSlot, 0);
+  const socketedGems = Array.from({ length: total }, () => null);
+  const socketedGemEstados = Array.from({ length: total }, () => null);
+  for (const g of gemasSlotadas) {
+    if (!g || !g.gemaId) continue;
+    const slot = Number(g.slot);
+    if (!Number.isInteger(slot) || slot < 0 || slot >= total) continue;
+    socketedGems[slot] = g.gemaId;
+    socketedGemEstados[slot] = 'polido';
+  }
+  return { socketedGems, socketedGemEstados };
 }
 
 // ============================================================================
@@ -298,7 +330,9 @@ export function craftarEquipamento(equipId, materialPrimarioId, materialSecundar
       ...resultado.equip,
       custo,
       materiais: resultado.materiais,
-      atributosFinais: resultado.atributos,
+      // `atributosFinais` guarda o bônus-base + materiais, sem as gemas: os
+      // bônus das gemas são aplicados por `gemsAttrs` a partir de `socketedGems`.
+      atributosFinais: resultado.atributosSemGemas,
       categoriaEfeito: resultado.categoriaEfeito,
       composicao: {
         categoria: resultado.composicao.categoria,
@@ -312,6 +346,7 @@ export function craftarEquipamento(equipId, materialPrimarioId, materialSecundar
     },
     custo,
     atributos: resultado.atributos,
+    atributosSemGemas: resultado.atributosSemGemas,
     categoriaEfeito: resultado.categoriaEfeito,
     composicao: resultado.composicao,
     honrineo,

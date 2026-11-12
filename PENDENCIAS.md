@@ -1,6 +1,10 @@
 # Pendências — Materiais, Metais e Podridão
 
+<<<<<<< HEAD
 Atualizado em 11/11/2026 — Etapa 8 (complemento do catálogo).
+=======
+Atualizado em 11/11/2026 — Etapa 8 (integrações da forja).
+>>>>>>> adf007ca5d374578a87f221640ae286e6b0cbf9c
 
 Este arquivo separa o que já foi **aprovado**, o que foi implementado como
 **provisório**, o que continua **pendente** e o que é apenas **sugestão**.
@@ -495,27 +499,14 @@ O que falta preencher com o criador/documentação:
   os efeitos individuais de cada runa não foram definidos. Falta também integrar
   os encaixes de pedra preciosa e os multiplicadores de 50%/150%.
 - **Paridade offline/online:** a forja e o combate têm caminhos separados; falta
-  garantir que os mesmos efeitos valham nos dois.
-- **Salvar item craftado no modo online:** `src/api.js` chama
-  `POST /api/characters/craft`, mas essa rota não existe em
-  `server/src/index.js`. No modo offline o item é gravado; no modo online o
-  salvamento falha. Falta criar a rota (com validação de personagem, item e
-  custo) ou alterar o cliente para usar uma rota existente.
-- **Equipar item craftado:** `equipItem` (online e offline) procura o item pelo
-  `id` nos presets de equipamento e ignora a cópia do inventário. Com isso,
-  `atributosFinais`, materiais, durabilidade e gemas do item craftado são
-  descartados ao equipar. Falta fazer `equipItem` preferir o item do inventário
-  quando o `id` corresponder a um equipamento craftado.
-- **Atributos finais no personagem:** `calcularAtributosPersonagem` soma
-  `slot.bonus`, mas não usa `slot.atributosFinais`. Mesmo depois de corrigir o
-  `equipItem`, os bônus de composição não chegariam à ficha sem esse ajuste.
-- **Seleção de materiais na forja:** `Forge.jsx` monta as listas com
-  `getMateriaisPorTipo`/raridade. Materiais futuros de categoria `magico` ou
-  `especial` com efeitos podem ficar de fora da seleção; falta revisar o filtro
-  quando novas fichas forem cadastradas.
+  garantir que os mesmos efeitos valham nos dois. Na Etapa 8, o salvamento do
+  item craftado, a dedução da carteira, a preferência pelo item do inventário e
+  os atributos finais foram alinhados nos dois modos; a aplicação automática de
+  efeitos de materiais em combate continua pendente.
 
 ### 3.4 Validação e limitações do ambiente
 
+<<<<<<< HEAD
 - **`node` e `npm` não estão disponíveis neste ambiente.** Por isso
   `npm run test:unit`, `npm run test:e2e` e `npm run build` oficiais não foram
   executados.
@@ -533,6 +524,18 @@ O que falta preencher com o criador/documentação:
 - O `git` também não está no `PATH`; quando necessário, usar o executável do
   GitHub Desktop. O commit-base já foi criado, mas os arquivos citados em D-14
   continuam fora dele.
+=======
+- Na auditoria da Etapa 7, `node`, `npm` e `git` não estavam no `PATH`; a
+  validação usou o esbuild já presente em `node_modules`, um servidor estático
+  em PowerShell e o harness de navegador (135/135 testes).
+- Na Etapa 8, `node` v24.15.0, `npm` 11.12.1 e `git` estão disponíveis. No
+  PowerShell, `npm`/`npx` puros esbarram na ExecutionPolicy; usar `npm.cmd`.
+- Resultado atual: **415/415 testes unitários passam**
+  (`npm.cmd run test --prefix server`) e o build de produção
+  (`npm.cmd run build`) conclui sem erro.
+- **Teste E2E oficial, responsividade e acessibilidade completa** continuam sem
+  verificação.
+>>>>>>> adf007ca5d374578a87f221640ae286e6b0cbf9c
 
 ### 3.5 Correções aplicadas na auditoria
 
@@ -590,6 +593,7 @@ Arquivos afetados pelas pendências gerais: `server/src/services/characters.js`,
 `src/config.js`, `src/api.js`, `src/pages/Forge.jsx` e
 `tools/sync-server-game.ps1`.
 
+<<<<<<< HEAD
 ### 3.7 Relatório de divergências do complemento
 
 Comparação entre o catálogo anterior, o PDF e o complemento:
@@ -614,6 +618,29 @@ Comparação entre o catálogo anterior, o PDF e o complemento:
 
 Nenhum nome, valor, fórmula ou efeito oficial foi alterado sem autorização. As
 lacunas que o complemento não preenche continuam como pendentes.
+=======
+### 3.7 Correções de integração aplicadas na Etapa 8
+
+Estas correções fecham os defeitos de integração da forja listados na Etapa 7.
+Nenhuma regra, fórmula ou valor oficial foi alterado.
+
+| Área | Correção |
+| --- | --- |
+| Rota de craft | Criada `POST /api/characters/craft` em `server/src/index.js`, com validação de personagem, vínculo com o jogador, tipo, categoria de arma e limites numéricos |
+| Dados do item | `sanitizarItemCraftado` (servidor) grava apenas campos conhecidos, limita bônus a ±99, descarta atributos desconhecidos e valida nome/tipo/categoria |
+| Id do item | Cada peça nova recebe um `id` único; duas armas iguais não compartilham mais o mesmo id no inventário |
+| Melhoria/reparo | `craftItem` com `modo: 'atualizar'` substitui a peça existente em vez de criar uma cópia duplicada |
+| Carteira | Criada `POST /api/wallet/spend`, usada por `api.gastarCarteira` na forja (craft, melhoria e reparo) |
+| Equipar craftado | `equipItem` (online e offline) procura primeiro o item no inventário, preservando `atributosFinais`, materiais, durabilidade, gemas e slots; a peça sai do inventário ao ser equipada e volta ao desequipar |
+| Atributos finais | `effectiveAttributes` (cliente e servidor) usa `atributosFinais` no lugar de `bonus`, sem somar os dois; `calcularAtributosPersonagem` segue a mesma regra |
+| Atributos de combate | A peça craftada passa a gravar `defesa`, `alcance`, `elemento`, `efeito`, `alvo`, `alvos`, `splash` e `recarga` da definição-base; sem isso, armaduras perdiam a defesa e armas de fogo viravam corpo a corpo |
+| Slots de gema | O item craftado passa a gravar `socketSlots`, permitindo encaixar gemas depois de equipado |
+| Gemas no craft | As gemas escolhidas na forja viram `socketedGems`/`socketedGemEstados`; `atributosFinais` guarda apenas bônus-base + materiais e `gemsAttrs` aplica os efeitos da gema, sem duplicar atributos |
+| Gemas em armas | `gemsAttrs` e os loops de regeneração/multiplicadores do servidor passam a varrer `equipment.armas` com a categoria `arma`, cobrindo as até três armas equipadas e a arma legada sem duplicar |
+| Arquivo temporário | `preview-materiais-entry.jsx` foi removido por não ser referenciado pelo projeto |
+| Seleção de materiais | `Forge.jsx` passou a montar a lista por `categoria` (minério, metal, especial e mágico), sem depender só do campo legado `tipo` |
+| Testes | 421/421 testes unitários passam; build de produção (`vite build`) conclui sem erro |
+>>>>>>> adf007ca5d374578a87f221640ae286e6b0cbf9c
 
 ---
 

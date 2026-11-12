@@ -5,6 +5,7 @@ import {
   effectiveAttributes,
   deriveStats,
   gemsAttrs,
+  itensComGemas,
   POTIONS,
   TAVERN_DRINKS,
   TAVERN_FOODS,
@@ -285,6 +286,36 @@ describe('gemas — estado bruto/polido e efeitos por slot', () => {
     expect(gemsAttrs(equipment)).toEqual({ forca: 3, resistencia: 1 });
   });
 
+  it('itensComGemas classifica armas aninhadas como arma', () => {
+    const equipment = {
+      arma: { id: 'espada_longa' },
+      armas: {
+        perto: { id: 'espada_longa' },
+        distancia: { id: 'arco_longo' },
+      },
+      armadura: { id: 'couro' },
+      acessorio: { id: 'anel_de_forca' },
+    };
+    expect(itensComGemas(equipment).map(({ categoria, item }) => [categoria, item.id])).toEqual([
+      ['arma', 'espada_longa'],
+      ['arma', 'arco_longo'],
+      ['armadura', 'couro'],
+      ['acessorio', 'anel_de_forca'],
+    ]);
+  });
+
+  it('gemsAttrs lê as gemas das armas em equipment.armas sem duplicar a arma legada', () => {
+    const equipment = {
+      arma: { id: 'espada_longa', socketedGems: ['ametista'] },
+      armas: {
+        perto: { id: 'espada_longa', socketedGems: ['ametista'] },
+        distancia: { id: 'arco_longo', socketedGems: ['diamante'] },
+      },
+      armadura: { socketedGems: ['lapis_lazuli'] },
+    };
+    expect(gemsAttrs(equipment)).toEqual({ inteligencia: 4, forca: 2 });
+  });
+
   it('effectiveAttributes aplica efeitos de gemas socketadas', () => {
     const attrs = { forca: 5, inteligencia: 3, resistencia: 4, destreza: 3, reflexos: 3 };
     const equipment = {
@@ -509,5 +540,40 @@ describe('Fusão no servidor — receitas + pares compatíveis', () => {
       { id: 'rubi', estado: 'polido' },
     );
     expect(r.ok).toBe(false);
+  });
+});
+
+describe('equipamento craftado — atributosFinais', () => {
+  const attrs = { forca: 5, inteligencia: 3, resistencia: 4, destreza: 3, reflexos: 3 };
+
+  it('usa atributosFinais no lugar de bonus, sem somar os dois', () => {
+    const equipment = {
+      arma: {
+        id: 'espada_longa-1',
+        bonus: { forca: 2 },
+        atributosFinais: { forca: 4, resistencia: 3 },
+      },
+    };
+    const eff = effectiveAttributes(attrs, equipment);
+    expect(eff.forca).toBe(9); // 5 + 4 (e não 5 + 2 + 4)
+    expect(eff.resistencia).toBe(7); // 4 + 3
+  });
+
+  it('mantém o bônus normal quando o item não tem atributosFinais', () => {
+    const equipment = { arma: { id: 'espada_curta', bonus: { forca: 2 } } };
+    expect(effectiveAttributes(attrs, equipment).forca).toBe(7);
+  });
+
+  it('deriveStats calcula vida/mana pelos atributos finais da peça', () => {
+    const equipment = {
+      armadura: {
+        id: 'couro-1',
+        bonus: { resistencia: 1 },
+        atributosFinais: { resistencia: 5, inteligencia: 2 },
+      },
+    };
+    const stats = deriveStats([], 1, attrs, equipment);
+    expect(stats.hpMax).toBe(500 + (4 + 5) * 10);
+    expect(stats.mpMax).toBe((3 + 2) * 10);
   });
 });

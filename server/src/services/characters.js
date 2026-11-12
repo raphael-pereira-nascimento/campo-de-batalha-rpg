@@ -11,6 +11,7 @@ import {
   aplicarCrescimentoNivel,
   efeitosDeHabilidades,
   ATTRIBUTE_KEYS,
+  ELEMENTOS,
   POINTS_TO_DISTRIBUTE,
   MIN_ATTRIBUTE,
   MAX_ATTRIBUTE,
@@ -429,8 +430,29 @@ export async function equipItem(characterId, slot, itemId) {
   if (!categoria && !isAcessorio && !isArmadura) {
     throw new Error('Slot de equipamento inválido.');
   }
+  const inventory = Array.isArray(char.inventory) ? [...char.inventory] : [];
   let item = null;
+  let itemFromInventoryIndex = -1;
   if (itemId) {
+    // Equipamento craftado: a cópia do inventário é a fonte da verdade e
+    // carrega `atributosFinais`, materiais, durabilidade, gemas e slots.
+    const wanted = String(itemId);
+    const idx = inventory.findIndex((it) => it && String(it.id) === wanted);
+    if (idx >= 0) {
+      const invItem = inventory[idx];
+      const categoriaItem = invItem.categoria
+        || (invItem.alcance === 'corpo' ? 'perto' : 'distancia');
+      const tipoOk = categoria
+        ? (invItem.tipo === 'arma' || invItem.tipo === 'arma_fogo') && categoriaItem === categoria
+        : isAcessorio
+          ? invItem.tipo === 'acessorio'
+          : invItem.tipo === 'armadura';
+      if (!tipoOk) throw new Error('Este item não pode ser equipado neste slot.');
+      item = { ...invItem };
+      itemFromInventoryIndex = idx;
+    }
+  }
+  if (!item && itemId) {
     if (categoria) {
       itemId = String(itemId);
       const preset = EQUIPMENT.canoes?.[itemId] || EQUIPMENT.armas[itemId];
@@ -540,15 +562,18 @@ export async function equipItem(characterId, slot, itemId) {
   // Fichas antigas (e equipamentos escolhidos na criação) podem ter o item
   // equipado sem uma cópia no inventário. Ao trocar ou remover, devolve o item
   // ao inventário para que ele não desapareça e possa ser equipado de novo.
-  const inventory = Array.isArray(char.inventory) ? [...char.inventory] : [];
   if (
     oldItem?.id &&
     (!item || item.id !== oldItem.id) &&
-    !inventory.some((it) => it.id === oldItem.id)
+    !inventory.some((it) => it && it.id === oldItem.id)
   ) {
     const { socketedGems: _sg, socketedGemEstados: _sge, ...oldCopy } = oldItem;
     inventory.push(oldCopy);
   }
+
+  // O item que veio do inventário passa a estar equipado, então sai da lista.
+  // Ao desequipar/trocar, a cópia é devolvida pelo bloco acima.
+  if (itemFromInventoryIndex >= 0) inventory.splice(itemFromInventoryIndex, 1);
 
   let equipment;
   if (categoria) {
@@ -597,6 +622,176 @@ export async function equipItem(characterId, slot, itemId) {
     ],
   );
   return getCharacter(characterId);
+}
+
+// ── Forja: item craftado no inventário ─────────────────────────────────────
+// O cálculo completo (materiais/composição) acontece no cliente. O servidor
+// valida o formato, limita valores e grava o item com um id único, para não
+// misturar duas peças iguais no inventário.
+const TIPOS_ITEM_CRAFTADO = new Set(['arma', 'arma_fogo', 'armadura', 'acessorio']);
+const CATEGORIAS_ITEM_ARMA = ['perto', 'distancia', 'utilitaria'];
+const ALCANCES_ITEM = ['corpo', 'medio', 'longo'];
+
+function textoLimitado(valor, max = 200) {
+  if (valor == null) return '';
+  return String(valor).trim().slice(0, max);
+}
+
+function copiarNumero(destino, chave, item, { min = 0, max = 1e9, inteiro = false } = {}) {
+  if (item[chave] == null) return;
+  const numero = Number(item[chave]);
+  if (!Number.isFinite(numero)) return;
+  destino[chave] = Math.max(min, Math.min(max, inteiro ? Math.round(numero) : numero));
+}
+
+function mapaAtributos(valor) {
+  if (!isObj(valor)) return {};
+  const limpo = {};
+  for (const [chave, bruto] of Object.entries(valor)) {
+    if (!ATTRIBUTE_KEYS.includes(chave)) continue;
+    const numero = Number(bruto);
+    if (!Number.isFinite(numero)) continue;
+    limpo[chave] = Math.max(-99, Math.min(99, Math.round(numero)));
+  }
+  return limpo;
+}
+
+const ESTADOS_GEMA = new Set(['bruta', 'lapidada', 'polido', 'perfeita', 'destruida']);
+
+// `socketedGems` é indexado por slot: posições vazias viram null. Mantemos o
+// tamanho para não deslocar as gemas já encaixadas.
+function listaGemas(valor, max = 20) {
+  if (!Array.isArray(valor)) return [];
+  return valor.slice(0, max).map((g) => textoLimitado(g, 60) || null);
+}
+
+// Alinha os estados com a lista de gemas; qualquer estado desconhecido vira
+// null e o desencaixe cai no fallback 'polido'.
+function listaEstadosGema(valor, total, max = 20) {
+  const origem = Array.isArray(valor) ? valor : [];
+  const limite = Math.max(0, Math.min(Number(total) || 0, max));
+  const lista = origem.slice(0, limite).map((e) => (ESTADOS_GEMA.has(e) ? e : null));
+  while (lista.length < limite) lista.push(null);
+  return lista;
+}
+
+function objetoLimitado(valor, maxJson = 20000) {
+  if (!isObj(valor)) return null;
+  try {
+    return JSON.stringify(valor).length <= maxJson ? valor : null;
+  } catch {
+    return null;
+  }
+}
+
+function gerarIdItemCraftado(base, inventario = []) {
+  const prefixo = textoLimitado(base, 40).replace(/[^a-zA-Z0-9_-]/g, '') || 'crafted';
+  const usados = new Set((inventario || []).map((it) => it && it.id));
+  let id = `${prefixo}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+  let sufixo = 1;
+  while (usados.has(id)) {
+    id = `${prefixo}-${Date.now()}-${randomUUID().slice(0, 8)}-${sufixo}`;
+    sufixo += 1;
+  }
+  return id;
+}
+
+export function sanitizarItemCraftado(item, inventario = [], { atualizar = false } = {}) {
+  if (!isObj(item)) throw new Error('Item craftado inválido.');
+  const nome = textoLimitado(item.nome, 120);
+  if (!nome) throw new Error('O item craftado precisa de nome.');
+  const tipo = TIPOS_ITEM_CRAFTADO.has(item.tipo) ? item.tipo : null;
+  if (!tipo) throw new Error('Tipo de item craftado inválido.');
+  const categoria = CATEGORIAS_ITEM_ARMA.includes(item.categoria) ? item.categoria : null;
+  if ((tipo === 'arma' || tipo === 'arma_fogo') && !categoria) {
+    throw new Error('Categoria de arma inválida.');
+  }
+
+  const socketedGems = listaGemas(item.socketedGems);
+  const socketedGemEstados = listaEstadosGema(item.socketedGemEstados, socketedGems.length);
+
+  const salvo = {
+    id: atualizar
+      ? textoLimitado(item.id, 80)
+      : gerarIdItemCraftado(item.id, inventario),
+    nome,
+    tipo,
+    raridade: textoLimitado(item.raridade, 30) || null,
+    bonus: mapaAtributos(item.bonus),
+    penalidade: mapaAtributos(item.penalidade),
+    materiais: objetoLimitado(item.materiais),
+    gemasSlotadas: Array.isArray(item.gemasSlotadas)
+      ? item.gemasSlotadas.slice(0, 20).map((g) => ({
+        slot: Math.max(0, Math.round(Number(g?.slot) || 0)),
+        gemaId: textoLimitado(g?.gemaId, 60) || null,
+      }))
+      : [],
+    socketedGems,
+    socketedGemEstados,
+    descricao: textoLimitado(item.descricao, 2000) || null,
+    subcategoria: textoLimitado(item.subcategoria, 30) || null,
+    categoria,
+    honrineoAplicado: item.honrineoAplicado === true,
+  };
+
+  // `atributosFinais` só entra quando tem conteúdo: se ficasse vazio, o
+  // cálculo de atributos ignoraria o bônus-base do equipamento.
+  const atributosFinais = mapaAtributos(item.atributosFinais);
+  if (Object.keys(atributosFinais).length) salvo.atributosFinais = atributosFinais;
+
+  copiarNumero(salvo, 'peso', item, { max: 1000 });
+  copiarNumero(salvo, 'slots', item, { max: 20, inteiro: true });
+  copiarNumero(salvo, 'socketSlots', item, { max: 20, inteiro: true });
+  copiarNumero(salvo, 'custo', item, { max: 1e9 });
+  copiarNumero(salvo, 'usosMax', item, { max: 99, inteiro: true });
+  copiarNumero(salvo, 'recargaTurnos', item, { max: 99, inteiro: true });
+  copiarNumero(salvo, 'danoBase', item, { max: 999 });
+  // Campos de combate do equipamento-base. Sem eles a armadura craftada perde
+  // a defesa e a arma craftada perde alcance, elemento, efeito e área.
+  copiarNumero(salvo, 'defesa', item, { max: 999, inteiro: true });
+  copiarNumero(salvo, 'alvos', item, { min: 1, max: 10, inteiro: true });
+  copiarNumero(salvo, 'splash', item, { min: 0, max: 1 });
+  copiarNumero(salvo, 'recarga', item, { min: 0, max: 99, inteiro: true });
+  if (ALCANCES_ITEM.includes(item.alcance)) salvo.alcance = item.alcance;
+  if (ELEMENTOS.includes(item.elemento)) salvo.elemento = item.elemento;
+  if (typeof item.alvo === 'string' && Object.prototype.hasOwnProperty.call(ALVO_TIPOS, item.alvo)) {
+    salvo.alvo = item.alvo;
+  }
+  const efeito = objetoLimitado(item.efeito, 5000);
+  if (efeito) salvo.efeito = efeito;
+  copiarNumero(salvo, 'durabilidade', item, { max: 1e6, inteiro: true });
+  copiarNumero(salvo, 'durabilidadeMax', item, { max: 1e6, inteiro: true });
+  copiarNumero(salvo, 'melhoriaNivel', item, { max: 100, inteiro: true });
+  copiarNumero(salvo, 'custoMelhoria', item, { max: 1e9 });
+
+  if (atualizar && !salvo.id) throw new Error('Item a atualizar sem id.');
+  return salvo;
+}
+
+export async function craftItem(characterId, playerId, item) {
+  const char = await getCharacter(characterId);
+  if (!char) throw new Error('Personagem não encontrado.');
+  if (playerId && char.player_id && char.player_id !== playerId) {
+    throw new Error('Acesso negado.');
+  }
+
+  const inventory = Array.isArray(char.inventory) ? [...char.inventory] : [];
+  const atualizar = item?.modo === 'atualizar';
+  let indice = -1;
+  if (atualizar) {
+    indice = inventory.findIndex((it) => it && String(it.id) === String(item.id));
+    if (indice < 0) throw new Error('Item não encontrado no inventário.');
+  }
+
+  const salvo = sanitizarItemCraftado(item, inventory, { atualizar });
+  if (indice >= 0) inventory[indice] = salvo;
+  else inventory.push(salvo);
+
+  await query('UPDATE characters SET inventory = $1 WHERE id = $2', [
+    JSON.stringify(inventory),
+    characterId,
+  ]);
+  return salvo;
 }
 
 export async function grantRewards(battle) {
