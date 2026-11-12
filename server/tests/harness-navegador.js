@@ -6,6 +6,9 @@ import './materialComposition.test.js';
 import './materialSchema.test.js';
 import './materialCatalog.test.js';
 import './podridao.test.js';
+import './corrupcao.test.js';
+import './contaminacao.test.js';
+import './runas.test.js';
 import './forgeMaterials.test.js';
 
 executarTestes().then((resumo) => {

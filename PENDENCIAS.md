@@ -1,6 +1,6 @@
 # Pendências — Materiais, Metais e Podridão
 
-Atualizado em 10/11/2026 — Etapa 7 (auditoria e correções).
+Atualizado em 11/11/2026 — Etapa 8 (complemento do catálogo).
 
 Este arquivo separa o que já foi **aprovado**, o que foi implementado como
 **provisório**, o que continua **pendente** e o que é apenas **sugestão**.
@@ -10,6 +10,7 @@ nome, valor, fórmula ou efeito, a ficha continua marcada como pendente.
 Fontes usadas nesta etapa:
 
 - PDF oficial de materiais fornecido pelo criador (texto extraído e lido).
+- Complemento do Catálogo de Metais e Minérios (fichas restantes e correções).
 - Regras aprovadas pelo criador na conversa desta implementação.
 - Código e dados que já existiam no projeto antes desta etapa.
 
@@ -23,7 +24,7 @@ Legenda:
 
 ---
 
-## Índice das decisões D-01 a D-14
+## Índice das decisões D-01 a D-35
 
 | Código | Assunto | Status |
 | --- | --- | --- |
@@ -41,6 +42,27 @@ Legenda:
 | D-12 | Efeitos de Ferro Estígio e Honríneo | Pendente |
 | D-13 | Tabela da Podridão (5 estágios/10 turnos) | Aprovado pelo criador, fora do PDF |
 | D-14 | Commit e limpeza do pacote final | Pendente |
+| D-15 | Adamantino com preço e efeitos percentuais aprovados | Aprovado no complemento |
+| D-16 | Honríneo limitado à adaptação automática, sem percentuais | Aprovado no complemento |
+| D-17 | Vibranium com direção de efeitos, sem números | Aprovado no complemento; números pendentes |
+| D-18 | Ruidium com preço, identidade e sistema de Corrupção | Aprovado no complemento |
+| D-19 | Mournlode com preço e identidade, efeitos pendentes | Aprovado no complemento; efeitos pendentes |
+| D-20 | Ferro de Febre com raridade, qualidade e preço | Aprovado no complemento; efeitos pendentes |
+| D-21 | Ouro Imperial e Bronze Celestial com preço, sem efeitos | Aprovado no complemento |
+| D-22 | Propriedades globais dos metais convencionais | Aprovado no complemento |
+| D-23 | Correção da chave `mournrlode` para `mournlode` | Corrigido |
+| D-24 | Remoção do alias indevido “Minério da Alma” | Corrigido; ficha própria criada em D-31 |
+| D-25 | Preservação dos efeitos legados dos metais convencionais | Provisório; substituído onde há regra oficial (D-30) |
+| D-26 | Uru e Aço Daédrico mantidos como fichas separadas | Provisório; decisão do criador pendente |
+| D-27 | Minério da Alma como matéria-prima | Cadastrado como ficha pendente (D-31) |
+| D-28 | Corrupção do Ruidium implementada em `corrupcao.js` | Implementado, aprovado |
+| D-29 | Integração da Corrupção ao combate | Pendente |
+| D-30 | Electrum, Prata e Obsidiana seguem os efeitos oficiais | Aprovado no complemento |
+| D-31 | Catálogo consolidado com 52 fichas e novas fichas pendentes | Implementado |
+| D-32 | Contaminação Pandemônica separada da Podridão e da Corrupção | Implementado; combate pendente |
+| D-33 | Runas elementais com 17 elementos e regras de uso | Dados implementados; combate pendente |
+| D-34 | Metal das Almas duplica a Pedra da Alma, sem duplicar regras de combate | Implementado |
+| D-35 | Integração de Contaminação e runas ao combate | Pendente |
 
 ---
 
@@ -73,7 +95,8 @@ Legenda:
 - **Restrições oficiais já registradas:** Oricalco é vulnerável à antimagia;
   Tenebrium exige preparação mágica e pode provocar Podridão; Ferro Estígio
   exige treinamento específico; Ruidium possui um sistema próprio de Corrupção
-  com cinco estágios (Normal a Consumido), ainda sem valores completos.
+  de 0 a 100 pontos, com seis estágios (Normal a Consumido), implementado em
+  `corrupcao.js`.
 
 #### Dados oficiais extraídos do PDF
 
@@ -93,9 +116,13 @@ Legenda:
 | Thinaum | Lendária | Excepcional | 65 Ouro |
 | Uru | Mítica | Perfeito | 80 Ouro |
 | Vibranium | Mítica | Perfeito | 100 Ouro |
+| Ruidium | Mítica | Perfeito | 90 Ouro |
 | Prata Pandemônica | Lendária | Excepcional | 75 Ouro |
-| Ouro Imperial | Muito rara | Excepcional | Pendente |
-| Bronze Celestial | Épica | Excepcional | Pendente |
+| Ouro Imperial | Muito rara | Excepcional | 50 Ouro |
+| Bronze Celestial | Épica | Excepcional | 25 Ouro |
+| Adamantino | Pendente | Pendente | 20 Ouro |
+| Ferro de Febre | Rara | Superior | 18 Ouro |
+| Mournlode | Pendente | Pendente | 70 Ouro |
 | Honríneo | Mítica | Perfeito | 25 Ouropla |
 | Minério de Honra | Mítica | Perfeito | 18 Ouropla |
 | Obsidiana | Incomum | Superior | 8 Ouro |
@@ -105,8 +132,11 @@ Legenda:
 | Carvão Mágico | Pendente | Pendente | 15 Ouro |
 
 Os preços dos 12 materiais legados foram preservados, exceto Obsidiana, que
-passou a usar o valor oficial do PDF. Ouro Imperial e Bronze Celestial têm
-raridade e qualidade oficiais, mas continuam sem preço documentado.
+passou a usar o valor oficial do PDF. O complemento acrescentou os preços de
+Adamantino (20 Ouro), Ferro de Febre (18 Ouro), Mournlode (70 Ouro), Ouro
+Imperial (50 Ouro), Bronze Celestial (25 Ouro) e Ruidium (90 Ouro). Raridade e
+qualidade de Adamantino e Mournlode continuam pendentes porque o complemento não
+as informa.
 
 ### 1.2 Decisão D-13 — tabela da Podridão aprovada em conversa
 
@@ -130,8 +160,8 @@ Tratamentos aprovados:
 
 ### 1.3 Entrega implementada e verificada
 
-- Catálogo com **49 fichas**: 5 minérios, 35 metais, 5 materiais especiais e
-  4 materiais mágicos. Os 12 `id`s originais foram preservados.
+- Catálogo com **52 fichas**: 7 minérios, 35 metais, 5 materiais especiais e
+  5 materiais mágicos. Os 12 `id`s originais foram preservados.
 - `src/game/materialRules.js`: categorias, raridades, qualidades, aplicações,
   normalização, validação, filtros, ordenação, preços, efeitos por equipamento,
   compatibilidade e composição.
@@ -142,14 +172,91 @@ Tratamentos aprovados:
 - `src/game/forge.js`: categoria de efeito derivada do tipo real do equipamento,
   composição principal/secundário e custo por kg opcional. A regra antiga de
   1 kg do principal + 0,25 kg do secundário continua como padrão.
+- `src/game/corrupcao.js`: estágios, ganhos e recuperação da Corrupção do
+  Ruidium, em módulo puro.
+- `src/game/contaminacao.js`: aplicações e cálculos da Contaminação
+  Pandemônica, em módulo puro e sem tabela de estágios (D-32).
+- `src/game/runas.js`: 17 elementos, regras de encaixe, combinação e
+  multiplicadores de efeito, sem integrar o combate (D-33).
 - Interface: `src/pages/Materiais.jsx`, `MaterialCard.jsx`,
   `MaterialDetails.jsx` e `MaterialComposition.jsx`, ligados em `App.jsx` e
   `Characters.jsx`. O catálogo tem busca por nome/id/alias, filtros de categoria,
   raridade, qualidade, bioma, aplicação, preço, ordenação e ficha detalhada.
-- Testes: **115/115 passam** no harness de navegador. Cobrem dados oficiais,
-  schema, aliases, filtros, preços, composição, custo, forja e Podridão.
+- Testes: **192/192 passam** no harness de navegador. Cobrem dados oficiais,
+  schema, aliases, filtros, preços, composição, custo, forja, Podridão,
+  Corrupção do Ruidium, Contaminação Pandemônica e runas.
 - Nenhum banco, configuração ou dado já cadastrado foi substituído de forma
   destrutiva. Nenhuma dependência nova foi adicionada ao projeto.
+
+### 1.4 Complemento do catálogo — dados aprovados e implementados
+
+O complemento foi comparado com o catálogo anterior. As decisões abaixo foram
+tomadas seguindo a recomendação apresentada ao criador e ficam registradas como
+**decisões desta implementação**, não como regras oficiais novas.
+
+- **D-15 — Adamantino:** preço de 20 Ouro/kg; efeitos percentuais aprovados para
+  armaduras, lâminas, impacto, armas de fogo, acessórios, equipamentos mágicos e
+  golens. Raridade e qualidade não foram informadas e continuam pendentes.
+- **D-16 — Honríneo:** 25 Ouropla/kg (250 Ouro), Mítica/Perfeito. A adaptação
+  automática ao usuário foi registrada nas categorias, **sem percentuais**. Não
+  há efeito individual de golem recuperado.
+- **D-17 — Vibranium:** 100 Ouro/kg, Mítica/Perfeito. A direção dos efeitos por
+  categoria foi registrada apenas como descrição. Percentuais, capacidade de
+  armazenamento, sobrecarga e regras de combate continuam pendentes.
+- **D-18 — Ruidium:** 90 Ouro/kg, Mítica/Perfeito. Identidade psíquica e sistema
+  de Corrupção implementados em `src/game/corrupcao.js`. **Não** foram criados
+  bônus numéricos de fabricação por categoria.
+- **D-19 — Mournlode:** 70 Ouro/kg. Energia espiritual, purificação de maldições
+  e aplicações contra mortos-vivos/sobrenaturais registradas como identidade.
+  Efeitos por categoria continuam pendentes.
+- **D-20 — Ferro de Febre:** Rara/Superior, 18 Ouro/kg, identidade de acúmulo de
+  calor. Valores e descrições por categoria não recuperados.
+- **D-21 — Ouro Imperial e Bronze Celestial:** classificações preservadas
+  (Muito rara/Excepcional e Épica/Excepcional) e preços de 50 e 25 Ouro/kg.
+  Nenhum efeito por categoria foi inventado.
+- **D-22 — Metais convencionais:** Ouro, Prata, Cobre, Estanho, Chumbo, Platina e
+  Electrum receberam as propriedades globais descritas no complemento.
+- **D-23 — Correção de chave:** `mournrlode` passou a ser `mournlode`, alinhando a
+  chave ao `id` e permitindo `getMaterialById('mournlode')`.
+- **D-24 — Minério da Alma:** o alias indevido foi removido de `metalDasAlmas`.
+  O minério é matéria-prima e ganhou ficha pendente própria em D-31.
+- **D-25 — Efeitos legados:** os efeitos por categoria já existentes de Ferro,
+  Cobre, Estanho, Chumbo, Prata e Ouro foram preservados em vez de apagados.
+  Eles não foram confirmados pelo complemento e ficam marcados para revisão.
+- **D-26 — Uru e Aço Daédrico:** as duas fichas continuam separadas. A repetição
+  de efeitos semelhantes não foi tratada como intencional nem como erro.
+- **D-28 — Corrupção do Ruidium:** estágios 0–19 Normal, 20–39 Influenciado,
+  40–59 Perturbado, 60–79 Corrompido, 80–99 Dominado e 100 Consumido; potência
+  mágica +5/+10/+15/+25%; ganhos de +1/+2/+3/+2/+1; recuperações de -5, -15 e
+  remoção total. O módulo é puro e não altera o combate automaticamente.
+- **D-30 — Efeitos oficiais substituem legados onde existem:** o Electrum passou
+  a conceder apenas +5% de experiência e +5% em efeitos medicinais/cura, sem
+  bônus físico por categoria. A Prata recebeu redução de 50% do dano
+  anti-fantasma/anti-maldição, +100% de dano das armas contra fantasmas e
+  maldições e +20% em efeitos medicinais. A Obsidiana recebeu os efeitos
+  vulcânicos oficiais com penalidades explícitas. Ouro, Cobre, Estanho e Chumbo
+  continuam com os efeitos legados marcados para revisão.
+- **D-31 — Catálogo consolidado em 52 fichas:** 7 minérios, 35 metais, 5
+  especiais e 5 mágicos. Foram adicionadas as fichas pendentes de Minério da
+  Alma e Aço Negro; Satetsu passou a minério bruto; Pedra da Alma passou a
+  material mágico. O filtro de golens continua por aplicação.
+- **D-32 — Contaminação Pandemônica:** condição própria da Prata Pandemônica,
+  separada da Podridão do Tenebrium e da Corrupção do Ruidium. A documentação
+  define dano progressivo, redução de cura, menor resistência à corrupção e
+  efeitos mais intensos em seres sagrados e equipamentos de luz, mas **não**
+  define tabela de estágios. O módulo `contaminacao.js` registra apenas as cinco
+  aplicações documentadas e não cria estágios.
+- **D-33 — Runas elementais:** 17 elementos aprovados (Água, Gelo, Fogo, Ar,
+  Planta, Pedra, Elétrico, Luz, Sombrio, Psíquico, Dor, Veneno, Tempo, Sangue,
+  Metais, Ilusão e Areia). Sem Aço Rúnico, o equipamento aceita 1 runa com efeito
+  reduzido em 50%; com Aço Rúnico, aceita 2 runas com efeitos aumentados em 50%.
+  Duas runas simultâneas precisam ser de elementos diferentes e cada runa ocupa
+  um encaixe de pedra preciosa. Os efeitos individuais de cada runa não foram
+  definidos na documentação recuperada.
+- **D-34 — Metal das Almas:** duplica os percentuais comuns da Pedra da Alma e
+  mantém as três regras especiais de combate (+300% de dano, 50% de proteção e
+  +300% de potência mágica por 3 turnos) fora da duplicação, em
+  `regrasCombate` com `naoDuplicar`.
 
 ---
 
@@ -246,8 +353,8 @@ criador antes de virarem regra definitiva.
 - **Preço exibido:** valores em centavos são decompostos em Platina, Ouropla,
   Ouro, Prata e Bronze. A conversão usa a tabela `MOEDA` já existente.
 - **Aplicações:** quando a ficha não declara `aplicacoes`, o sistema deriva a
-  lista das categorias de efeito já cadastradas. Uru declara `golem`
-  explicitamente.
+  lista das categorias de efeito já cadastradas. Uru e os demais metais oficiais
+  têm a aplicação de golem derivada do efeito de golem da própria ficha.
 - **Fallback mágico:** cajado, varinha, grimório, orbe e catalisador sem efeito
   específico usam `equipamentoMagico`. Nenhuma ficha real inventa um efeito
   específico só para preencher a categoria.
@@ -272,41 +379,51 @@ criador antes de virarem regra definitiva.
 
 #### D-11 — Fichas completas de Ruidium, Vibranium, Honríneo e Mournlode
 
-- **Ruidium:** só existe a observação do sistema de Corrupção em cinco estágios
-  (Normal a Consumido); faltam nomes, percentuais, duração, cura e efeitos.
-- **Vibranium:** a característica “absorve, armazena e redistribui energia
-  cinética” está registrada, mas não há fórmula, limite ou efeito de combate.
-- **Honríneo:** a adaptação automática ao usuário está registrada, sem números.
-- **Mournlode:** a ficha está pendente e não há dados oficiais suficientes
-  registrados para preencher raridade, qualidade, preço ou efeitos.
-- **Decisão necessária:** completar com a documentação oficial ou manter as
-  fichas parciais até uma etapa específica.
+- **Ruidium:** o preço, a classificação Mítica/Perfeito, a identidade psíquica e
+  o sistema de Corrupção foram implementados (D-18 e D-28). Continuam pendentes
+  os efeitos numéricos individuais por categoria.
+- **Vibranium:** a identidade e a direção dos efeitos foram registradas (D-17).
+  Faltam percentuais, limites de armazenamento, sobrecarga e efeitos de combate.
+- **Honríneo:** a adaptação automática foi registrada sem números (D-16).
+- **Mournlode:** preço e identidade foram registrados (D-19); faltam raridade,
+  qualidade e efeitos individuais.
+- **Decisão necessária:** recuperar os números oficiais restantes ou manter as
+  fichas parciais.
 
 #### D-12 — Efeitos de Ferro Estígio e Honríneo
 
 - Ferro Estígio tem a restrição de treinamento registrada, mas os efeitos por
   equipamento continuam pendentes.
-- Honríneo tem raridade, qualidade, preço e a característica de adaptação, mas
-  os efeitos numéricos por categoria continuam pendentes.
+- Honríneo tem raridade, qualidade, preço e a propriedade de adaptação aprovada,
+  mas os percentuais por categoria não existem na documentação recuperada.
 - **Decisão necessária:** quais bônus, percentuais, penalidades e condições
   oficiais cada um concede?
 
 #### D-14 — Commit e limpeza do pacote final
 
 - O commit-base `1c13525` (“parte 1 de implementação de minérios e metais”) já
-  existe e inclui a maior parte da implementação; `b4ea563` é o commit mais
-  recente (“parte 2”).
+  existe e inclui a maior parte da implementação; `b4ea563` (“parte 2”) e
+  `01ad070` são commits posteriores.
 - **Fora do commit atual:** `server/tests/forgeMaterials.test.js`, a versão
   final deste `PENDENCIAS.md`, a alteração de
-  `server/tests/harness-navegador.js` e as correções da auditoria (etapa 7).
+  `server/tests/harness-navegador.js`, `server/tests/harness-dump.js` e as
+  correções das etapas 7 e 8.
 - As correções da auditoria tocam `src/game/forge.js`, `src/game/materials.js`,
   `src/game/materialRules.js`, `src/game/podridao.js`,
   `src/components/MaterialThumb.jsx`, `src/components/MaterialCard.jsx`,
   `src/components/MaterialDetails.jsx`, `src/components/MaterialComposition.jsx`
   e `src/pages/Forge.jsx`.
-- Os testes de regressão da auditoria estão em
-  `server/tests/forgeMaterials.test.js`, `materialCatalog.test.js`,
-  `materialSchema.test.js` e `podridao.test.js`.
+- A etapa 8 acrescenta `src/game/corrupcao.js` e
+  `server/tests/corrupcao.test.js`, além de novas fichas e testes em
+  `src/game/materials.js` e `server/tests/materialCatalog.test.js`.
+- A etapa do complemento (D-30 a D-35) acrescenta
+  `src/game/contaminacao.js`, `src/game/runas.js`,
+  `server/tests/contaminacao.test.js`, `server/tests/runas.test.js`, novas
+  fichas em `src/game/materials.js` e a renderização de efeitos em
+  `src/components/MaterialDetails.jsx`.
+- Os testes de regressão estão em `server/tests/forgeMaterials.test.js`,
+  `materialCatalog.test.js`, `materialSchema.test.js`, `podridao.test.js`,
+  `corrupcao.test.js`, `contaminacao.test.js` e `runas.test.js`.
 - O arquivo temporário `server/tests/preview-materiais.jsx` foi removido do
   pacote final por ser apenas uma prévia local da interface.
 - **Decisão necessária:** commitar as correções, os testes de integração da
@@ -317,32 +434,39 @@ criador antes de virarem regra definitiva.
 
 Situação atual do catálogo:
 
-- **18 fichas sem raridade** e **29 sem qualidade**.
+- **19 fichas sem raridade** e **30 sem qualidade**.
 - **Nenhuma ficha está com status `completo`**; todas têm pelo menos um campo
   pendente.
-- **13 fichas** estão marcadas como aplicação de golem.
-- **4 fichas** são míticas e **4** são perfeitas (Uru, Vibranium, Honríneo e
-  Minério de Honra).
+- **25 fichas** estão marcadas como aplicação de golem.
+- **5 fichas** são míticas e **5** são perfeitas (Uru, Vibranium, Ruidium,
+  Honríneo e Minério de Honra).
 - Todas as fichas continuam com os campos físicos pendentes: características,
   dureza, resistência, peso, densidade, flexibilidade e condutividade mágica.
 - Muitas fichas ainda não têm descrição, bioma, compatibilidade, aplicações ou
   efeitos. Onde não há dado oficial, a interface mostra “Pendente”.
 - **Imagens:** não existem os arquivos `assets/materiais/*.png`; a interface usa
   a inicial do material e o aviso “Imagem pendente”.
-- **Ouro Imperial** e **Bronze Celestial** têm raridade/qualidade oficiais, mas
-  não têm preço oficial preenchido.
+- **Adamantino** e **Mournlode** têm preço, mas não têm raridade nem qualidade
+  informadas no complemento.
+- **Ouro Imperial**, **Bronze Celestial**, **Ferro de Febre**, **Adamantino** e
+  **Mournlode** têm preço oficial, mas não têm efeitos por categoria recuperados.
+- **Aurorum**, **Prata Sagrada**, **Ébano**, **Stalhrim**, **Gelo Eterno**,
+  **Aço Negro** e **Minério da Alma** continuam sem ficha de efeitos.
 
 O que falta preencher com o criador/documentação:
 
-1. Raridade e qualidade das 18/29 fichas restantes.
+1. Raridade e qualidade das 19/30 fichas restantes.
 2. Descrições oficiais e biomas de origem.
 3. Ficha física completa (peso, dureza, densidade etc.).
 4. Lista oficial de categorias compatíveis por material.
-5. Efeitos por equipamento que ainda estão vazios.
+5. Efeitos por equipamento que ainda estão vazios, incluindo Ferro de Febre,
+   Ouro Imperial, Bronze Celestial, Mournlode e Aurorum.
 6. Efeitos de golem para os materiais que podem ser usados em golens.
 7. Imagens oficiais.
-8. Valores completos do sistema de Corrupção do Ruidium.
-9. Regras de Vibranium, Honríneo e Mournlode.
+8. Percentuais, limites e sobrecarga do Vibranium.
+9. Efeitos numéricos por categoria do Ruidium, sem confundir com a potência
+   mágica da Corrupção.
+10. Efeitos individuais de cada uma das 17 runas elementais.
 
 ### 3.3 Integrações ainda pendentes
 
@@ -363,6 +487,13 @@ O que falta preencher com o criador/documentação:
   implementada no combate.
 - **Podridão no combate:** `podridao.js` é um módulo puro; falta decidir onde a
   exposição acumula, quando o dano é aplicado e como o tratamento é usado.
+- **Contaminação Pandemônica no combate (D-35):** `contaminacao.js` é um módulo
+  puro. Falta decidir onde a contaminação acumula, quando as chances de aplicação
+  são roladas, como o dano progressivo é aplicado e como a redução de cura entra
+  nos cálculos.
+- **Runas no combate (D-35):** `runas.js` registra elementos e regras de uso, mas
+  os efeitos individuais de cada runa não foram definidos. Falta também integrar
+  os encaixes de pedra preciosa e os multiplicadores de 50%/150%.
 - **Paridade offline/online:** a forja e o combate têm caminhos separados; falta
   garantir que os mesmos efeitos valham nos dois.
 - **Salvar item craftado no modo online:** `src/api.js` chama
@@ -390,10 +521,11 @@ O que falta preencher com o criador/documentação:
   executados.
 - A validação foi feita com o binário do esbuild já presente em
   `node_modules`, um servidor estático em PowerShell e o harness de navegador.
-- Resultado do harness após a auditoria: **135/135 testes passam**, sem falhas.
-- A interface foi validada no navegador: catálogo com 49 fichas, filtros,
-  busca por alias (inclusive sem acento), ficha detalhada e composição com custo
-  parcial e limitação de kg.
+- Resultado do harness após o complemento: **192/192 testes passam**, sem falhas.
+- A interface foi validada no navegador: catálogo com 52 fichas, filtros
+  (7 minérios, 35 metais, 5 especiais, 5 mágicos e 25 de golem), busca por alias
+  (inclusive sem acento), ficha detalhada e composição com custo parcial e
+  limitação de kg.
 - A prévia registrou apenas respostas HTTP 404 para as imagens ausentes; não
   houve erro de aplicação no console.
 - **Build de produção, teste E2E oficial, responsividade e acessibilidade
@@ -458,6 +590,31 @@ Arquivos afetados pelas pendências gerais: `server/src/services/characters.js`,
 `src/config.js`, `src/api.js`, `src/pages/Forge.jsx` e
 `tools/sync-server-game.ps1`.
 
+### 3.7 Relatório de divergências do complemento
+
+Comparação entre o catálogo anterior, o PDF e o complemento:
+
+| Item | Divergência encontrada | Tratamento aplicado |
+| --- | --- | --- |
+| Mournlode | A chave era `mournrlode`, mas o `id` era `mournlode`; a busca por id falhava | Chave corrigida para `mournlode` (D-23) |
+| Minério da Alma | Era alias de `metalDasAlmas`, mas o complemento o define como matéria-prima do metal | Alias removido; ficha pendente própria criada (D-24 e D-31) |
+| Efeitos legados dos metais | Ferro, Cobre, Estanho, Chumbo, Prata e Ouro tinham efeitos por categoria não confirmados pelo complemento | Efeitos preservados e marcados para revisão (D-25) |
+| Uru e Aço Daédrico | Efeitos muito semelhantes e mesmos percentuais em várias categorias | Fichas mantidas separadas; decisão do criador pendente (D-26) |
+| Adamantino | O complemento informa preço e efeitos, mas não raridade/qualidade | Preço e efeitos implementados; classificação pendente |
+| Honríneo | O complemento proíbe criar percentuais adicionais | Apenas a adaptação automática foi registrada |
+| Vibranium | O complemento aprova a direção dos efeitos, mas não os números | Descrições registradas; números pendentes |
+| Ruidium | A ficha anterior só citava “cinco estágios”; o complemento define a mecânica completa | `corrupcao.js` implementado; efeitos de fabricação por categoria continuam pendentes |
+| Ferro de Febre | O complemento afirma que a ficha completa foi aprovada, mas não traz os valores | Raridade, qualidade, preço e identidade registrados; efeitos pendentes |
+| Mournlode | O complemento define preço e identidade, mas não os efeitos nem raridade/qualidade | Preço e identidade registrados; raridade, qualidade e efeitos pendentes |
+| Ouro Imperial | A ficha anterior tinha classificação, mas não preço | Preço de 50 Ouro/kg adicionado; efeitos pendentes |
+| Bronze Celestial | A ficha anterior tinha classificação, mas não preço | Preço de 25 Ouro/kg adicionado; efeitos pendentes |
+| Obsidiana | O complemento reforça que é material vulcânico, não metal | Mantida como `tipo: 'pedra'` e categoria especial (D-03) |
+| Carvão | O complemento reforça que é material utilitário, não metal | Mantido como especial e fora das fichas de arma/armadura |
+| Preço do Cobre | O complemento diz “preço aumentado em 10%”, sem informar a referência | Preço atual preservado; referência registrada como pendência |
+
+Nenhum nome, valor, fórmula ou efeito oficial foi alterado sem autorização. As
+lacunas que o complemento não preenche continuam como pendentes.
+
 ---
 
 ## 4. Sugestão
@@ -480,9 +637,10 @@ Arquivos afetados pelas pendências gerais: `server/src/services/characters.js`,
    materiais/gemas, sem duplicar regras.
 7. **Usar `compatibilidade` de verdade** quando as receitas oficiais forem
    definidas, em vez de manter o campo apenas no schema.
-8. **Criar um módulo de Corrupção do Ruidium** nos mesmos moldes de
-   `podridao.js`, com estágios, tratamentos e funções puras, quando os valores
-   oficiais forem fornecidos.
+8. **Integrar a Corrupção do Ruidium ao combate** (D-29): o módulo
+   `corrupcao.js` é puro e já implementa estágios, ganhos e recuperação; falta
+   decidir onde a pontuação acumula, quando as chances de efeito são roladas e
+   como a potência mágica adicional entra nas habilidades.
 9. **Decidir a transição dos drops de mineração** dos `id`s refinados para os
    minérios brutos, com migração dos veios existentes.
 10. **Automatizar a validação** em CI com `npm test` e `npm run build` em um
@@ -497,3 +655,9 @@ Arquivos afetados pelas pendências gerais: `server/src/services/characters.js`,
 13. **Revisar a ordem das pendências gerais:** P-01, P-02 e P-03 (nível e XP)
     primeiro; depois P-04 e P-05 (chefes e masmorras); em seguida P-06, P-07 e
     P-09 (equipamento, inventário e desgaste); por fim P-08, P-10 a P-18.
+14. **Integrar a Contaminação Pandemônica ao combate** (D-35): decidir onde a
+    condição acumula, quando as chances da Prata Pandemônica são roladas e como
+    o dano progressivo e a redução de cura entram nos cálculos.
+15. **Definir e integrar os efeitos das 17 runas** (D-33/D-35): cada runa ainda
+    não tem efeito individual na documentação recuperada; faltam também os
+    encaixes de pedra preciosa e os multiplicadores de 50% e 150%.
