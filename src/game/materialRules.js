@@ -742,7 +742,6 @@ export function validarMaterial(material) {
         if (efeito.condicoes != null && !Array.isArray(efeito.condicoes)) {
           erros.push(`condições do efeito "${chave}" devem ser uma lista.`);
         }
-<<<<<<< HEAD
         if (efeito.chance != null) {
           const chance = Number(efeito.chance);
           if (!Number.isFinite(chance) || chance < 0 || chance > 100) {
@@ -761,14 +760,13 @@ export function validarMaterial(material) {
         }
         if (efeito.status != null && typeof efeito.status !== 'string') {
           erros.push(`status do efeito "${chave}" deve ser texto.`);
-=======
+        }
         if (efeito.modificadores != null && !Array.isArray(efeito.modificadores)) {
           erros.push(`modificadores do efeito "${chave}" devem ser uma lista.`);
         } else if (Array.isArray(efeito.modificadores)) {
           efeito.modificadores.forEach((modificador, indice) => {
             validarModificador(modificador, `efeitos.${chave}.modificadores[${indice}]`, erros);
           });
->>>>>>> adf007ca5d374578a87f221640ae286e6b0cbf9c
         }
         if (
           efeito.especial != null
@@ -923,57 +921,41 @@ export function getEfeitoPorEquipamento(material, categoria, opcoes = {}) {
     ? material.efeitosGerais
     : [];
 
-  if (!efeito && gerais.length === 0) return null;
+  // Fallback por categoria (`efeitos.geral`): vale quando não existe efeito
+  // direto nem o fallback mágico. Golens ficam de fora porque dependem de
+  // aplicação declarada na ficha.
+  const efeitoGeralCategoria = !efeito && categoria !== 'golem' ? efeitos.geral : null;
+
+  if (!efeito && !efeitoGeralCategoria && gerais.length === 0) return null;
 
   const montar = (base, origem) => ({
     chave: categoria,
     origem,
-<<<<<<< HEAD
-    desc: efeito.desc || efeito.descricao || '',
-    bonus: efeito.bonus || {},
-    percentuais: efeito.percentuais || null,
-    penalidades: efeito.penalidades || null,
-    ajustes: efeito.ajustes || null,
-    condicoes: Array.isArray(efeito.condicoes) ? efeito.condicoes : [],
-    chance: efeito.chance ?? null,
-    duracao: efeito.duracao ?? null,
-    alvo: efeito.alvo ?? null,
-    status: efeito.status ?? null,
-    especial: efeito.especial || null,
-=======
     desc: base.desc || base.descricao || '',
     bonus: base.bonus || {},
     percentuais: base.percentuais || null,
     penalidades: base.penalidades || null,
+    ajustes: base.ajustes || null,
     condicoes: Array.isArray(base.condicoes) ? base.condicoes : [],
+    chance: base.chance ?? null,
+    duracao: base.duracao ?? null,
+    alvo: base.alvo ?? null,
+    status: base.status ?? null,
     especial: base.especial || null,
     modificadores: Array.isArray(base.modificadores) ? base.modificadores : [],
->>>>>>> adf007ca5d374578a87f221640ae286e6b0cbf9c
     fallback: origem !== categoria,
   });
 
   const base = efeito
     ? montar(efeito, direto ? categoria : 'equipamentoMagico')
-    : montar({}, 'efeitosGerais');
+    : efeitoGeralCategoria
+      ? montar(efeitoGeralCategoria, 'geral')
+      : montar({}, 'efeitosGerais');
 
-<<<<<<< HEAD
-  if (CATEGORIAS_MAGICAS.includes(categoria) && efeitos.equipamentoMagico) {
-    return montar(efeitos.equipamentoMagico, 'equipamentoMagico');
-  }
-
-  // Efeitos gerais não exigem repetição em todas as categorias. Golens ficam de
-  // fora do fallback porque dependem de aplicação declarada na ficha.
-  if (categoria !== 'golem' && efeitos.geral) {
-    return montar(efeitos.geral, 'geral');
-  }
-
-  return null;
-=======
   return {
     ...base,
     modificadores: combinarModificadores(gerais, base.modificadores),
   };
->>>>>>> adf007ca5d374578a87f221640ae286e6b0cbf9c
 }
 
 export function getEfeitosPorCategoria(material) {

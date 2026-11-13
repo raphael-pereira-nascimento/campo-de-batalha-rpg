@@ -10,6 +10,7 @@ import {
   FISICA_CAMPOS,
   getCategoria,
   getCategoriaEfeitoEquipamento,
+  getEfeitoPorEquipamento,
   normalizarMaterial,
   validarMaterial,
   camposPendentes,
@@ -258,5 +259,81 @@ describe('schema — validação', () => {
     expect(pendentes).not.toContain('categoria');
     expect(pendentes).not.toContain('aplicacoes');
     expect(pendentes).not.toContain('efeitos');
+  });
+});
+
+describe('schema — resolução de efeitos por equipamento', () => {
+  const material = {
+    id: 'teste',
+    efeitos: {
+      armadura: {
+        desc: 'Efeito direto',
+        bonus: { resistencia: 2 },
+        modificadores: [{ tipo: 'status', alvo: 'queimadura', valor: 20 }],
+      },
+      equipamentoMagico: {
+        desc: 'Efeito mágico',
+        percentuais: { dano: 10 },
+      },
+    },
+    efeitosGerais: [
+      { tipo: 'especial', alvo: 'teste geral', valor: 5 },
+    ],
+  };
+
+  it('combina o efeito direto com os efeitos gerais', () => {
+    const efeito = getEfeitoPorEquipamento(material, 'armadura');
+    expect(efeito.origem).toBe('armadura');
+    expect(efeito.fallback).toBe(false);
+    expect(efeito.bonus.resistencia).toBe(2);
+    expect(efeito.modificadores).toHaveLength(2);
+    expect(efeito.modificadores.map((m) => m.alvo).sort())
+      .toEqual(['queimadura', 'teste geral']);
+  });
+
+  it('efeito idêntico do específico substitui o geral, sem acumular', () => {
+    const efeito = getEfeitoPorEquipamento({
+      id: 'teste',
+      efeitos: {
+        armadura: {
+          desc: 'Específico',
+          modificadores: [{ tipo: 'especial', alvo: 'Teste Geral', valor: 20 }],
+        },
+      },
+      efeitosGerais: [
+        { tipo: 'especial', alvo: 'teste geral', valor: 5 },
+      ],
+    }, 'armadura');
+    expect(efeito.modificadores).toHaveLength(1);
+    expect(efeito.modificadores[0].valor).toBe(20);
+  });
+
+  it('categorias mágicas caem no fallback equipamentoMagico', () => {
+    const efeito = getEfeitoPorEquipamento(material, 'cajado');
+    expect(efeito.origem).toBe('equipamentoMagico');
+    expect(efeito.fallback).toBe(true);
+    expect(efeito.percentuais).toEqual({ dano: 10 });
+  });
+
+  it('usa efeitos.geral quando não há efeito da categoria', () => {
+    const comGeral = {
+      id: 'teste',
+      efeitos: { geral: { desc: 'Geral', percentuais: { cura: 20 } } },
+    };
+    const efeito = getEfeitoPorEquipamento(comGeral, 'armadura');
+    expect(efeito.origem).toBe('geral');
+    expect(efeito.percentuais).toEqual({ cura: 20 });
+  });
+
+  it('não aplica efeitos.geral a golens nem com incluirGerais desligado', () => {
+    const comGeral = {
+      id: 'teste',
+      efeitos: { geral: { desc: 'Geral', percentuais: { cura: 20 } } },
+    };
+    expect(getEfeitoPorEquipamento(comGeral, 'golem')).toBeNull();
+
+    const semGerais = getEfeitoPorEquipamento(material, 'armadura', { incluirGerais: false });
+    expect(semGerais.modificadores).toHaveLength(1);
+    expect(semGerais.modificadores[0].alvo).toBe('queimadura');
   });
 });

@@ -155,8 +155,9 @@ describe('catálogo — integridade das fichas', () => {
     expect(vibranium.efeitos.armadura.desc).toContain('Absorve');
     expect(vibranium.efeitos.golem.desc).toContain('devolve a energia');
     for (const efeito of Object.values(vibranium.efeitos).filter(Boolean)) {
-      expect(efeito.percentuais).toBeFalsy();
-      expect(efeito.bonus).toBeFalsy();
+      // A normalização representa ausência de valores como objeto vazio.
+      expect(efeito.percentuais || {}).toEqual({});
+      expect(efeito.bonus || {}).toEqual({});
     }
     expect(vibranium.efeitosNegativos.some((t) => t.includes('sobrecarga'))).toBe(true);
   });
@@ -176,7 +177,7 @@ describe('catálogo — integridade das fichas', () => {
     expect(precoKgEmCents(honrineo.precoPorKg)).toBe(250000);
     for (const chave of ['armadura', 'armaLamina', 'armaImpacto', 'armaFogo', 'acessorio', 'equipamentoMagico']) {
       expect(honrineo.efeitos[chave].desc, chave).toContain('Adaptação automática');
-      expect(honrineo.efeitos[chave].percentuais, chave).toBeFalsy();
+      expect(honrineo.efeitos[chave].percentuais || {}, chave).toEqual({});
     }
     expect(honrineo.efeitos.golem).toBeFalsy();
   });

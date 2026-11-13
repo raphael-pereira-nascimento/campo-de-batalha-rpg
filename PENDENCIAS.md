@@ -1,10 +1,6 @@
 # Pendências — Materiais, Metais e Podridão
 
-<<<<<<< HEAD
-Atualizado em 11/11/2026 — Etapa 8 (complemento do catálogo).
-=======
-Atualizado em 11/11/2026 — Etapa 8 (integrações da forja).
->>>>>>> adf007ca5d374578a87f221640ae286e6b0cbf9c
+Atualizado em 12/11/2026 — Etapa 8 (complemento do catálogo e integrações da forja).
 
 Este arquivo separa o que já foi **aprovado**, o que foi implementado como
 **provisório**, o que continua **pendente** e o que é apenas **sugestão**.
@@ -41,7 +37,7 @@ Legenda:
 | D-07 | Bônus negativo do secundário com `Math.trunc` | Provisório |
 | D-08 | Percentuais do secundário seguem a mesma regra dos bônus | Provisório |
 | D-09 | Custo de fabricação com quantidades em kg opcionais | Provisório |
-| D-10 | Efeitos de Tenebrium em armas de impacto e golens | Pendente |
+| D-10 | Efeitos de Tenebrium em armas de impacto e golens | Resolvido no PDF e implementado |
 | D-11 | Fichas completas de Ruidium, Vibranium, Honríneo e Mournlode | Pendente |
 | D-12 | Efeitos de Ferro Estígio e Honríneo | Pendente |
 | D-13 | Tabela da Podridão (5 estágios/10 turnos) | Aprovado pelo criador, fora do PDF |
@@ -94,8 +90,12 @@ Legenda:
   a vida já reduzida. Os tratamentos interrompem a progressão e restauram a
   vida máxima perdida.
 - **Armas de Tenebrium:** causam 20% da vida máxima por turno durante 3 turnos;
-  chance de aplicação de 15% em arma comum e 25% em equipamento mágico. A
-  documentação também registra imunidade para armaduras de Tenebrium.
+  chance de aplicação de 15% em arma comum e 25% em equipamento mágico. Armas
+  de impacto seguem as lâminas. A documentação também registra imunidade para
+  armaduras de Tenebrium.
+- **Golens de Tenebrium:** alternam entre o modo Velocidade (+60% velocidade e
+  +40% de dano recebido) e o modo Resistência (+30% de dano causado, +50% de
+  resistência a danos, −60% de velocidade e Podridão em todo dano causado).
 - **Restrições oficiais já registradas:** Oricalco é vulnerável à antimagia;
   Tenebrium exige preparação mágica e pode provocar Podridão; Ferro Estígio
   exige treinamento específico; Ruidium possui um sistema próprio de Corrupção
@@ -373,14 +373,6 @@ criador antes de virarem regra definitiva.
 
 ### 3.1 Decisões pendentes desta etapa
 
-#### D-10 — Tenebrium em armas de impacto e golens
-
-- O PDF documenta a Podridão em armas; não foram encontrados valores oficiais
-  para armas de impacto nem para golens de Tenebrium.
-- **Decisão necessária:** esses equipamentos aplicam a mesma Podridão, uma
-  versão reduzida ou nenhuma?
-- **Hoje no código:** `PODRIDAO_ARMA` só descreve a arma comum e a mágica.
-
 #### D-11 — Fichas completas de Ruidium, Vibranium, Honríneo e Mournlode
 
 - **Ruidium:** o preço, a classificação Mítica/Perfeito, a identidade psíquica e
@@ -506,36 +498,28 @@ O que falta preencher com o criador/documentação:
 
 ### 3.4 Validação e limitações do ambiente
 
-<<<<<<< HEAD
-- **`node` e `npm` não estão disponíveis neste ambiente.** Por isso
-  `npm run test:unit`, `npm run test:e2e` e `npm run build` oficiais não foram
-  executados.
-- A validação foi feita com o binário do esbuild já presente em
-  `node_modules`, um servidor estático em PowerShell e o harness de navegador.
-- Resultado do harness após o complemento: **192/192 testes passam**, sem falhas.
+- **Neste ambiente (12/11/2026), `node`, `npm` e `git` não estão no `PATH`.**
+  A validação local usou o binário do esbuild já presente em `node_modules`, um
+  servidor estático em PowerShell e o harness de navegador.
+- No ambiente da auditoria da Etapa 8, `node` v24.15.0 e `npm` 11.12.1 estavam
+  disponíveis; no PowerShell, `npm`/`npx` puros esbarram na ExecutionPolicy e é
+  preciso usar `npm.cmd`. Nesse ambiente, **421/421 testes unitários** passaram
+  (`npm.cmd run test --prefix server`) e o build de produção
+  (`npm.cmd run build`) concluiu sem erro.
+- Resultado do harness neste ambiente após o merge da Etapa 8: **199/199 testes
+  passam**, sem falhas, incluindo 5 testes novos de resolução de efeitos por
+  equipamento.
 - A interface foi validada no navegador: catálogo com 52 fichas, filtros
   (7 minérios, 35 metais, 5 especiais, 5 mágicos e 25 de golem), busca por alias
   (inclusive sem acento), ficha detalhada e composição com custo parcial e
   limitação de kg.
 - A prévia registrou apenas respostas HTTP 404 para as imagens ausentes; não
   houve erro de aplicação no console.
-- **Build de produção, teste E2E oficial, responsividade e acessibilidade
-  completa** ainda não foram verificados.
-- O `git` também não está no `PATH`; quando necessário, usar o executável do
-  GitHub Desktop. O commit-base já foi criado, mas os arquivos citados em D-14
-  continuam fora dele.
-=======
-- Na auditoria da Etapa 7, `node`, `npm` e `git` não estavam no `PATH`; a
-  validação usou o esbuild já presente em `node_modules`, um servidor estático
-  em PowerShell e o harness de navegador (135/135 testes).
-- Na Etapa 8, `node` v24.15.0, `npm` 11.12.1 e `git` estão disponíveis. No
-  PowerShell, `npm`/`npx` puros esbarram na ExecutionPolicy; usar `npm.cmd`.
-- Resultado atual: **415/415 testes unitários passam**
-  (`npm.cmd run test --prefix server`) e o build de produção
-  (`npm.cmd run build`) conclui sem erro.
 - **Teste E2E oficial, responsividade e acessibilidade completa** continuam sem
   verificação.
->>>>>>> adf007ca5d374578a87f221640ae286e6b0cbf9c
+- O `git` também não está no `PATH` neste ambiente; quando necessário, usar o
+  executável do GitHub Desktop. O commit-base e as etapas seguintes já foram
+  commitados; as pendências de commit restantes estão em D-14.
 
 ### 3.5 Correções aplicadas na auditoria
 
@@ -553,7 +537,7 @@ do código.
 | Aliases | `getMaterialPorAlias` usa `normalizarTexto`, encontrando aliases com ou sem acento; o import ausente em `materials.js` foi corrigido |
 | Bônus de conjunto | `calcularBonusConjunto` aceita `materiais.primario` como id ou objeto |
 | Podridão — vida atual | Vida 0 permanece 0 (personagem caído) e valores negativos são limitados a zero, antes e depois do tratamento |
-| Validação de efeitos | `validarMaterial` confere `percentuais`, `penalidades`, `condicoes` e `especial` |
+| Validação de efeitos | `validarMaterial` confere `percentuais`, `penalidades`, `condicoes`, `especial`, `chance`, `duracao`, `alvo`, `status` e `modificadores` |
 
 ### 3.6 Regras gerais do RPG ainda pendentes (P-01 a P-18)
 
@@ -593,7 +577,6 @@ Arquivos afetados pelas pendências gerais: `server/src/services/characters.js`,
 `src/config.js`, `src/api.js`, `src/pages/Forge.jsx` e
 `tools/sync-server-game.ps1`.
 
-<<<<<<< HEAD
 ### 3.7 Relatório de divergências do complemento
 
 Comparação entre o catálogo anterior, o PDF e o complemento:
@@ -618,8 +601,8 @@ Comparação entre o catálogo anterior, o PDF e o complemento:
 
 Nenhum nome, valor, fórmula ou efeito oficial foi alterado sem autorização. As
 lacunas que o complemento não preenche continuam como pendentes.
-=======
-### 3.7 Correções de integração aplicadas na Etapa 8
+
+### 3.8 Correções de integração aplicadas na Etapa 8
 
 Estas correções fecham os defeitos de integração da forja listados na Etapa 7.
 Nenhuma regra, fórmula ou valor oficial foi alterado.
@@ -639,8 +622,7 @@ Nenhuma regra, fórmula ou valor oficial foi alterado.
 | Gemas em armas | `gemsAttrs` e os loops de regeneração/multiplicadores do servidor passam a varrer `equipment.armas` com a categoria `arma`, cobrindo as até três armas equipadas e a arma legada sem duplicar |
 | Arquivo temporário | `preview-materiais-entry.jsx` foi removido por não ser referenciado pelo projeto |
 | Seleção de materiais | `Forge.jsx` passou a montar a lista por `categoria` (minério, metal, especial e mágico), sem depender só do campo legado `tipo` |
-| Testes | 421/421 testes unitários passam; build de produção (`vite build`) conclui sem erro |
->>>>>>> adf007ca5d374578a87f221640ae286e6b0cbf9c
+| Testes | 421/421 testes unitários passavam na auditoria da Etapa 8; o harness local valida 199/199, incluindo 5 testes novos de resolução de efeitos por equipamento |
 
 ---
 
