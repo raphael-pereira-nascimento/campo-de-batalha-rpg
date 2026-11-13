@@ -506,8 +506,8 @@ O que falta preencher com o criador/documentação:
   preciso usar `npm.cmd`. Nesse ambiente, **421/421 testes unitários** passaram
   (`npm.cmd run test --prefix server`) e o build de produção
   (`npm.cmd run build`) concluiu sem erro.
-- Resultado do harness neste ambiente após o merge da Etapa 8: **199/199 testes
-  passam**, sem falhas, incluindo 5 testes novos de resolução de efeitos por
+- Resultado do harness neste ambiente após o merge da Etapa 8: **200/200 testes
+  passam**, sem falhas, incluindo 6 testes novos de resolução de efeitos por
   equipamento.
 - A interface foi validada no navegador: catálogo com 52 fichas, filtros
   (7 minérios, 35 metais, 5 especiais, 5 mágicos e 25 de golem), busca por alias
@@ -622,7 +622,8 @@ Nenhuma regra, fórmula ou valor oficial foi alterado.
 | Gemas em armas | `gemsAttrs` e os loops de regeneração/multiplicadores do servidor passam a varrer `equipment.armas` com a categoria `arma`, cobrindo as até três armas equipadas e a arma legada sem duplicar |
 | Arquivo temporário | `preview-materiais-entry.jsx` foi removido por não ser referenciado pelo projeto |
 | Seleção de materiais | `Forge.jsx` passou a montar a lista por `categoria` (minério, metal, especial e mágico), sem depender só do campo legado `tipo` |
-| Testes | 421/421 testes unitários passavam na auditoria da Etapa 8; o harness local valida 199/199, incluindo 5 testes novos de resolução de efeitos por equipamento |
+| Efeitos gerais | `getEfeitoPorEquipamento` combina `efeitosGerais` com o efeito da categoria, preserva o fallback de `efeitos.geral` e mantém golens fora desse fallback; `MaterialDetails` exibe os modificadores resultantes e rotula `efeitosGerais` como efeito geral |
+| Testes | 421/421 testes unitários passavam na auditoria da Etapa 8; o harness local valida 200/200, incluindo 6 testes novos de resolução de efeitos por equipamento |
 
 ---
 

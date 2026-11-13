@@ -325,6 +325,17 @@ describe('schema — resolução de efeitos por equipamento', () => {
     expect(efeito.percentuais).toEqual({ cura: 20 });
   });
 
+  it('expõe efeitos gerais mesmo sem efeito da categoria', () => {
+    const efeito = getEfeitoPorEquipamento({
+      id: 'teste',
+      efeitos: {},
+      efeitosGerais: [{ tipo: 'especial', alvo: 'teste geral', valor: 5 }],
+    }, 'armadura');
+    expect(efeito.origem).toBe('efeitosGerais');
+    expect(efeito.fallback).toBe(true);
+    expect(efeito.modificadores).toHaveLength(1);
+  });
+
   it('não aplica efeitos.geral a golens nem com incluirGerais desligado', () => {
     const comGeral = {
       id: 'teste',

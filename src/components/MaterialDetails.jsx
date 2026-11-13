@@ -55,6 +55,41 @@ function BonusList({ bonus }) {
   );
 }
 
+function ModificadoresList({ modificadores }) {
+  const lista = Array.isArray(modificadores) ? modificadores.filter(Boolean) : [];
+  if (lista.length === 0) return null;
+
+  return (
+    <ul className="material-bonus-list">
+      {lista.map((modificador, indice) => {
+        const partes = [];
+        if (modificador.valor != null) {
+          partes.push(`${modificador.valor}${modificador.unidade ? ` ${modificador.unidade}` : ''}`);
+        }
+        if (modificador.alvo) partes.push(modificador.alvo);
+        if (modificador.condicao) partes.push(`condição: ${modificador.condicao}`);
+        if (modificador.duracao) partes.push(`duração: ${modificador.duracao}`);
+        if (modificador.chance != null) partes.push(`chance: ${modificador.chance}%`);
+        if (modificador.sistema) partes.push(`sistema: ${modificador.sistema}`);
+
+        return (
+          <li key={`${modificador.tipo || 'efeito'}-${indice}`}>
+            <strong>{modificador.tipo || 'Efeito'}</strong>
+            {partes.length > 0 ? `: ${partes.join('; ')}` : ''}
+            {modificador.status === 'pendente' && (
+              <>
+                {' '}
+                <span className="tag material-tag-pendente">pendente</span>
+              </>
+            )}
+            {modificador.observacao ? ` (${modificador.observacao})` : ''}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function EspecialTexto({ especial }) {
   if (!especial) return null;
   if (typeof especial === 'string') {
@@ -88,6 +123,7 @@ function EfeitoBloco({ chave, info, material }) {
   const temPenalidades = efeito?.penalidades && Object.keys(efeito.penalidades).length > 0;
   const temAjustes = efeito?.ajustes && Object.keys(efeito.ajustes).length > 0;
   const temCondicoes = efeito?.condicoes?.length > 0;
+  const temModificadores = efeito?.modificadores?.length > 0;
   const temEspecial = Boolean(efeito?.especial);
 
   return (
@@ -95,7 +131,11 @@ function EfeitoBloco({ chave, info, material }) {
       <div className="material-efeito-head">
         <span>{info.icone} {info.nome}</span>
         {efeito?.fallback && (
-          <span className="tag">{efeito.origem === 'geral' ? 'efeito geral' : 'fallback mágico'}</span>
+          <span className="tag">
+            {efeito.origem === 'geral' || efeito.origem === 'efeitosGerais'
+              ? 'efeito geral'
+              : 'fallback mágico'}
+          </span>
         )}
       </div>
 
@@ -135,6 +175,8 @@ function EfeitoBloco({ chave, info, material }) {
               ))}
             </ul>
           )}
+
+          {temModificadores && <ModificadoresList modificadores={efeito.modificadores} />}
 
           {efeito.chance != null && (
             <p className="material-efeito-condicao">Chance: {efeito.chance}%</p>
