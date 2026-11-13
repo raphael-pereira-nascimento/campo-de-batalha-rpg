@@ -59,6 +59,13 @@ import {
 import { estadoEclipse, sortearVarianteEclipse, aplicarEclipseEmChefe, aplicarVarianteEclipseEmChefe } from './eclipse.js';
 import { RACES } from './races.js';
 import { buildMonster, bossActionsPerTurn, chefeHpMultPorAdversarios } from './monsters.js';
+import {
+  normalizarChance,
+  danoDeStatus,
+  reducaoDeCuraPct,
+  aplicarCorrupcaoEmAtributos,
+} from './combatEffects.js';
+import { calcularEstadoCorrupcao } from './corrupcao.js';
 
 let logCounter = 0;
 
@@ -294,6 +301,12 @@ export class BattleManager {
       inventory: JSON.parse(JSON.stringify(character.inventory || [])),
       hp: stats.hpMax,
       hpMax: stats.hpMax,
+      // Vida máxima original: base para Podridão e Contaminação (nunca a vida
+      // já reduzida por outros efeitos).
+      hpMaxOriginal: stats.hpMax,
+      // Corrupção persistida no personagem (0–100); penalidades por estágio
+      // são aplicadas em `_finalAttrs`.
+      corrupcao: Number(character.corrupcao) || 0,
       mp: stats.mpMax,
       mpMax: stats.mpMax,
       defesa: stats.defesa,
@@ -421,6 +434,7 @@ export class BattleManager {
       m.hp = m.hpMax = Math.max(50, Math.round(sumHeroHp * (def.multiplicadorHP || 3) * chefeHpMultPorAdversarios(playerCount)));
     }
     m.monsterDef = { ...m.monsterDef, acoesPorTurno: m.acoesPorTurno };
+    m.hpMaxOriginal = m.hpMax;
     battle.participants.push(m);
     battle.log.push(makeLog(`🐲 ${m.monsterName} entra na batalha pelo lado do mestre!${m.isBoss ? ` (CHEFE · vida ajustada para ${playerCount} adversário(s))` : ''}`, 'enemy'));
     return battle;
@@ -479,6 +493,12 @@ export class BattleManager {
         }
       });
     }
+    // Vida máxima original depois de qualquer ajuste de chefe/eclipse.
+    // Podridão e Contaminação calculam dano sobre este valor, nunca sobre a
+    // vida máxima já reduzida.
+    battle.participants.forEach((p) => {
+      p.hpMaxOriginal = p.hpMax;
+    });
     // O turno extra do chefe durante o Eclipse entra na ordem de turnos.
     battle.eclipse = eclipse;
 
@@ -576,7 +596,7 @@ export class BattleManager {
     }
     this._processFlight(battle, p);
     if (efeito.regenHpPct && p.alive) {
-      const heal = Math.max(1, Math.round(p.hpMax * efeito.regenHpPct));
+      const heal = this._curaRecebida(p, Math.max(1, Math.round(p.hpMax * efeito.regenHpPct)));
       const before = p.hp;
       p.hp = clamp(p.hp + heal, 0, p.hpMax);
       if (p.hp > before) battle.log.push(makeLog(`🌿 ${p.charName} regenera ${p.hp - before} de HP.`, 'heal'));
@@ -636,12 +656,18 @@ export class BattleManager {
   // já com o efeito de bêbado. Mesmo conceito da vida/mana — ver
   // effectiveAttributes em data.js.
   _finalAttrs(p) {
-    return effectiveAttributes(
+    const attrs = effectiveAttributes(
       this._rollAttrs(p),
       p.equipment || {},
       p.races || null,
       p.classes || null,
     );
+    // Corrupção (0–100): as penalidades do estágio atual são percentuais
+    // oficiais e incidem sobre o atributo final. Sem pontos, nada muda.
+    if (p.corrupcao == null || Number(p.corrupcao) <= 0) return attrs;
+    const estado = calcularEstadoCorrupcao(p.corrupcao);
+    if (!Object.keys(estado.penalidades || {}).length) return attrs;
+    return aplicarCorrupcaoEmAtributos(attrs, estado.penalidades).atributos;
   }
 
   _withDrunk(p) {
@@ -840,10 +866,19 @@ export class BattleManager {
     return 1;
   }
 
+  // Cura efetiva recebida por um combatente. Contaminação Pandemônica reduz a
+  // potência de cura/proteção em 25% enquanto ativa (quando aplicável).
+  _curaRecebida(p, quantidade) {
+    const bruto = Math.max(0, Number(quantidade) || 0);
+    if (bruto <= 0 || !p) return 0;
+    const reducao = reducaoDeCuraPct(p.statuses);
+    return Math.max(0, Math.round(bruto * (1 - reducao / 100)));
+  }
+
   _lifesteal(battle, p, damageDealt) {
     const pct = efeitosDe(p).rouboVida || 0;
     if (pct <= 0 || !p.alive) return;
-    const heal = Math.max(1, Math.round(damageDealt * pct));
+    const heal = this._curaRecebida(p, Math.max(1, Math.round(damageDealt * pct)));
     const before = p.hp;
     p.hp = clamp(p.hp + heal, 0, p.hpMax);
     if (p.hp > before) battle.log.push(makeLog(`🩸 ${p.charName} drena ${p.hp - before} de HP.`, 'heal'));
@@ -943,36 +978,68 @@ export class BattleManager {
   }
 
   // Aplica (ou renova) um efeito de status, respeitando imunidades.
-  _applyStatus(battle, target, status, source) {
+  // `opcoes.crit` informa se o acerto foi crítico (aplicações como Ruptura
+  // Profana só valem em crítico). A chance documentada (0–100) é normalizada
+  // para fração pelo `normalizarChance`.
+  _applyStatus(battle, target, status, source, opcoes = {}) {
     if (!target.alive || !status || !STATUS_DEFS[status.tipo]) return;
+    if (status.somenteCritico === true && opcoes.crit !== true) return;
     const def = STATUS_DEFS[status.tipo];
     const imune = efeitosDe(target).imune || [];
     if (Array.isArray(imune) && imune.includes(status.tipo)) {
       battle.log.push(makeLog(`🛡️ ${target.charName} não é afetado por ${def.nome.toLowerCase()}.`, 'info'));
       return;
     }
-    const chance = status.chance ?? 1;
+    const chance = normalizarChance(status.chance, 1);
     if (chance < 1 && Math.random() > chance) {
       battle.log.push(makeLog(`💨 ${target.charName} resiste a ${def.nome.toLowerCase()}.`, 'info'));
       return;
     }
+    // Dano do status: usa o valor explícito do golpe ou o percentual oficial
+    // sobre a vida máxima ORIGINAL (Podridão = 20%, Ferida Pandemônica = 10%).
+    const dano = Math.max(0, Math.round(danoDeStatus(status, {
+      hpMaxOriginal: target.hpMaxOriginal ?? target.hpMax,
+      hpMax: target.hpMax,
+    }) || 0));
+    const turnos = Math.max(1, Math.trunc(
+      Number(status.turnos) || Number(def.duracaoPadrao) || 1,
+    ));
+    const danoPctVidaMaxima = status.danoPctVidaMaxima
+      ?? status.percentualDanoVidaMaxima
+      ?? def.danoPctVidaMaxima
+      ?? null;
+    const reducaoCuraPct = status.reducaoCuraPct
+      ?? status.reducaoPotenciaCuraProtecao
+      ?? def.reducaoCuraPct
+      ?? null;
+    const novos = {
+      id: status.tipo,
+      nome: def.nome,
+      turnos,
+      dano,
+      danoPctVidaMaxima,
+      reducaoCuraPct,
+      origem: status.origem || null,
+      interrompeCuraProtecao: status.interrompeCuraProtecao === true,
+    };
     const existing = (target.statuses || []).find((s) => s.id === status.tipo);
     if (existing) {
-      existing.turnos = Math.max(existing.turnos, status.turnos || 1);
-      if (status.dano) existing.dano = status.dano;
+      // Efeitos idênticos não acumulam: renovam a duração e mantêm o maior dano.
+      existing.turnos = Math.max(existing.turnos, turnos);
+      if (dano > 0) existing.dano = dano;
+      if (danoPctVidaMaxima != null) existing.danoPctVidaMaxima = danoPctVidaMaxima;
+      if (reducaoCuraPct != null) existing.reducaoCuraPct = reducaoCuraPct;
+      if (novos.origem) existing.origem = novos.origem;
+      existing.interrompeCuraProtecao = existing.interrompeCuraProtecao
+        || novos.interrompeCuraProtecao;
     } else {
       target.statuses = target.statuses || [];
-      target.statuses.push({
-        id: status.tipo,
-        nome: def.nome,
-        turnos: status.turnos || 1,
-        dano: status.dano || 0,
-      });
+      target.statuses.push(novos);
     }
     const origem = source ? `${source.charName} aplica` : 'Aplicado';
     battle.log.push(
       makeLog(
-        `${def.icon} ${origem} ${def.nome.toLowerCase()} em ${target.charName} (${status.turnos || 1} turno(s)).`,
+        `${def.icon} ${origem} ${def.nome.toLowerCase()} em ${target.charName} (${turnos} turno(s)${dano > 0 ? `, ${dano} de dano/turno` : ''}).`,
         'status',
       ),
     );
@@ -1042,10 +1109,15 @@ export class BattleManager {
         p.statuses.splice(i, 1);
         continue;
       }
-      if (s.dano && p.alive) {
+      // Dano calculado na aplicação; fallback recalcula sobre a vida máxima
+      // original (status vindos de batalhas salvas ou aplicados antes do início).
+      const dano = Number(s.dano) > 0
+        ? Math.round(Number(s.dano))
+        : Math.max(0, Math.round(danoDeStatus(s, p) || 0));
+      if (dano > 0 && p.alive) {
         if (def.tipo === 'dot') {
           const before = p.hp;
-          p.hp = clamp(p.hp - s.dano, 0, p.hpMax);
+          p.hp = clamp(p.hp - dano, 0, p.hpMax);
           p.danoRecebido = (p.danoRecebido || 0) + (before - p.hp);
           this._chargeUltimate(battle, p, (before - p.hp) * 0.8);
           battle.log.push(makeLog(`${def.icon} ${p.charName} sofre ${before - p.hp} de dano de ${def.nome.toLowerCase()}.`, 'damage'));
@@ -1053,7 +1125,8 @@ export class BattleManager {
           if (!p.alive) continue;
         } else if (def.tipo === 'hot') {
           const before = p.hp;
-          p.hp = clamp(p.hp + s.dano, 0, p.hpMax);
+          const cura = this._curaRecebida(p, dano);
+          p.hp = clamp(p.hp + cura, 0, p.hpMax);
           if (p.hp > before) battle.log.push(makeLog(`${def.icon} ${p.charName} regenera ${p.hp - before} de HP.`, 'heal'));
         }
       }
@@ -1241,7 +1314,7 @@ export class BattleManager {
       if (!t.alive && !t.horda) p.kills += 1;
       if (ataqueStatus && t.alive) this._applyStatus(battle, t, ataqueStatus, p);
       // Efeito próprio da arma (canhões utilitários): só em quem foi atingido.
-      if (weapon?.efeito && t.alive) this._applyStatus(battle, t, weapon.efeito, p);
+      if (weapon?.efeito && t.alive) this._applyStatus(battle, t, weapon.efeito, p, { crit: res.crit });
     });
   }
 
@@ -1324,7 +1397,7 @@ export class BattleManager {
       const dealt = this._applyDamage(t, total, battle, p, kind);
       if (dealt > 0) this._lifesteal(battle, p, dealt);
       if (!t.alive && !t.horda) p.kills += 1;
-      if (skill.status && t.alive) this._applyStatus(battle, t, skill.status, p);
+      if (skill.status && t.alive) this._applyStatus(battle, t, skill.status, p, { crit: res.crit });
     });
     if (!mega) this._setCooldown(p, skill);
   }
@@ -1487,7 +1560,8 @@ export class BattleManager {
       const targets = skill.todos ? allies : [target && target.alive ? target : p];
       targets.forEach((t) => {
         const before = t.hp;
-        t.hp = clamp(t.hp + healing, 0, t.hpMax);
+        const cura = this._curaRecebida(t, healing);
+        t.hp = clamp(t.hp + cura, 0, t.hpMax);
         if (!p.isMonster) {
           p.contribuicao = p.contribuicao || { dano: 0, cura: 0, acertos: 0, acoes: 0, suporte: 0 };
           p.contribuicao.cura += t.hp - before;
@@ -1539,7 +1613,8 @@ export class BattleManager {
       const targets = skill.todos ? allies : [target && target.alive ? target : p];
       targets.forEach((t) => {
         const before = t.hp;
-        t.hp = clamp(t.hp + healing, 0, t.hpMax);
+        const cura = this._curaRecebida(t, healing);
+        t.hp = clamp(t.hp + cura, 0, t.hpMax);
         if (!p.isMonster) {
           p.contribuicao = p.contribuicao || { dano: 0, cura: 0, acertos: 0, acoes: 0, suporte: 0 };
           p.contribuicao.cura += t.hp - before;

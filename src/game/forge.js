@@ -9,7 +9,10 @@ import { getGemaById } from './gems.js';
 import {
   getCategoriaEfeitoEquipamento,
   calcularBonusComposicao,
+  CATEGORIAS_MAGICAS,
 } from './materialRules.js';
+import { PODRIDAO_ARMA, criarStatusPodridaoArma } from './podridao.js';
+import { CONTAMINACAO_APLICACOES, criarStatusContaminacao } from './contaminacao.js';
 
 // ============================================================================
 // CÁLCULO DE PREÇO DE EQUIPAMENTO (delega para equipments.js)
@@ -213,6 +216,12 @@ export function calcularAtributosEquipamento(equipId, materialPrimarioId, materi
 
   const atributosSemGemas = { ...atributos };
 
+  // Perfil mecânico normalizado (bonus/redução/resistência/chance/custo/
+  // penalidade). Não altera `atributosFinais`: os itens antigos continuam
+  // usando exatamente os mesmos bônus de antes.
+  const perfilMecanico = composicao.perfilMecanico || null;
+  const statusAplicavel = efeitoDeStatusDoPerfil(perfilMecanico, categoriaEfeito);
+
   for (const g of gemasSlotadas) {
     if (!g || !g.gemaId) continue;
     const gema = getGemaById(g.gemaId);
@@ -232,7 +241,44 @@ export function calcularAtributosEquipamento(equipId, materialPrimarioId, materi
     materiais: { primario: matPrimario, secundario: matSecundario },
     categoriaEfeito,
     composicao,
+    perfilMecanico,
+    statusAplicavel,
   };
+}
+
+// Deriva o efeito de status do perfil mecânico. Só são automatizadas as
+// aplicações oficiais que o motor consegue representar hoje:
+// - Podridão em armas (15% / 25% em equipamentos mágicos, 3 turnos, 20% da vida máxima);
+// - Ferida Pandemônica e Munição Contaminante em armas.
+// Aplicações reativas (armadura), de área (golem) ou só em crítico (Ruptura
+// Profana) permanecem descritivas na ficha até o combate defini-las.
+const CONTAMINACAO_POR_CATEGORIA = {
+  armaLamina: 'feridaPandemica',
+  armaFogo: 'municaoContaminante',
+};
+
+function efeitoDeStatusDoPerfil(perfil, categoriaEfeito) {
+  const status = perfil?.status;
+  if (!status?.id) return null;
+  const turnosDoc = Number.parseInt(status.duracao, 10);
+  const turnosValidos = Number.isFinite(turnosDoc) && turnosDoc > 0 ? turnosDoc : null;
+
+  if (status.id === 'podridao') {
+    const magico = CATEGORIAS_MAGICAS.includes(categoriaEfeito);
+    return criarStatusPodridaoArma({
+      magico,
+      chance: status.chance != null ? status.chance / 100 : null,
+      turnos: turnosValidos,
+    });
+  }
+
+  if (status.id === 'contaminacaoPandemonica') {
+    const aplicacaoId = CONTAMINACAO_POR_CATEGORIA[categoriaEfeito];
+    if (!aplicacaoId || !CONTAMINACAO_APLICACOES[aplicacaoId]) return null;
+    return criarStatusContaminacao(aplicacaoId);
+  }
+
+  return null;
 }
 
 // Converte as gemas escolhidas na forja ({ slot, gemaId }) para o formato do
@@ -324,6 +370,10 @@ export function craftarEquipamento(equipId, materialPrimarioId, materialSecundar
     honrineo = aplicarHonrineo(resultado.equip, personagem);
   }
 
+  // Efeito automático de arma: usa o efeito intrínseco do equipamento-base
+  // quando existir; senão, o status documentado no material principal.
+  const efeitoFinal = resultado.equip.efeito || resultado.statusAplicavel || null;
+
   return {
     ok: true,
     equip: {
@@ -334,12 +384,15 @@ export function craftarEquipamento(equipId, materialPrimarioId, materialSecundar
       // bônus das gemas são aplicados por `gemsAttrs` a partir de `socketedGems`.
       atributosFinais: resultado.atributosSemGemas,
       categoriaEfeito: resultado.categoriaEfeito,
+      perfilMecanico: resultado.perfilMecanico,
+      ...(efeitoFinal ? { efeito: efeitoFinal } : {}),
       composicao: {
         categoria: resultado.composicao.categoria,
         bonusFinal: resultado.composicao.bonusFinal,
         percentuaisFinal: resultado.composicao.percentuaisFinal,
         ignorados: resultado.composicao.ignorados,
         avisos: resultado.composicao.avisos,
+        perfilMecanico: resultado.composicao.perfilMecanico,
       },
       gemasSlotadas,
       honrineoAplicado: honrineo ? true : false,
@@ -348,6 +401,7 @@ export function craftarEquipamento(equipId, materialPrimarioId, materialSecundar
     atributos: resultado.atributos,
     atributosSemGemas: resultado.atributosSemGemas,
     categoriaEfeito: resultado.categoriaEfeito,
+    perfilMecanico: resultado.perfilMecanico,
     composicao: resultado.composicao,
     honrineo,
   };

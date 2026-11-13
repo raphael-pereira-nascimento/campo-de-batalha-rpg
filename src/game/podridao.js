@@ -228,6 +228,22 @@ export function rolarPodridaoArma({ magico = false, aleatorio = Math.random } = 
   return Number(aleatorio()) < chance;
 }
 
+// Status de combate da Podridão de arma. `chance` e `turnos` podem vir do
+// efeito documentado do material; o dano é SEMPRE 20% da vida máxima original.
+export function criarStatusPodridaoArma({ magico = false, chance = null, turnos = null } = {}) {
+  const chanceFinal = Number.isFinite(Number(chance))
+    ? Number(chance)
+    : (magico ? PODRIDAO_ARMA.chanceEquipamentoMagico : PODRIDAO_ARMA.chance);
+  const turnosFinal = Number(turnos) > 0 ? Math.trunc(Number(turnos)) : PODRIDAO_ARMA.turnos;
+  return {
+    tipo: 'podridao',
+    chance: chanceFinal > 1 ? chanceFinal / 100 : chanceFinal,
+    turnos: turnosFinal,
+    danoPctVidaMaxima: PODRIDAO_ARMA.danoPorTurnoPct,
+    origem: 'Tenebrium',
+  };
+}
+
 export function descreverEstagio(estado) {
   if (!estado || estado.ok !== true) return 'Estado de Podridão inválido.';
   if (estado.tratado) return 'Podridão tratada: sem redução de vida máxima e sem dano contínuo.';

@@ -321,6 +321,9 @@ export const STATUS_DEFS = {
   cegueira: { id: 'cegueira', nome: 'Cegueira', icon: '🌫️', tipo: 'debuff', desc: 'Reduz muito a chance de acerto.', duracaoPadrao: 2, danoPadrao: 0, acumulo: 'renova', modificadores: '-25% acerto', remocao: ['expiração'] },
   fraqueza: { id: 'fraqueza', nome: 'Fraqueza', icon: '💢', tipo: 'debuff', desc: 'Reduz o dano físico e mágico causado.', duracaoPadrao: 1, danoPadrao: 0, acumulo: 'renova', modificadores: '×0.8 no dano causado', remocao: ['expiração', 'itens com removeStatus: fraqueza'] },
   congelamento: { id: 'congelamento', nome: 'Congelamento', icon: '🧊', tipo: 'cc', desc: 'Pula os turnos até se libertar do gelo.', duracaoPadrao: 2, danoPadrao: 0, acumulo: 'renova', modificadores: 'pula o turno', remocao: ['expiração (libertação)'] },
+  // Condições próprias dos materiais (não são a mesma coisa entre si).
+  podridao: { id: 'podridao', nome: 'Podridão', icon: '🦠', tipo: 'dot', desc: 'Dano por turno sobre a vida máxima original (Tenebrium).', duracaoPadrao: 3, danoPadrao: 0, danoPctVidaMaxima: 20, acumulo: 'renova', sistema: 'podridao', modificadores: '20% da vida máxima original por turno', remocao: ['expiração', 'tratamento de Podridão'] },
+  contaminacaoPandemonica: { id: 'contaminacaoPandemonica', nome: 'Contaminação Pandemônica', icon: '☣️', tipo: 'dot', desc: 'Contaminação profana da Prata Pandemônica; o dano depende da aplicação.', duracaoPadrao: 3, danoPadrao: 0, danoPctVidaMaxima: null, reducaoCuraPct: 25, acumulo: 'renova', sistema: 'contaminacaoPandemica', modificadores: 'dano progressivo documentado e −25% de cura/proteção quando aplicável', remocao: ['expiração', 'purificação por Prata Sagrada'] },
 };
 
 export const STATUS_KEYS = Object.keys(STATUS_DEFS);

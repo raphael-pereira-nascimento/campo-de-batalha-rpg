@@ -1063,6 +1063,11 @@ export function calcularBonusComposicao(materialPrincipal, materialSecundario, c
     return aplicado;
   };
 
+  // Perfil mecânico: representação única (configurável por categoria) usada
+  // pela forja e pelo combate. Não substitui os mapas legados acima; apenas
+  // normaliza o que já está documentado, sem inventar valores.
+  const perfilMecanico = construirPerfilMecanico(efeitoPrincipal, efeitoSecundario, categoria);
+
   const percentuaisPrincipal = { ...(efeitoPrincipal?.percentuais || {}) };
   const percentuaisSecundarioOriginal = { ...(efeitoSecundario?.percentuais || {}) };
   const percentuaisSecundarioAplicado = aplicarParcial(
@@ -1171,6 +1176,7 @@ export function calcularBonusComposicao(materialPrincipal, materialSecundario, c
     percentuaisFinal,
     ajustesFinal,
     penalidadesFinal,
+    perfilMecanico,
     condicoes: {
       principal: efeitoPrincipal?.condicoes || [],
       secundario: efeitoSecundario?.condicoes || [],
@@ -1180,6 +1186,217 @@ export function calcularBonusComposicao(materialPrincipal, materialSecundario, c
       secundario: efeitoSecundario?.especial || null,
     },
     compatibilidade: { ok: incompatibilidades.length === 0, avisos: incompatibilidades },
+    avisos,
+  };
+}
+
+// ═════════════════════════════════════════════════════════════════════════════════════
+// PERFIL MECÂNICO — representação única entre forja, ficha e combate
+// ═════════════════════════════════════════════════════════════════════════════════════
+// O perfil NÃO substitui os campos legados (`bonus`, `percentuais`, `penalidades`).
+// Ele os normaliza em uma lista de modificadores com tipo explícito, para que o
+// combate saiba o que é bônus, redução, resistência, chance, custo ou penalidade.
+// Chaves sem significado mecânico conhecido continuam como `especial` (descritivas):
+// nenhum valor é inventado e nenhum sistema não documentado é automatizado.
+export const LIMITE_RESISTENCIA_PCT = 75;
+
+export function classificarPercentual(chave, valor = null) {
+  const k = normalizarTexto(chave);
+  const numero = Number(valor);
+  if (!k) return 'especial';
+  if (/^imunidade/.test(k)) return 'imunidade';
+  if (/^resist/.test(k)) return 'resistencia';
+  if (/^redu[cç]/.test(k)) return 'reducao';
+  if (k.includes('custo')) return 'custo';
+  if (/^chance|^probabilidade|chance de/.test(k)) return 'chance';
+  if (/^dano/.test(k)) return Number.isFinite(numero) && numero < 0 ? 'reducao' : 'bonus';
+  if (/^cura|^medicina|^efeitos medicinais|regenera/.test(k)) return 'cura';
+  if (/^defesa|^prote[cç]/.test(k)) return 'resistencia';
+  if (/^penalidade/.test(k)) return 'penalidade';
+  if (Number.isFinite(numero) && numero < 0) return 'penalidade';
+  return 'especial';
+}
+
+// Converte a chance documentada (0–100) para percentual. Frações (0–1) também
+// são aceitas porque alguns efeitos antigos já usavam fração.
+export function chancePercentual(valor) {
+  if (valor == null || valor === '') return null;
+  const numero = Number(valor);
+  if (!Number.isFinite(numero) || numero < 0) return null;
+  return numero <= 1 ? numero * 100 : numero;
+}
+
+export function modificadorDePercentual(chave, valor, extras = {}) {
+  const numero = Number(valor);
+  if (!Number.isFinite(numero)) return null;
+  return normalizarModificador({
+    tipo: extras.tipo || classificarPercentual(chave, numero),
+    valor: numero,
+    unidade: extras.unidade || 'percentual',
+    alvo: String(chave),
+    condicao: extras.condicao ?? null,
+    duracao: extras.duracao ?? null,
+    chance: extras.chance ?? null,
+    sistema: extras.sistema ?? null,
+    fonte: extras.fonte || 'documento',
+    observacao: extras.observacao ?? null,
+    duplicavel: extras.duplicavel,
+  });
+}
+
+// Converte um efeito de categoria (formato legado) em modificadores tipados.
+// `origem` é apenas rastreabilidade ('principal' | 'secundario').
+export function modificadoresDoEfeito(efeito, origem = 'principal') {
+  if (!efeito) return [];
+  const condicoes = Array.isArray(efeito.condicoes) ? efeito.condicoes.filter(Boolean) : [];
+  const condicao = condicoes.length ? condicoes.join(' ') : null;
+  const extras = {
+    condicao,
+    duracao: efeito.duracao ?? null,
+    chance: chancePercentual(efeito.chance),
+    fonte: origem,
+  };
+  const modificadores = [];
+
+  for (const [atributo, valor] of Object.entries(efeito.bonus || {})) {
+    const numero = Number(valor);
+    if (!Number.isFinite(numero)) continue;
+    modificadores.push(normalizarModificador({
+      tipo: 'bonus',
+      valor: numero,
+      unidade: 'pontos',
+      alvo: atributo,
+      ...extras,
+    }));
+  }
+
+  for (const [chave, valor] of Object.entries(efeito.percentuais || {})) {
+    const modificador = modificadorDePercentual(chave, valor, extras);
+    if (modificador) modificadores.push(modificador);
+  }
+
+  for (const [chave, valor] of Object.entries(efeito.ajustes || {})) {
+    const numero = Number(valor);
+    if (!Number.isFinite(numero)) continue;
+    modificadores.push(normalizarModificador({
+      tipo: 'bonus',
+      valor: numero,
+      unidade: 'pontos',
+      alvo: chave,
+      ...extras,
+    }));
+  }
+
+  for (const [chave, valor] of Object.entries(efeito.penalidades || {})) {
+    const numero = Number(valor);
+    if (!Number.isFinite(numero)) continue;
+    modificadores.push(normalizarModificador({
+      tipo: 'penalidade',
+      valor: numero,
+      unidade: 'percentual',
+      alvo: chave,
+      ...extras,
+    }));
+  }
+
+  for (const modificador of efeito.modificadores || []) {
+    const normalizado = normalizarModificador({
+      ...modificador,
+      fonte: modificador.fonte || origem,
+      condicao: modificador.condicao ?? condicao,
+      duracao: modificador.duracao ?? extras.duracao,
+      chance: modificador.chance ?? extras.chance,
+    });
+    if (normalizado) modificadores.push(normalizado);
+  }
+
+  return modificadores;
+}
+
+// Status documentado no efeito (Podridão/Contaminação). O combate usa o id
+// oficial e os números da ficha; a descrição continua disponível para a UI.
+export function statusDoEfeito(efeito) {
+  if (!efeito || !efeito.status) return null;
+  const id = String(efeito.status);
+  return {
+    id,
+    chance: chancePercentual(efeito.chance),
+    duracao: efeito.duracao ?? null,
+    alvo: efeito.alvo ?? null,
+    sistema: SISTEMAS_EFEITO[id] ? id : null,
+    especial: efeito.especial ?? null,
+    condicoes: Array.isArray(efeito.condicoes) ? efeito.condicoes : [],
+  };
+}
+
+function agruparModificadoresPorTipo(modificadores) {
+  const out = {};
+  for (const modificador of modificadores) {
+    const tipo = modificador.tipo || 'especial';
+    out[tipo] = out[tipo] || [];
+    out[tipo].push(modificador);
+  }
+  return out;
+}
+
+// Principal 100% / secundário até 25% / efeito idêntico não acumula.
+// A resistência é limitada a 75%, exceto imunidades oficiais (que não são
+// percentuais e continuam descritivas).
+export function construirPerfilMecanico(efeitoPrincipal, efeitoSecundario, categoria = null) {
+  const avisos = [];
+  const mapa = new Map();
+
+  for (const modificador of modificadoresDoEfeito(efeitoPrincipal, 'principal')) {
+    const chave = chaveModificador(modificador);
+    if (!mapa.has(chave)) mapa.set(chave, { ...modificador, origem: 'principal' });
+  }
+
+  for (const modificador of modificadoresDoEfeito(efeitoSecundario, 'secundario')) {
+    const chave = chaveModificador(modificador);
+    if (mapa.has(chave)) {
+      avisos.push(`Efeito idêntico do material secundário não acumula: ${modificador.alvo}.`);
+      continue;
+    }
+    const binario = TIPOS_EFEITO_BINARIOS.includes(modificador.tipo) || modificador.unidade === 'texto';
+    if (binario || modificador.valor == null) {
+      avisos.push(`Efeito binário ou sem valor do secundário mantido como descritivo: ${modificador.alvo}.`);
+      continue;
+    }
+    const valor = Math.trunc(Number(modificador.valor) * 0.25);
+    if (valor === 0) {
+      avisos.push(`Valor de 25% do secundário arredondado para zero: ${modificador.alvo}.`);
+      continue;
+    }
+    mapa.set(chave, { ...modificador, valor, origem: 'secundario' });
+  }
+
+  const modificadores = [];
+  for (const modificador of mapa.values()) {
+    const resistenciaPercentual = modificador.tipo === 'resistencia'
+      && modificador.unidade === 'percentual'
+      && Number(modificador.valor) > LIMITE_RESISTENCIA_PCT;
+    if (resistenciaPercentual) {
+      avisos.push(
+        `Resistência de ${modificador.alvo} limitada a ${LIMITE_RESISTENCIA_PCT}% `
+        + `(valor documentado: ${modificador.valor}%).`,
+      );
+      modificadores.push({
+        ...modificador,
+        valorOriginal: Number(modificador.valor),
+        valor: LIMITE_RESISTENCIA_PCT,
+        capado: true,
+      });
+    } else {
+      modificadores.push(modificador);
+    }
+  }
+
+  return {
+    versao: 1,
+    categoria: categoria || null,
+    modificadores,
+    porTipo: agruparModificadoresPorTipo(modificadores),
+    status: statusDoEfeito(efeitoPrincipal),
     avisos,
   };
 }

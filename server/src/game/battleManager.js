@@ -53,6 +53,13 @@ import {
 import { estadoEclipse, sortearVarianteEclipse, aplicarEclipseEmChefe, aplicarVarianteEclipseEmChefe } from './eclipse.js';
 import { RACES } from './races.js';
 import { buildMonster, bossActionsPerTurn, chefeHpMultPorAdversarios } from './monsters.js';
+import {
+  normalizarChance,
+  danoDeStatus,
+  reducaoDeCuraPct,
+  aplicarCorrupcaoEmAtributos,
+} from './combatEffects.js';
+import { calcularEstadoCorrupcao } from './corrupcao.js';
 
 let logCounter = 0;
 
@@ -284,6 +291,11 @@ export class BattleManager {
       inventory: JSON.parse(JSON.stringify(character.inventory || [])),
       hp: stats.hpMax,
       hpMax: stats.hpMax,
+      // Vida máxima original: base para Podridão e Contaminação.
+      hpMaxOriginal: stats.hpMax,
+      // Corrupção persistida no personagem (0–100); penalidades por estágio
+      // são aplicadas em `_finalAttrs`.
+      corrupcao: Number(character.corrupcao) || 0,
       mp: stats.mpMax,
       mpMax: stats.mpMax,
       defesa: stats.defesa,
@@ -411,6 +423,7 @@ export class BattleManager {
       m.hp = m.hpMax = Math.max(50, Math.round(sumHeroHp * (def.multiplicadorHP || 3) * chefeHpMultPorAdversarios(playerCount)));
     }
     m.monsterDef = { ...m.monsterDef, acoesPorTurno: m.acoesPorTurno };
+    m.hpMaxOriginal = m.hpMax;
     battle.participants.push(m);
     battle.log.push(makeLog(`🐲 ${m.monsterName} entra na batalha pelo lado do mestre!${m.isBoss ? ` (CHEFE · vida ajustada para ${playerCount} adversário(s))` : ''}`, 'enemy'));
     return battle;

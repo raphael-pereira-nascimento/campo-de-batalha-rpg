@@ -78,6 +78,20 @@ export const CONTAMINACAO_APLICACOES = {
     alvo: 'encantamentos de luz em equipamentos atingidos',
     descricao: '20% de chance de perder temporariamente a eficiência por 2 turnos.',
   },
+  // Efeito oficial da Prata Pandemônica em armas de impacto. Não é uma
+  // contaminação de dano progressivo: interrompe cura/proteção sagrada.
+  rupturaProfana: {
+    id: 'rupturaProfana',
+    nome: 'Ruptura Profana',
+    origem: 'armaImpacto',
+    chance: 30,
+    duracao: 2,
+    percentualDanoVidaMaxima: null,
+    interrompeCuraProtecao: true,
+    somenteCritico: true,
+    alvo: 'habilidades de cura ou proteção sagrada',
+    descricao: 'Acertos críticos têm 30% de chance de interromper habilidades de cura ou proteção sagrada por 2 turnos.',
+  },
 };
 
 // Bônus documentados contra seres sagrados e equipamentos de luz.
@@ -115,6 +129,23 @@ function limitarVidaMaxima(vidaMaxima) {
 
 export function getAplicacaoContaminacao(id) {
   return CONTAMINACAO_APLICACOES[id] || null;
+}
+
+// Status de combate a partir de uma aplicação oficial. A chance é convertida
+// para fração (0–1), formato usado pelo motor de batalha.
+export function criarStatusContaminacao(aplicacaoId) {
+  const aplicacao = getAplicacaoContaminacao(aplicacaoId);
+  if (!aplicacao) return null;
+  return {
+    tipo: CONTAMINACAO_ID,
+    chance: aplicacao.chance != null ? aplicacao.chance / 100 : 1,
+    turnos: aplicacao.duracao,
+    danoPctVidaMaxima: aplicacao.percentualDanoVidaMaxima,
+    reducaoPotenciaCuraProtecao: aplicacao.reducaoPotenciaCuraProtecao ?? null,
+    interrompeCuraProtecao: aplicacao.interrompeCuraProtecao === true,
+    somenteCritico: aplicacao.somenteCritico === true,
+    origem: aplicacao.nome,
+  };
 }
 
 // Dano por turno documentado para a contaminação (ex.: 10% da vida máxima).
