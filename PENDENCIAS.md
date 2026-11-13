@@ -41,7 +41,7 @@ Legenda:
 | D-11 | Fichas completas de Ruidium, Vibranium, Honríneo e Mournlode | Pendente |
 | D-12 | Efeitos de Ferro Estígio e Honríneo | Pendente |
 | D-13 | Tabela da Podridão (5 estágios/10 turnos) | Aprovado pelo criador, fora do PDF |
-| D-14 | Commit e limpeza do pacote final | Pendente |
+| D-14 | Commit e limpeza do pacote final | Resolvido; decisão sobre o harness pendente |
 | D-15 | Adamantino com preço e efeitos percentuais aprovados | Aprovado no complemento |
 | D-16 | Honríneo limitado à adaptação automática, sem percentuais | Aprovado no complemento |
 | D-17 | Vibranium com direção de efeitos, sem números | Aprovado no complemento; números pendentes |
@@ -397,34 +397,18 @@ criador antes de virarem regra definitiva.
 
 #### D-14 — Commit e limpeza do pacote final
 
-- O commit-base `1c13525` (“parte 1 de implementação de minérios e metais”) já
-  existe e inclui a maior parte da implementação; `b4ea563` (“parte 2”) e
-  `01ad070` são commits posteriores.
-- **Fora do commit atual:** `server/tests/forgeMaterials.test.js`, a versão
-  final deste `PENDENCIAS.md`, a alteração de
-  `server/tests/harness-navegador.js`, `server/tests/harness-dump.js` e as
-  correções das etapas 7 e 8.
-- As correções da auditoria tocam `src/game/forge.js`, `src/game/materials.js`,
-  `src/game/materialRules.js`, `src/game/podridao.js`,
-  `src/components/MaterialThumb.jsx`, `src/components/MaterialCard.jsx`,
-  `src/components/MaterialDetails.jsx`, `src/components/MaterialComposition.jsx`
-  e `src/pages/Forge.jsx`.
-- A etapa 8 acrescenta `src/game/corrupcao.js` e
-  `server/tests/corrupcao.test.js`, além de novas fichas e testes em
-  `src/game/materials.js` e `server/tests/materialCatalog.test.js`.
-- A etapa do complemento (D-30 a D-35) acrescenta
-  `src/game/contaminacao.js`, `src/game/runas.js`,
-  `server/tests/contaminacao.test.js`, `server/tests/runas.test.js`, novas
-  fichas em `src/game/materials.js` e a renderização de efeitos em
-  `src/components/MaterialDetails.jsx`.
+- O pacote das etapas 7 e 8 foi commitado em `1fbe868`, `a4db8de`, `c7b8428`,
+  `c20aee5`, `adf007c`, `573a3fc` e `6020bd5`. O merge `6336a4b` recebeu a
+  resolução dos conflitos em `91bd8f5` e a exibição de modificadores em
+  `9c8ad27`; a árvore de trabalho ficou limpa.
 - Os testes de regressão estão em `server/tests/forgeMaterials.test.js`,
   `materialCatalog.test.js`, `materialSchema.test.js`, `podridao.test.js`,
   `corrupcao.test.js`, `contaminacao.test.js` e `runas.test.js`.
 - O arquivo temporário `server/tests/preview-materiais.jsx` foi removido do
   pacote final por ser apenas uma prévia local da interface.
-- **Decisão necessária:** commitar as correções, os testes de integração da
-  forja e este `PENDENCIAS.md`; decidir se os arquivos de harness continuam no
-  repositório ou viram ferramentas locais descartáveis.
+- **Decisão necessária:** decidir se os arquivos de harness continuam no
+  repositório ou viram ferramentas locais descartáveis; o envio dos commits ao
+  remoto também depende do criador.
 
 ### 3.2 Dados oficiais ainda ausentes
 
