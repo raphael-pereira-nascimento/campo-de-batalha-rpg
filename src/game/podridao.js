@@ -251,3 +251,58 @@ export function descreverEstagio(estado) {
     + `-${estado.reducaoVidaMaxima}% de vida máxima e ${estado.danoPorTurno}% de dano por turno `
     + `(${estado.danoPorTurnoValor} pontos sobre ${estado.vidaMaximaOriginal} de vida original).`;
 }
+
+// ── Imunidade do Tenebrium ───────────────────────────────────────────────
+// Regra oficial: uma armadura de Tenebrium deixa o usuário imune a danos de
+// Podridão, mas o material NÃO pode ser usado na armadura inteira. A imunidade
+// é derivada da peça craftada (material primário ou secundário), nunca de uma
+// suposição sobre o corpo inteiro do personagem.
+export const TENEBRIUM_RESTRICAO_ARMADURA_INTEIRA = {
+  materialId: 'tenebrium',
+  nome: 'Tenebrium',
+  podeUsarNaArmaduraInteira: false,
+  descricao: 'O Tenebrium concede imunidade a Podridão na armadura, mas não pode ser usado na armadura inteira.',
+};
+
+export const TENEBRIUM_IMUNIDADE_PODRIDAO = {
+  materialId: 'tenebrium',
+  tipo: 'podridao',
+  origem: 'armadura de Tenebrium',
+  descricao: 'Armadura craftada com Tenebrium concede imunidade a danos de Podridão.',
+};
+
+export function materialConcedeImunidadePodridao(materialId) {
+  return String(materialId || '').toLowerCase() === 'tenebrium';
+}
+
+function idDoMaterial(valor) {
+  if (!valor) return null;
+  if (typeof valor === 'string') return valor;
+  return valor.id || null;
+}
+
+// `item` é uma peça de armadura craftada. A função evita inferir imunidade de
+// acessórios ou armas, porque a documentação só a concede à armadura.
+export function itemConcedeImunidadePodridao(item) {
+  if (!item || typeof item !== 'object') return false;
+  if (item.tipo && item.tipo !== 'armadura') return false;
+  const materiais = item.materiais || {};
+  const ids = [
+    idDoMaterial(materiais.primario),
+    idDoMaterial(materiais.secundario),
+    idDoMaterial(item.materialPrimario),
+    idDoMaterial(item.materialSecundario),
+  ];
+  return ids.some(materialConcedeImunidadePodridao);
+}
+
+export function equipamentoConcedeImunidadePodridao(equipment = {}) {
+  if (!equipment || typeof equipment !== 'object') return false;
+  return itemConcedeImunidadePodridao(equipment.armadura);
+}
+
+// Usado pelo motor de batalha: monstros não recebem a imunidade de equipamento.
+export function participanteConcedeImunidadePodridao(participante) {
+  if (!participante || participante.isMonster) return false;
+  return equipamentoConcedeImunidadePodridao(participante.equipment);
+}

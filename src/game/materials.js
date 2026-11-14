@@ -1322,6 +1322,7 @@ const DADOS_OFICIAIS = {
         chance: 30,
         duracao: '2 turnos',
         alvo: 'habilidades de cura ou proteção sagrada',
+        status: 'contaminacaoPandemonica',
         especial: 'Ruptura Profana: acertos críticos têm 30% de chance de interromper habilidades de cura ou proteção sagrada por 2 turnos.',
       },
       armaFogo: {

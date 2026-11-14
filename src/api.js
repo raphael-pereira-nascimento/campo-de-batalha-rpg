@@ -7,6 +7,14 @@ import { gemIsRaw, getGemaById, GEM_LIST, GEMS, gemPrice, MINERA_VEIOS, polirPed
 import { VEIOS_MATERIAIS, getVeioMaterialById, calcularDropsMonstro, calcularDropsChefe } from './game/mineracao.js';
 import { precoEmCents } from './game/tools.js';
 import { EQUIPMENT, POTIONS, deriveStats, applyMaxMults, aplicarCrescimentoNivel, efeitosDeHabilidades, TAVERN_DRINKS, TAVERN_FOODS } from './game/data.js';
+import {
+  CORRUPCAO_MIN,
+  CORRUPCAO_MAX,
+  CORRUPCAO_GANHOS,
+  adicionarCorrupcao,
+  recuperarCorrupcao,
+  calcularEstadoCorrupcao,
+} from './game/corrupcao.js';
 import { DUNGEONS } from './game/dungeons.js';
 import {
   estadoMundo,
@@ -1218,6 +1226,86 @@ export const api = {
     return auth('/api/characters/craft', {
       method: 'POST',
       body: JSON.stringify({ characterId, item }),
+    });
+  },
+
+  // ── Corrupção do Ruidium (0–100) ──────────────────────────────────────────
+  // O estágio e as penalidades são derivados; o histórico registra cada
+  // ganho, recuperação ou ajuste manual. Nada causa morte automática.
+  getCorrupcao: (characterId) => {
+    if (isOffline()) {
+      const c = getOfflineCharacters().find((ch) => ch.id === characterId);
+      if (!c) return Promise.reject(new Error('Personagem não encontrado.'));
+      return Promise.resolve({
+        ok: true,
+        corrupcao: Number(c.corrupcao) || 0,
+        estado: calcularEstadoCorrupcao(c.corrupcao || 0),
+        historico: Array.isArray(c.corrupcaoHistorico) ? c.corrupcaoHistorico : [],
+        offline: true,
+      });
+    }
+    return auth(`/api/characters/${characterId}/corrupcao`);
+  },
+  setCorrupcao: (characterId, payload = {}) => {
+    if (isOffline()) {
+      const chars = getOfflineCharacters();
+      const c = chars.find((ch) => ch.id === characterId);
+      if (!c) return Promise.reject(new Error('Personagem não encontrado.'));
+
+      const anterior = Math.max(CORRUPCAO_MIN, Math.min(CORRUPCAO_MAX, Math.trunc(Number(c.corrupcao) || 0)));
+      let novo = anterior;
+      let tipo = 'ajuste';
+      let motivo = payload.motivo || 'Ajuste manual do mestre';
+
+      if (payload.recuperacao) {
+        const r = recuperarCorrupcao(anterior, payload.recuperacao);
+        if (!r.ok) return Promise.reject(new Error(r.motivo));
+        novo = r.pontos;
+        tipo = 'recuperacao';
+        motivo = r.recuperacao.nome;
+      } else if (payload.ganho != null) {
+        const r = adicionarCorrupcao(anterior, payload.ganho);
+        if (!r.ok) return Promise.reject(new Error(r.motivo));
+        novo = r.pontos;
+        tipo = 'ganho';
+        motivo = typeof payload.ganho === 'number'
+          ? `Ganho manual de ${payload.ganho} ponto(s)`
+          : (CORRUPCAO_GANHOS[payload.ganho]?.nome || 'Ganho de Corrupção');
+      } else {
+        novo = Math.max(
+          CORRUPCAO_MIN,
+          Math.min(CORRUPCAO_MAX, Math.trunc(Number(payload.pontos) || 0)),
+        );
+      }
+
+      c.corrupcao = novo;
+      const estado = calcularEstadoCorrupcao(novo);
+      if (novo !== anterior) {
+        const entrada = {
+          id: `offline-${Date.now()}`,
+          pontos_anteriores: anterior,
+          pontos_novos: novo,
+          delta: novo - anterior,
+          tipo,
+          motivo,
+          criado_em: new Date().toISOString(),
+        };
+        c.corrupcaoHistorico = [entrada, ...(Array.isArray(c.corrupcaoHistorico) ? c.corrupcaoHistorico : [])]
+          .slice(0, 50);
+      }
+      localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
+      return Promise.resolve({
+        ok: true,
+        corrupcao: novo,
+        personagem: c,
+        estado,
+        historico: c.corrupcaoHistorico || [],
+        offline: true,
+      });
+    }
+    return auth(`/api/characters/${characterId}/corrupcao`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   },
 

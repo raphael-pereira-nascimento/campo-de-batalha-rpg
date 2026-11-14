@@ -82,6 +82,38 @@ export const RUNAS_OBSERVACOES = [
   'O efeito-base de +10% de dano/resistência e 20% de chance por 2 turnos é uma proposta aprovada, não um valor oficial.',
 ];
 
+// Ficha individual das 17 runas. A identidade (elemento) é aprovada; o efeito
+// próprio de cada runa continua PENDENTE. `efeitoIndividual: null` é intencional:
+// não inventamos comportamento, número, duração ou alvo por elemento.
+export const RUNAS_FICHAS = RUNAS_ELEMENTOS.map((elemento) => ({
+  id: elemento.id,
+  nome: `Runa de ${elemento.nome}`,
+  elemento: elemento.id,
+  elementoNome: elemento.nome,
+  efeitoIndividual: null,
+  efeitoOficial: false,
+  status: 'pendente',
+  observacoes: 'Identidade do elemento aprovada; efeito individual ainda não documentado.',
+}));
+
+export function fichaRuna(id, temAcoRunico = false) {
+  const elemento = getElementoRuna(id);
+  if (!elemento) return null;
+  const ficha = RUNAS_FICHAS.find((item) => item.id === elemento.id);
+  return {
+    ...ficha,
+    regra: { ...getRegraRunas(temAcoRunico) },
+    efeitoGenerico: efeitoRuna(elemento.id, temAcoRunico),
+  };
+}
+
+export function descreverFichaRuna(id, temAcoRunico = false) {
+  const ficha = fichaRuna(id, temAcoRunico);
+  if (!ficha) return 'Runa desconhecida.';
+  return `${ficha.nome} — efeito individual pendente de definição oficial.`
+    + ` Regra atual: ${ficha.regra.descricao}`;
+}
+
 export function getElementoRuna(id) {
   if (!id) return null;
   const alvo = String(id).toLowerCase();

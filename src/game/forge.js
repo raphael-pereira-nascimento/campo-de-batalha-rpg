@@ -13,6 +13,7 @@ import {
 } from './materialRules.js';
 import { PODRIDAO_ARMA, criarStatusPodridaoArma } from './podridao.js';
 import { CONTAMINACAO_APLICACOES, criarStatusContaminacao } from './contaminacao.js';
+import { validarRunas } from './runas.js';
 
 // ============================================================================
 // CÁLCULO DE PREÇO DE EQUIPAMENTO (delega para equipments.js)
@@ -249,11 +250,12 @@ export function calcularAtributosEquipamento(equipId, materialPrimarioId, materi
 // Deriva o efeito de status do perfil mecânico. Só são automatizadas as
 // aplicações oficiais que o motor consegue representar hoje:
 // - Podridão em armas (15% / 25% em equipamentos mágicos, 3 turnos, 20% da vida máxima);
-// - Ferida Pandemônica e Munição Contaminante em armas.
-// Aplicações reativas (armadura), de área (golem) ou só em crítico (Ruptura
-// Profana) permanecem descritivas na ficha até o combate defini-las.
+// - Ferida Pandemônica e Munição Contaminante em armas;
+// - Ruptura Profana em armas de impacto (somente em crítico; 30% / 2 turnos).
+// Aplicações reativas (armadura) e de área (golem) permanecem descritivas na ficha.
 const CONTAMINACAO_POR_CATEGORIA = {
   armaLamina: 'feridaPandemica',
+  armaImpacto: 'rupturaProfana',
   armaFogo: 'municaoContaminante',
 };
 
@@ -303,6 +305,30 @@ export function gemasSlotadasParaSocketedGems(gemasSlotadas = [], totalSlots = 0
 }
 
 // ============================================================================
+// RUNAS ELEMENTAIS NA FORJA
+// ============================================================================
+// O Aço Rúnico é o material que libera a segunda runa e o multiplicador de
+// potência documentado. A validação em si fica em `runas.js`; aqui apenas
+// ligamos os materiais escolhidos à regra, sem inventar efeitos por elemento.
+export function equipamentoTemAcoRunico(materialPrimarioId, materialSecundarioId) {
+  return materialPrimarioId === 'acoRunico' || materialSecundarioId === 'acoRunico';
+}
+
+export function validarRunasEquipamento(runas, materialPrimarioId, materialSecundarioId) {
+  return validarRunas(runas, equipamentoTemAcoRunico(materialPrimarioId, materialSecundarioId));
+}
+
+// Formato persistido no item: apenas o elemento de cada runa. O efeito
+// individual continua pendente e não é gravado como se fosse oficial.
+export function normalizarRunasParaItem(runas) {
+  const lista = Array.isArray(runas) ? runas : [];
+  return lista
+    .map((runa) => (typeof runa === 'string' ? runa : runa?.elemento || runa?.id || null))
+    .filter(Boolean)
+    .map((elemento) => ({ elemento: String(elemento).toLowerCase() }));
+}
+
+// ============================================================================
 // CUSTO DE FABRICAÇÃO
 // ============================================================================
 export function calcularCustoFabricacao(equipId, materialPrimarioId, materialSecundarioId, gemasSlotadas = [], quantidades = null) {
@@ -349,9 +375,18 @@ export function tipoInventarioEquipamento(equipamento) {
   return equipamento.tipo;
 }
 
-export function craftarEquipamento(equipId, materialPrimarioId, materialSecundarioId, gemasSlotadas = [], personagem = null, quantidades = null) {
+export function craftarEquipamento(equipId, materialPrimarioId, materialSecundarioId, gemasSlotadas = [], personagem = null, quantidades = null, runas = []) {
   const equip = getEquipamentoById(equipId);
   if (!equip) return { ok: false, motivo: 'Equipamento não encontrado.' };
+
+  const runasValidadas = validarRunasEquipamento(runas, materialPrimarioId, materialSecundarioId);
+  if (!runasValidadas.ok) {
+    return {
+      ok: false,
+      motivo: runasValidadas.erros.join(' '),
+      runas: runasValidadas,
+    };
+  }
 
   if (materialPrimarioId === 'ferroEstigio' || materialSecundarioId === 'ferroEstigio') {
     const pode = podeUsarFerroEstigio(personagem);
@@ -364,6 +399,7 @@ export function craftarEquipamento(equipId, materialPrimarioId, materialSecundar
   if (!resultado.ok) return resultado;
 
   const custo = calcularCustoFabricacao(equipId, materialPrimarioId, materialSecundarioId, gemasSlotadas, quantidades);
+  const runasDoItem = normalizarRunasParaItem(runasValidadas.elementos);
 
   let honrineo = null;
   if (personagem) {
@@ -395,6 +431,7 @@ export function craftarEquipamento(equipId, materialPrimarioId, materialSecundar
         perfilMecanico: resultado.composicao.perfilMecanico,
       },
       gemasSlotadas,
+      runas: runasDoItem,
       honrineoAplicado: honrineo ? true : false,
     },
     custo,
@@ -403,6 +440,7 @@ export function craftarEquipamento(equipId, materialPrimarioId, materialSecundar
     categoriaEfeito: resultado.categoriaEfeito,
     perfilMecanico: resultado.perfilMecanico,
     composicao: resultado.composicao,
+    runas: runasValidadas,
     honrineo,
   };
 }

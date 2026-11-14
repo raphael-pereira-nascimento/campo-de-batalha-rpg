@@ -27,6 +27,11 @@ import {
   removeGemFromInventory,
   socketGem,
   unsocketGem,
+  setCorrupcao,
+  ganharCorrupcao,
+  recuperarCorrupcaoPersonagem,
+  estadoCorrupcaoDoPersonagem,
+  getHistoricoCorrupcao,
 } from './services/characters.js';
 import {
   gemIsRaw,
@@ -433,6 +438,63 @@ app.post('/api/characters/craft', requireAuth, async (req, res) => {
     if (!characterId) throw new Error('Informe o personagem.');
     const salvo = await craftItem(characterId, req.player.id, item);
     res.json({ ok: true, item: salvo });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+// ── Corrupção do Ruidium (persistida, 0–100) ──────────────────────────────
+// O estágio e as penalidades são sempre derivados de `game/corrupcao.js`.
+// O ajuste manual é uma ferramenta do mestre e NÃO causa morte automática ao
+// chegar a 100: apenas marca o personagem como Consumido.
+app.get('/api/characters/:id/corrupcao', requireAuth, async (req, res) => {
+  try {
+    const char = await getCharacter(req.params.id);
+    if (!char) return res.status(404).json({ ok: false, error: 'Personagem não encontrado.' });
+    if (char.player_id !== req.player.id) throw new Error('Este personagem não é seu.');
+    res.json({
+      ok: true,
+      corrupcao: Number(char.corrupcao) || 0,
+      estado: estadoCorrupcaoDoPersonagem(char),
+      historico: await getHistoricoCorrupcao(req.params.id),
+    });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/characters/:id/corrupcao', requireAuth, async (req, res) => {
+  try {
+    const char = await getCharacter(req.params.id);
+    if (!char) return res.status(404).json({ ok: false, error: 'Personagem não encontrado.' });
+    if (char.player_id !== req.player.id) throw new Error('Este personagem não é seu.');
+    const { pontos, ganho, recuperacao, motivo } = req.body || {};
+
+    let personagem;
+    let estado;
+    if (recuperacao) {
+      const r = await recuperarCorrupcaoPersonagem(req.params.id, recuperacao);
+      personagem = r.personagem;
+      estado = r.estado;
+    } else if (ganho != null) {
+      const r = await ganharCorrupcao(req.params.id, ganho);
+      personagem = r.personagem;
+      estado = r.estado;
+    } else {
+      personagem = await setCorrupcao(req.params.id, pontos, {
+        tipo: 'ajuste',
+        motivo: motivo || 'Ajuste manual do mestre',
+      });
+      estado = estadoCorrupcaoDoPersonagem(personagem);
+    }
+
+    res.json({
+      ok: true,
+      corrupcao: Number(personagem.corrupcao) || 0,
+      personagem,
+      estado,
+      historico: await getHistoricoCorrupcao(req.params.id),
+    });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }

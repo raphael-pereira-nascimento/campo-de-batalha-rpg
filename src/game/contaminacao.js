@@ -148,6 +148,40 @@ export function criarStatusContaminacao(aplicacaoId) {
   };
 }
 
+// Contaminação Profana (armadura) e Núcleo Pandemônico (golem) são aplicações
+// oficiais, mas dependem de gatilhos que o motor ainda não representa:
+// - Contaminação Profana reage a criaturas sagradas que atingem a armadura;
+// - Núcleo Pandemônico afeta inimigos próximos ao golem.
+// As funções abaixo preparam a estrutura para uso manual/descritivo, sempre com
+// `automatico: false`, sem conectar um comportamento que não foi definido.
+export function criarEfeitoContaminacaoProfana() {
+  const status = criarStatusContaminacao('contaminacaoProfana');
+  if (!status) return null;
+  return {
+    ...status,
+    aplicacaoId: 'contaminacaoProfana',
+    nome: 'Contaminação Profana',
+    automatico: false,
+    gatilho: 'criatura sagrada atinge diretamente a armadura',
+    alvo: CONTAMINACAO_APLICACOES.contaminacaoProfana.alvo,
+    motivoPendente: 'Aplicação reativa de armadura ainda não conectada ao motor de combate.',
+  };
+}
+
+export function criarEfeitoNucleoPandemico() {
+  const status = criarStatusContaminacao('nucleoPandemico');
+  if (!status) return null;
+  return {
+    ...status,
+    aplicacaoId: 'nucleoPandemico',
+    nome: 'Núcleo Pandemônico',
+    automatico: false,
+    gatilho: 'inimigos próximos do golem',
+    alvo: CONTAMINACAO_APLICACOES.nucleoPandemico.alvo,
+    motivoPendente: 'Efeito de área do golem ainda não conectado ao motor de combate.',
+  };
+}
+
 // Dano por turno documentado para a contaminação (ex.: 10% da vida máxima).
 // A função apenas aplica o percentual; não define arredondamento oficial.
 export function calcularDanoContaminacao(vidaMaxima, percentualDanoVidaMaxima = 10) {

@@ -26,10 +26,13 @@ import { clampInt, clampFloat } from '../utils.js';
 import {
   CORRUPCAO_MIN,
   CORRUPCAO_MAX,
+  CORRUPCAO_GANHOS,
+  CORRUPCAO_RECUPERACOES,
   adicionarCorrupcao,
   recuperarCorrupcao,
   calcularEstadoCorrupcao,
 } from '../game/corrupcao.js';
+import { getElementoRuna, validarRunas } from '../game/runas.js';
 
 export function hashPassword(password) {
   const salt = randomUUID().replace(/-/g, '');
@@ -687,6 +690,34 @@ function listaEstadosGema(valor, total, max = 20) {
   return lista;
 }
 
+function idDeMaterial(valor) {
+  if (!valor) return null;
+  return typeof valor === 'string' ? valor : valor.id || null;
+}
+
+// Runas persistidas: no máximo 2 elementos válidos e diferentes. A regra do
+// Aço Rúnico é derivada dos materiais gravados no próprio item, nunca de um
+// campo enviado pelo cliente. Efeitos individuais continuam pendentes.
+function listaRunasValidadas(item) {
+  if (!Array.isArray(item?.runas)) return [];
+  const elementos = item.runas
+    .slice(0, 2)
+    .map((runa) => {
+      const bruto = typeof runa === 'string' ? runa : runa?.elemento || runa?.id || null;
+      return getElementoRuna(bruto)?.id || null;
+    })
+    .filter(Boolean);
+  const materiais = item?.materiais || {};
+  const temAcoRunico = [materiais.primario, materiais.secundario]
+    .map(idDeMaterial)
+    .includes('acoRunico');
+  const validacao = validarRunas(elementos, temAcoRunico);
+  if (!validacao.ok) {
+    throw new Error(`Runas inválidas: ${validacao.erros.join(' ')}`);
+  }
+  return elementos.map((elemento) => ({ elemento }));
+}
+
 function objetoLimitado(valor, maxJson = 20000) {
   if (!isObj(valor)) return null;
   try {
@@ -721,6 +752,7 @@ export function sanitizarItemCraftado(item, inventario = [], { atualizar = false
 
   const socketedGems = listaGemas(item.socketedGems);
   const socketedGemEstados = listaEstadosGema(item.socketedGemEstados, socketedGems.length);
+  const runas = listaRunasValidadas(item);
 
   const salvo = {
     id: atualizar
@@ -740,6 +772,7 @@ export function sanitizarItemCraftado(item, inventario = [], { atualizar = false
       : [],
     socketedGems,
     socketedGemEstados,
+    runas,
     descricao: textoLimitado(item.descricao, 2000) || null,
     subcategoria: textoLimitado(item.subcategoria, 30) || null,
     categoria,
@@ -928,12 +961,29 @@ export async function levelUpCharacter(characterId, playerId) {
 // ── Corrupção do Ruidium (persistida, 0–100) ────────────────────────────
 // O estágio e as penalidades são sempre derivados de `game/corrupcao.js`.
 // Não existe recuperação automática: cada ganho/perda exige um motivo oficial.
-export async function setCorrupcao(characterId, pontos) {
+async function registrarHistoricoCorrupcao(characterId, pontosAnteriores, pontosNovos, tipo, motivo) {
+  const delta = pontosNovos - pontosAnteriores;
+  if (delta === 0) return;
+  await query(
+    `INSERT INTO character_corruption_history
+       (character_id, pontos_anteriores, pontos_novos, delta, tipo, motivo)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [characterId, pontosAnteriores, pontosNovos, delta, tipo, motivo || null],
+  );
+}
+
+export async function setCorrupcao(characterId, pontos, { tipo = 'ajuste', motivo = 'Ajuste manual do mestre' } = {}) {
+  const char = await getCharacter(characterId);
+  if (!char) throw new Error('Personagem não encontrado.');
+  const anterior = Number(char.corrupcao) || 0;
   const valor = Math.max(
     CORRUPCAO_MIN,
     Math.min(CORRUPCAO_MAX, Math.trunc(Number(pontos) || 0)),
   );
-  await query('UPDATE characters SET corrupcao = $1 WHERE id = $2', [valor, characterId]);
+  if (valor !== anterior) {
+    await query('UPDATE characters SET corrupcao = $1 WHERE id = $2', [valor, characterId]);
+    await registrarHistoricoCorrupcao(characterId, anterior, valor, tipo, motivo);
+  }
   return getCharacter(characterId);
 }
 
@@ -942,8 +992,14 @@ export async function ganharCorrupcao(characterId, motivoOuPontos) {
   if (!char) throw new Error('Personagem não encontrado.');
   const r = adicionarCorrupcao(char.corrupcao || 0, motivoOuPontos);
   if (!r.ok) throw new Error(r.motivo);
+  const motivoNome = typeof motivoOuPontos === 'number'
+    ? `Ganho manual de ${motivoOuPontos} ponto(s)`
+    : (CORRUPCAO_GANHOS[motivoOuPontos]?.nome || 'Ganho de Corrupção');
   return {
-    personagem: await setCorrupcao(characterId, r.pontos),
+    personagem: await setCorrupcao(characterId, r.pontos, {
+      tipo: 'ganho',
+      motivo: `${motivoNome} (+${r.ganho})`,
+    }),
     estado: r.estado,
     mudouEstagio: r.mudouEstagio,
     ganho: r.ganho,
@@ -956,7 +1012,10 @@ export async function recuperarCorrupcaoPersonagem(characterId, metodo) {
   const r = recuperarCorrupcao(char.corrupcao || 0, metodo);
   if (!r.ok) throw new Error(r.motivo);
   return {
-    personagem: await setCorrupcao(characterId, r.pontos),
+    personagem: await setCorrupcao(characterId, r.pontos, {
+      tipo: 'recuperacao',
+      motivo: r.recuperacao.nome,
+    }),
     estado: r.estado,
     mudouEstagio: r.mudouEstagio,
     recuperacao: r.recuperacao,
@@ -965,6 +1024,19 @@ export async function recuperarCorrupcaoPersonagem(characterId, metodo) {
 
 export function estadoCorrupcaoDoPersonagem(char) {
   return calcularEstadoCorrupcao(char?.corrupcao || 0);
+}
+
+export async function getHistoricoCorrupcao(characterId, limite = 50) {
+  const max = Math.max(1, Math.min(200, Math.trunc(Number(limite) || 50)));
+  const { rows } = await query(
+    `SELECT id, pontos_anteriores, pontos_novos, delta, tipo, motivo, criado_em
+       FROM character_corruption_history
+      WHERE character_id = $1
+      ORDER BY criado_em DESC
+      LIMIT $2`,
+    [characterId, max],
+  );
+  return rows;
 }
 
 // ── Ajuste manual de nível do Mestre (PROVISÓRIO) ───────────────────────

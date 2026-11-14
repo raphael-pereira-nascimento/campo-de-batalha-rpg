@@ -60,6 +60,7 @@ import {
   aplicarCorrupcaoEmAtributos,
 } from './combatEffects.js';
 import { calcularEstadoCorrupcao } from './corrupcao.js';
+import { participanteConcedeImunidadePodridao } from './podridao.js';
 
 let logCounter = 0;
 
@@ -1012,6 +1013,12 @@ export class BattleManager {
     if (!target.alive || !status || !STATUS_DEFS[status.tipo]) return;
     if (status.somenteCritico === true && opcoes.crit !== true) return;
     const def = STATUS_DEFS[status.tipo];
+    // Imunidade oficial do Tenebrium: só a armadura craftada com o material
+    // concede proteção contra Podridão; não vale para armas nem acessórios.
+    if (status.tipo === 'podridao' && participanteConcedeImunidadePodridao(target)) {
+      battle.log.push(makeLog(`🛡️ ${target.charName} é imune à Podridão pela armadura de Tenebrium.`, 'info'));
+      return;
+    }
     const imune = efeitosDe(target).imune || [];
     if (Array.isArray(imune) && imune.includes(status.tipo)) {
       battle.log.push(makeLog(`🛡️ ${target.charName} não é afetado por ${def.nome.toLowerCase()}.`, 'info'));
