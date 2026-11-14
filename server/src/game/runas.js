@@ -55,10 +55,31 @@ export const RUNAS_ENCAIXE = {
   descricao: 'Cada runa ocupa um encaixe que poderia receber uma pedra preciosa.',
 };
 
+// Efeito-base aprovado para as runas (proposta implementada, NÃO é dado
+// oficial): passivo de +10% de dano e +10% de resistência ao elemento da runa;
+// ativo com 20% de chance de aplicar o efeito elemental por 2 turnos.
+// O multiplicador do Aço Rúnico incide sobre a potência (dano/resistência e
+// chance), mas NÃO sobre a duração. Os efeitos individuais de cada elemento
+// continuam pendentes de definição oficial.
+export const RUNAS_EFEITO_BASE = {
+  oficial: false,
+  origem: 'proposta aprovada',
+  passivo: {
+    bonusDanoPct: 10,
+    resistenciaPct: 10,
+  },
+  ativo: {
+    chancePct: 20,
+    duracaoTurnos: 2,
+  },
+  descricao: 'Efeito elemental genérico aprovado; identidade individual de cada runa ainda pendente.',
+};
+
 export const RUNAS_OBSERVACOES = [
   'As runas não são exclusivas do Aço Rúnico; qualquer equipamento pode recebê-las.',
   'O Aço Rúnico aumenta a potência das runas e permite duas inscrições simultâneas.',
   'Os efeitos individuais de cada elemento ainda não foram definidos.',
+  'O efeito-base de +10% de dano/resistência e 20% de chance por 2 turnos é uma proposta aprovada, não um valor oficial.',
 ];
 
 export function getElementoRuna(id) {
@@ -113,6 +134,67 @@ export function calcularEfeitoRuna(valorBase, temAcoRunico = false) {
   const base = Number(valorBase);
   if (!Number.isFinite(base)) return 0;
   return base * getRegraRunas(temAcoRunico).multiplicadorEfeito;
+}
+
+// Efeito aprovado de uma runa (genérico por elemento). Retorna `null` para
+// elemento desconhecido. A identidade individual de cada runa continua pendente.
+export function efeitoRuna(elemento, temAcoRunico = false) {
+  const el = getElementoRuna(elemento);
+  if (!el) return null;
+  const multiplicador = getRegraRunas(temAcoRunico).multiplicadorEfeito;
+  return {
+    elemento: el.id,
+    nome: el.nome,
+    oficial: RUNAS_EFEITO_BASE.oficial,
+    origem: RUNAS_EFEITO_BASE.origem,
+    multiplicador,
+    passivo: {
+      bonusDanoPct: RUNAS_EFEITO_BASE.passivo.bonusDanoPct * multiplicador,
+      resistenciaPct: RUNAS_EFEITO_BASE.passivo.resistenciaPct * multiplicador,
+    },
+    ativo: {
+      chancePct: RUNAS_EFEITO_BASE.ativo.chancePct * multiplicador,
+      duracaoTurnos: RUNAS_EFEITO_BASE.ativo.duracaoTurnos,
+    },
+  };
+}
+
+// Modificadores no formato canônico de `combatEffects`/`materialRules`.
+// Ainda não são aplicados automaticamente: servem para a futura integração
+// de runas na forja e no combate, sem inventar a identidade de cada runa.
+export function modificadoresRuna(elemento, temAcoRunico = false) {
+  const efeito = efeitoRuna(elemento, temAcoRunico);
+  if (!efeito) return [];
+  return [
+    {
+      tipo: 'bonus',
+      valor: efeito.passivo.bonusDanoPct,
+      unidade: 'percentual',
+      alvo: `dano de ${efeito.elemento}`,
+      condicao: null,
+      fonte: 'runa',
+      elemento: efeito.elemento,
+    },
+    {
+      tipo: 'resistencia',
+      valor: efeito.passivo.resistenciaPct,
+      unidade: 'percentual',
+      alvo: `resistência a ${efeito.elemento}`,
+      condicao: null,
+      fonte: 'runa',
+      elemento: efeito.elemento,
+    },
+    {
+      tipo: 'chance',
+      valor: efeito.ativo.chancePct,
+      unidade: 'percentual',
+      alvo: `aplicar efeito de ${efeito.elemento}`,
+      duracao: `${efeito.ativo.duracaoTurnos} turnos`,
+      condicao: null,
+      fonte: 'runa',
+      elemento: efeito.elemento,
+    },
+  ];
 }
 
 export function descreverRegrasRunas() {

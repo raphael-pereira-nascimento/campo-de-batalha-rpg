@@ -10,6 +10,9 @@ import {
   validarRunas,
   calcularEfeitoRuna,
   descreverRegrasRunas,
+  RUNAS_EFEITO_BASE,
+  efeitoRuna,
+  modificadoresRuna,
 } from '../../src/game/runas.js';
 
 describe('Runas elementais — dados aprovados', () => {
@@ -93,5 +96,67 @@ describe('Runas elementais — regras de uso', () => {
     expect(texto).toContain('2 runas');
     expect(texto).toContain('elementos diferentes');
     expect(texto).toContain('pedra preciosa');
+  });
+});
+
+describe('Runas elementais — efeito genérico aprovado', () => {
+  it('registra o efeito-base como proposta, não como dado oficial', () => {
+    expect(RUNAS_EFEITO_BASE.oficial).toBe(false);
+    expect(RUNAS_EFEITO_BASE.passivo.bonusDanoPct).toBe(10);
+    expect(RUNAS_EFEITO_BASE.passivo.resistenciaPct).toBe(10);
+    expect(RUNAS_EFEITO_BASE.ativo.chancePct).toBe(20);
+    expect(RUNAS_EFEITO_BASE.ativo.duracaoTurnos).toBe(2);
+  });
+
+  it('aplica o multiplicador do Aço Rúnico sobre potência e chance', () => {
+    const semAco = efeitoRuna('fogo', false);
+    expect(semAco.multiplicador).toBe(0.5);
+    expect(semAco.passivo.bonusDanoPct).toBe(5);
+    expect(semAco.passivo.resistenciaPct).toBe(5);
+    expect(semAco.ativo.chancePct).toBe(10);
+
+    const comAco = efeitoRuna('fogo', true);
+    expect(comAco.multiplicador).toBe(1.5);
+    expect(comAco.passivo.bonusDanoPct).toBe(15);
+    expect(comAco.passivo.resistenciaPct).toBe(15);
+    expect(comAco.ativo.chancePct).toBe(30);
+  });
+
+  it('não multiplica a duração do efeito ativo', () => {
+    expect(efeitoRuna('gelo', false).ativo.duracaoTurnos).toBe(2);
+    expect(efeitoRuna('gelo', true).ativo.duracaoTurnos).toBe(2);
+  });
+
+  it('não inventa efeito para elemento desconhecido', () => {
+    expect(efeitoRuna('inexistente')).toBeNull();
+    expect(efeitoRuna()).toBeNull();
+    expect(modificadoresRuna('inexistente')).toEqual([]);
+  });
+
+  it('converte o efeito em modificadores canônicos', () => {
+    const modificadores = modificadoresRuna('gelo', false);
+    expect(modificadores).toHaveLength(3);
+
+    const [bonus, resistencia, chance] = modificadores;
+    expect(bonus.tipo).toBe('bonus');
+    expect(bonus.valor).toBe(5);
+    expect(bonus.unidade).toBe('percentual');
+    expect(bonus.alvo).toContain('gelo');
+    expect(bonus.fonte).toBe('runa');
+    expect(bonus.elemento).toBe('gelo');
+
+    expect(resistencia.tipo).toBe('resistencia');
+    expect(resistencia.valor).toBe(5);
+
+    expect(chance.tipo).toBe('chance');
+    expect(chance.valor).toBe(10);
+    expect(chance.duracao).toBe('2 turnos');
+  });
+
+  it('usa os valores ampliados com Aço Rúnico nos modificadores', () => {
+    const [bonus, resistencia, chance] = modificadoresRuna('gelo', true);
+    expect(bonus.valor).toBe(15);
+    expect(resistencia.valor).toBe(15);
+    expect(chance.valor).toBe(30);
   });
 });

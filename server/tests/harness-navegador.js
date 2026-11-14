@@ -9,6 +9,7 @@ import './podridao.test.js';
 import './corrupcao.test.js';
 import './contaminacao.test.js';
 import './runas.test.js';
+import './combatEffects.test.js';
 import './forgeMaterials.test.js';
 
 executarTestes().then((resumo) => {

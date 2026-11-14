@@ -341,3 +341,83 @@ describe('forja — bônus de conjunto', () => {
     expect(bonus).toEqual({ forca: 3, resistencia: 1 });
   });
 });
+
+describe('forja — perfil mecânico e status derivados', () => {
+  it('arma de Tenebrium aplica Podridão com os números oficiais', () => {
+    const resultado = craftarEquipamento('espada_longa', 'tenebrium');
+
+    expect(resultado.ok).toBe(true);
+    expect(resultado.categoriaEfeito).toBe('armaLamina');
+    expect(resultado.perfilMecanico.status.id).toBe('podridao');
+
+    const efeito = resultado.equip.efeito;
+    expect(efeito.tipo).toBe('podridao');
+    expect(efeito.chance).toBe(0.15);
+    expect(efeito.turnos).toBe(3);
+    expect(efeito.danoPctVidaMaxima).toBe(20);
+    expect(efeito.origem).toBe('Tenebrium');
+  });
+
+  it('equipamento mágico de Tenebrium usa 25% de chance', () => {
+    const resultado = craftarEquipamento('cajado_arcano', 'tenebrium');
+
+    expect(resultado.ok).toBe(true);
+    expect(resultado.categoriaEfeito).toBe('cajado');
+    expect(resultado.equip.efeito.chance).toBe(0.25);
+    expect(resultado.equip.efeito.turnos).toBe(3);
+    expect(resultado.equip.efeito.danoPctVidaMaxima).toBe(20);
+  });
+
+  it('lâmina de Prata Pandemônica aplica Ferida Pandemônica', () => {
+    const resultado = craftarEquipamento('espada_longa', 'prataPandemomico');
+
+    expect(resultado.ok).toBe(true);
+    const efeito = resultado.equip.efeito;
+    expect(efeito.tipo).toBe('contaminacaoPandemonica');
+    expect(efeito.chance).toBe(0.25);
+    expect(efeito.turnos).toBe(3);
+    expect(efeito.danoPctVidaMaxima).toBe(10);
+    expect(efeito.origem).toBe('Ferida Pandemônica');
+  });
+
+  it('arma de fogo de Prata Pandemônica aplica Munição Contaminante', () => {
+    const resultado = craftarEquipamento('pistola', 'prataPandemomico');
+
+    expect(resultado.ok).toBe(true);
+    expect(resultado.categoriaEfeito).toBe('armaFogo');
+    const efeito = resultado.equip.efeito;
+    expect(efeito.tipo).toBe('contaminacaoPandemonica');
+    expect(efeito.chance).toBe(0.2);
+    expect(efeito.turnos).toBe(3);
+    expect(efeito.danoPctVidaMaxima).toBe(null);
+    expect(efeito.origem).toBe('Munição Contaminante');
+  });
+
+  it('não automatiza a Ruptura Profana (só em crítico)', () => {
+    const resultado = craftarEquipamento('machado_de_guerra', 'prataPandemomico');
+
+    expect(resultado.ok).toBe(true);
+    expect(resultado.categoriaEfeito).toBe('armaImpacto');
+    expect(resultado.perfilMecanico.status).toBe(null);
+    expect(resultado.equip.efeito).toBeUndefined();
+  });
+
+  it('normaliza o perfil mecânico por tipo', () => {
+    const resultado = craftarEquipamento('espada_longa', 'tenebrium');
+    const perfil = resultado.perfilMecanico;
+
+    expect(perfil.versao).toBe(1);
+    expect(perfil.categoria).toBe('armaLamina');
+    expect(perfil.porTipo.bonus).toHaveLength(2);
+    expect(perfil.modificadores.every((m) => m.tipo === 'bonus')).toBe(true);
+    expect(perfil.status.chance).toBe(15);
+  });
+
+  it('não acumula efeito idêntico vindo do secundário', () => {
+    const resultado = craftarEquipamento('espada_longa', 'tenebrium', 'tenebrium');
+
+    expect(resultado.ok).toBe(true);
+    expect(resultado.perfilMecanico.avisos.some((aviso) => aviso.includes('não acumula'))).toBe(true);
+    expect(resultado.perfilMecanico.porTipo.bonus).toHaveLength(2);
+  });
+});

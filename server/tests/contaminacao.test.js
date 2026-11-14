@@ -30,13 +30,15 @@ describe('Contaminação Pandemônica — identidade', () => {
     }
   });
 
-  it('registra as cinco aplicações documentadas', () => {
-    expect(Object.keys(CONTAMINACAO_APLICACOES)).toHaveLength(5);
+  it('registra as seis aplicações documentadas', () => {
+    expect(Object.keys(CONTAMINACAO_APLICACOES)).toHaveLength(6);
     expect(getAplicacaoContaminacao('contaminacaoProfana').chance).toBe(20);
     expect(getAplicacaoContaminacao('feridaPandemica').percentualDanoVidaMaxima).toBe(10);
     expect(getAplicacaoContaminacao('municaoContaminante').duracao).toBe(3);
     expect(getAplicacaoContaminacao('nucleoPandemico').reducaoPotenciaCuraProtecao).toBe(25);
     expect(getAplicacaoContaminacao('encantamentoLuz').duracao).toBe(2);
+    expect(getAplicacaoContaminacao('rupturaProfana').somenteCritico).toBe(true);
+    expect(getAplicacaoContaminacao('rupturaProfana').interrompeCuraProtecao).toBe(true);
   });
 
   it('retorna null para aplicação desconhecida', () => {

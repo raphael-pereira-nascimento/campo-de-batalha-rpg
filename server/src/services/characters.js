@@ -23,6 +23,13 @@ import { ALVO_TIPOS } from '../game/sistema.js';
 import { gemIsRaw, getGemById, GEMS, pickGemByWeight, mineGem, rollGemDrop, getInitialGem, MINERA_VEIOS } from '../game/gems.js';
 import { getCustomEquipment } from './customContent.js';
 import { clampInt, clampFloat } from '../utils.js';
+import {
+  CORRUPCAO_MIN,
+  CORRUPCAO_MAX,
+  adicionarCorrupcao,
+  recuperarCorrupcao,
+  calcularEstadoCorrupcao,
+} from '../game/corrupcao.js';
 
 export function hashPassword(password) {
   const salt = randomUUID().replace(/-/g, '');
@@ -405,6 +412,11 @@ function decorateCharacter(row) {
     especial: jsonOrObj(row.especial) || null,
     habilidades: jsonOrObj(row.habilidades) || [],
     gender: row.gender || null,
+    // Corrupção (0–100). Zero quando a coluna ainda não existia (bancos antigos).
+    corrupcao: Math.max(
+      CORRUPCAO_MIN,
+      Math.min(CORRUPCAO_MAX, Number(row.corrupcao) || 0),
+    ),
   };
 }
 
@@ -759,6 +771,10 @@ export function sanitizarItemCraftado(item, inventario = [], { atualizar = false
   }
   const efeito = objetoLimitado(item.efeito, 5000);
   if (efeito) salvo.efeito = efeito;
+  // Perfil mecânico normalizado da forja (bônus/resistência/chance/status).
+  // Preservado para que o combate online use as mesmas regras do offline.
+  const perfilMecanico = objetoLimitado(item.perfilMecanico, 20000);
+  if (perfilMecanico) salvo.perfilMecanico = perfilMecanico;
   copiarNumero(salvo, 'durabilidade', item, { max: 1e6, inteiro: true });
   copiarNumero(salvo, 'durabilidadeMax', item, { max: 1e6, inteiro: true });
   copiarNumero(salvo, 'melhoriaNivel', item, { max: 100, inteiro: true });
@@ -907,6 +923,48 @@ export async function levelUpCharacter(characterId, playerId) {
     [c.xp, c.level, c.hp_max, c.mp_max, c.hp_current, c.mp_current, JSON.stringify(c.attributes), characterId],
   );
   return getCharacter(characterId);
+}
+
+// ── Corrupção do Ruidium (persistida, 0–100) ────────────────────────────
+// O estágio e as penalidades são sempre derivados de `game/corrupcao.js`.
+// Não existe recuperação automática: cada ganho/perda exige um motivo oficial.
+export async function setCorrupcao(characterId, pontos) {
+  const valor = Math.max(
+    CORRUPCAO_MIN,
+    Math.min(CORRUPCAO_MAX, Math.trunc(Number(pontos) || 0)),
+  );
+  await query('UPDATE characters SET corrupcao = $1 WHERE id = $2', [valor, characterId]);
+  return getCharacter(characterId);
+}
+
+export async function ganharCorrupcao(characterId, motivoOuPontos) {
+  const char = await getCharacter(characterId);
+  if (!char) throw new Error('Personagem não encontrado.');
+  const r = adicionarCorrupcao(char.corrupcao || 0, motivoOuPontos);
+  if (!r.ok) throw new Error(r.motivo);
+  return {
+    personagem: await setCorrupcao(characterId, r.pontos),
+    estado: r.estado,
+    mudouEstagio: r.mudouEstagio,
+    ganho: r.ganho,
+  };
+}
+
+export async function recuperarCorrupcaoPersonagem(characterId, metodo) {
+  const char = await getCharacter(characterId);
+  if (!char) throw new Error('Personagem não encontrado.');
+  const r = recuperarCorrupcao(char.corrupcao || 0, metodo);
+  if (!r.ok) throw new Error(r.motivo);
+  return {
+    personagem: await setCorrupcao(characterId, r.pontos),
+    estado: r.estado,
+    mudouEstagio: r.mudouEstagio,
+    recuperacao: r.recuperacao,
+  };
+}
+
+export function estadoCorrupcaoDoPersonagem(char) {
+  return calcularEstadoCorrupcao(char?.corrupcao || 0);
 }
 
 // ── Ajuste manual de nível do Mestre (PROVISÓRIO) ───────────────────────

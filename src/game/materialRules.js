@@ -1207,7 +1207,7 @@ export function classificarPercentual(chave, valor = null) {
   if (/^imunidade/.test(k)) return 'imunidade';
   if (/^resist/.test(k)) return 'resistencia';
   if (/^redu[cç]/.test(k)) return 'reducao';
-  if (k.includes('custo')) return 'custo';
+  if (k.includes('custo') || k.includes('consumo')) return 'custo';
   if (/^chance|^probabilidade|chance de/.test(k)) return 'chance';
   if (/^dano/.test(k)) return Number.isFinite(numero) && numero < 0 ? 'reducao' : 'bonus';
   if (/^cura|^medicina|^efeitos medicinais|regenera/.test(k)) return 'cura';

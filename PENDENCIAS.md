@@ -56,13 +56,13 @@ Legenda:
 | D-26 | Uru e Aço Daédrico mantidos como fichas separadas | Provisório; decisão do criador pendente |
 | D-27 | Minério da Alma como matéria-prima | Cadastrado como ficha pendente (D-31) |
 | D-28 | Corrupção do Ruidium implementada em `corrupcao.js` | Implementado, aprovado |
-| D-29 | Integração da Corrupção ao combate | Pendente |
+| D-29 | Integração da Corrupção ao combate | Motor implementado; persistência sem API/UI |
 | D-30 | Electrum, Prata e Obsidiana seguem os efeitos oficiais | Aprovado no complemento |
 | D-31 | Catálogo consolidado com 52 fichas e novas fichas pendentes | Implementado |
-| D-32 | Contaminação Pandemônica separada da Podridão e da Corrupção | Implementado; combate pendente |
-| D-33 | Runas elementais com 17 elementos e regras de uso | Dados implementados; combate pendente |
+| D-32 | Contaminação Pandemônica separada da Podridão e da Corrupção | Armas implementadas; armadura/golem pendentes |
+| D-33 | Runas elementais com 17 elementos e regras de uso | Efeito genérico aprovado; identidades pendentes |
 | D-34 | Metal das Almas duplica a Pedra da Alma, sem duplicar regras de combate | Implementado |
-| D-35 | Integração de Contaminação e runas ao combate | Pendente |
+| D-35 | Integração de Contaminação e runas ao combate | Armas de Contaminação implementadas; runas pendentes |
 
 ---
 
@@ -186,9 +186,10 @@ Tratamentos aprovados:
   `MaterialDetails.jsx` e `MaterialComposition.jsx`, ligados em `App.jsx` e
   `Characters.jsx`. O catálogo tem busca por nome/id/alias, filtros de categoria,
   raridade, qualidade, bioma, aplicação, preço, ordenação e ficha detalhada.
-- Testes: **192/192 passam** no harness de navegador. Cobrem dados oficiais,
+- Testes: **242/242 passam** no harness de navegador. Cobrem dados oficiais,
   schema, aliases, filtros, preços, composição, custo, forja, Podridão,
-  Corrupção do Ruidium, Contaminação Pandemônica e runas.
+  Corrupção do Ruidium, Contaminação Pandemônica, runas e o avaliador de efeitos
+  de combate.
 - Nenhum banco, configuração ou dado já cadastrado foi substituído de forma
   destrutiva. Nenhuma dependência nova foi adicionada ao projeto.
 
@@ -232,7 +233,8 @@ tomadas seguindo a recomendação apresentada ao criador e ficam registradas com
 - **D-28 — Corrupção do Ruidium:** estágios 0–19 Normal, 20–39 Influenciado,
   40–59 Perturbado, 60–79 Corrompido, 80–99 Dominado e 100 Consumido; potência
   mágica +5/+10/+15/+25%; ganhos de +1/+2/+3/+2/+1; recuperações de -5, -15 e
-  remoção total. O módulo é puro e não altera o combate automaticamente.
+  remoção total. As penalidades do estágio já são aplicadas em `_finalAttrs`; a
+  potência mágica continua descritiva.
 - **D-30 — Efeitos oficiais substituem legados onde existem:** o Electrum passou
   a conceder apenas +5% de experiência e +5% em efeitos medicinais/cura, sem
   bônus físico por categoria. A Prata recebeu redução de 50% do dano
@@ -248,8 +250,8 @@ tomadas seguindo a recomendação apresentada ao criador e ficam registradas com
   separada da Podridão do Tenebrium e da Corrupção do Ruidium. A documentação
   define dano progressivo, redução de cura, menor resistência à corrupção e
   efeitos mais intensos em seres sagrados e equipamentos de luz, mas **não**
-  define tabela de estágios. O módulo `contaminacao.js` registra apenas as cinco
-  aplicações documentadas e não cria estágios.
+  define tabela de estágios. O módulo `contaminacao.js` registra apenas as seis
+  aplicações documentadas (incluindo a Ruptura Profana) e não cria estágios.
 - **D-33 — Runas elementais:** 17 elementos aprovados (Água, Gelo, Fogo, Ar,
   Planta, Pedra, Elétrico, Luz, Sombrio, Psíquico, Dor, Veneno, Tempo, Sangue,
   Metais, Ilusão e Areia). Sem Aço Rúnico, o equipamento aceita 1 runa com efeito
@@ -261,6 +263,45 @@ tomadas seguindo a recomendação apresentada ao criador e ficam registradas com
   mantém as três regras especiais de combate (+300% de dano, 50% de proteção e
   +300% de potência mágica por 3 turnos) fora da duplicação, em
   `regrasCombate` com `naoDuplicar`.
+
+### 1.5 Efeitos em combate — implementação atual
+
+Esta etapa implementou o pacote de efeitos aprovado, sem criar dados oficiais
+novos. Os valores continuam vindo das fichas; o que mudou é que eles passaram a
+ter interpretação mecânica explícita.
+
+- `src/game/combatEffects.js` (com cópia em `server/src/game/`): avaliação pura
+  de condições, percentuais tipados, teto de resistência, fórmula de dano,
+  penalidades, dano de status sobre a vida máxima original e redução de cura.
+- `src/game/materialRules.js`: classifica cada percentual como bônus, redução,
+  resistência, chance, custo ou penalidade; normaliza a chance; monta
+  `modificadores` e `perfilMecanico`, com a regra principal 100% / secundário
+  até 25% / efeito idêntico não acumula.
+- `src/game/forge.js`: grava `perfilMecanico` no item craftado e deriva o
+  `efeito` automático de armas. Tenebrium aplica Podridão (15% ou 25% em
+  equipamentos mágicos, 20% da vida máxima original por 3 turnos); Prata
+  Pandemônica aplica Ferida Pandemônica em lâminas e Munição Contaminante em
+  armas de fogo. Ruptura Profana permanece descritiva, pois só vale em crítico.
+- `battleManager` (cliente e servidor): normaliza a chance dos status, guarda
+  `hpMaxOriginal`, calcula dano percentual sobre a vida original, aplica redução
+  de cura da Contaminação, aceita status `somenteCritico` com o resultado do
+  crítico e aplica as penalidades percentuais da Corrupção em `_finalAttrs`.
+- `server/src/services/characters.js` + migração `0010_corrupcao.sql`: preservam
+  `perfilMecanico` na sanitização da forja e persistem a Corrupção (0–100) com
+  `setCorrupcao`, `ganharCorrupcao`, `recuperarCorrupcaoPersonagem` e
+  `estadoCorrupcaoDoPersonagem`.
+- `src/game/runas.js`: efeito genérico **não oficial** aprovado (+10% de dano e
+  +10% de resistência ao elemento; 20% de chance por 2 turnos), com
+  `efeitoRuna` e `modificadoresRuna`. As identidades individuais das 17 runas
+  continuam pendentes.
+- Testes: `server/tests/combatEffects.test.js` cobre chance, condições,
+  resistência, fórmula, penalidades, Corrupção, dano de status e cura; os testes
+  de runas e forja foram estendidos para o efeito genérico e os status derivados.
+
+Ainda não automatizado nesta etapa: recuperação/API/UI da Corrupção, seleção e
+armazenamento de runas na forja, aplicações reativas (armadura de Tenebrium,
+aura de golem), identidades individuais das runas e o comportamento completo do
+estado “Consumido”.
 
 ---
 
@@ -450,11 +491,14 @@ O que falta preencher com o criador/documentação:
 
 ### 3.3 Integrações ainda pendentes
 
-- **Combate:** os efeitos de materiais são calculados na forja, mas não são
-  aplicados automaticamente pelo `battleManager` durante a batalha.
+- **Combate:** o avaliador puro (`combatEffects.js`) e o `perfilMecanico` já
+  existem, e as armas de Tenebrium/Prata Pandemônica aplicam status. Efeitos
+  reativos, de área e condicionais não representados pelo motor continuam
+  descritivos; nenhum percentual é inventado.
 - **Percentuais, penalidades, condições e efeitos especiais:** são expostos na
-  ficha e na composição, mas `forge.js` só soma bônus numéricos. Nada é aplicado
-  automaticamente em combate.
+  ficha, na composição e no perfil mecânico. `forge.js` continua somando apenas
+  bônus numéricos em `atributosFinais`; o combate usa o perfil quando a regra é
+  automatizável.
 - **Golens:** não existe golem jogável, equipamento ou aliado; o catálogo só
   registra quais materiais podem ser usados.
 - **Mineração:** os veios e drops ainda entregam os `id`s refinados (`ferro`,
@@ -464,21 +508,27 @@ O que falta preencher com o criador/documentação:
   compatibilidade existe no schema, mas nenhum material real declara uma lista
   oficial de categorias compatíveis.
 - **Armadura de Tenebrium:** a imunidade documentada no PDF ainda não foi
-  implementada no combate.
-- **Podridão no combate:** `podridao.js` é um módulo puro; falta decidir onde a
-  exposição acumula, quando o dano é aplicado e como o tratamento é usado.
-- **Contaminação Pandemônica no combate (D-35):** `contaminacao.js` é um módulo
-  puro. Falta decidir onde a contaminação acumula, quando as chances de aplicação
-  são roladas, como o dano progressivo é aplicado e como a redução de cura entra
-  nos cálculos.
-- **Runas no combate (D-35):** `runas.js` registra elementos e regras de uso, mas
-  os efeitos individuais de cada runa não foram definidos. Falta também integrar
-  os encaixes de pedra preciosa e os multiplicadores de 50%/150%.
+  implementada no combate (permanece descritiva).
+- **Podridão no combate:** a Podridão de arma já é aplicada por Tenebrium. A
+  exposição por turnos, a progressão de estágios e o tratamento continuam
+  disponíveis como módulo puro, sem gatilho automático no `battleManager`.
+- **Contaminação Pandemônica no combate (D-35):** armas de lâmina e de fogo já
+  aplicam Ferida Pandemônica e Munição Contaminante, com dano sobre a vida
+  máxima original e redução de cura. Contaminação Profana (armadura), Núcleo
+  Pandemônico (golem) e Ruptura Profana (crítico) ainda não têm automação
+  completa.
+- **Corrupção no combate (D-29):** as penalidades do estágio já entram em
+  `_finalAttrs` e a pontuação é persistida. Faltam rota de API, exibição na ficha
+  do cliente e definição do comportamento completo de “Consumido”.
+- **Runas no combate (D-35):** o efeito genérico aprovado existe em
+  `efeitoRuna`/`modificadoresRuna`, mas as identidades individuais das 17 runas
+  não foram definidas. Seleção/armazenamento na forja e aplicação automática
+  continuam pendentes.
 - **Paridade offline/online:** a forja e o combate têm caminhos separados; falta
-  garantir que os mesmos efeitos valham nos dois. Na Etapa 8, o salvamento do
+  garantir que todos os efeitos valham nos dois. Na Etapa 8, o salvamento do
   item craftado, a dedução da carteira, a preferência pelo item do inventário e
-  os atributos finais foram alinhados nos dois modos; a aplicação automática de
-  efeitos de materiais em combate continua pendente.
+  os atributos finais foram alinhados; agora o perfil mecânico também é
+  preservado no servidor.
 
 ### 3.4 Validação e limitações do ambiente
 
@@ -490,9 +540,13 @@ O que falta preencher com o criador/documentação:
   preciso usar `npm.cmd`. Nesse ambiente, **421/421 testes unitários** passaram
   (`npm.cmd run test --prefix server`) e o build de produção
   (`npm.cmd run build`) concluiu sem erro.
-- Resultado do harness neste ambiente após o merge da Etapa 8: **200/200 testes
-  passam**, sem falhas, incluindo 6 testes novos de resolução de efeitos por
-  equipamento.
+- Resultado do harness neste ambiente após a integração dos efeitos:
+  **242/242 testes passam**, sem falhas, incluindo os novos testes de
+  `combatEffects`, perfil mecânico, status derivados da forja e efeito genérico
+  das runas.
+- Nesta rodada, `npm run test:unit`, `npm run test:e2e` e `npm run build` não
+  puderam ser executados porque `node`/`npm` continuam fora do `PATH`; a
+  validação foi feita pelo bundle do esbuild e pelo harness de navegador.
 - A interface foi validada no navegador: catálogo com 52 fichas, filtros
   (7 minérios, 35 metais, 5 especiais, 5 mágicos e 25 de golem), busca por alias
   (inclusive sem acento), ficha detalhada e composição com custo parcial e
@@ -625,16 +679,17 @@ Nenhuma regra, fórmula ou valor oficial foi alterado.
    “Completa”) e permitir filtrar apenas fichas pendentes. O campo `status` já
    existe em `materials.js`.
 5. **Unificar a aplicação de efeitos** entre forja, combate online e offline,
-   incluindo percentuais, penalidades, condições e efeitos especiais. Hoje a
-   forja só soma bônus numéricos.
+   incluindo percentuais, penalidades, condições e efeitos especiais. O perfil
+   mecânico e `combatEffects.js` já são compartilhados; falta levar essa
+   integração aos efeitos ainda descritivos.
 6. **Criar testes de paridade** entre cliente e servidor para efeitos de
    materiais/gemas, sem duplicar regras.
 7. **Usar `compatibilidade` de verdade** quando as receitas oficiais forem
    definidas, em vez de manter o campo apenas no schema.
-8. **Integrar a Corrupção do Ruidium ao combate** (D-29): o módulo
-   `corrupcao.js` é puro e já implementa estágios, ganhos e recuperação; falta
-   decidir onde a pontuação acumula, quando as chances de efeito são roladas e
-   como a potência mágica adicional entra nas habilidades.
+8. **Integrar a Corrupção do Ruidium ao combate** (D-29): as penalidades de
+   estágio já entram em `_finalAttrs` e a pontuação é persistida. Faltam rota de
+   API, exibição na ficha do cliente, gatilhos de ganho/recuperação e a potência
+   mágica adicional nas habilidades.
 9. **Decidir a transição dos drops de mineração** dos `id`s refinados para os
    minérios brutos, com migração dos veios existentes.
 10. **Automatizar a validação** em CI com `npm test` e `npm run build` em um
@@ -649,9 +704,12 @@ Nenhuma regra, fórmula ou valor oficial foi alterado.
 13. **Revisar a ordem das pendências gerais:** P-01, P-02 e P-03 (nível e XP)
     primeiro; depois P-04 e P-05 (chefes e masmorras); em seguida P-06, P-07 e
     P-09 (equipamento, inventário e desgaste); por fim P-08, P-10 a P-18.
-14. **Integrar a Contaminação Pandemônica ao combate** (D-35): decidir onde a
-    condição acumula, quando as chances da Prata Pandemônica são roladas e como
-    o dano progressivo e a redução de cura entram nos cálculos.
+14. **Integrar a Contaminação Pandemônica ao combate** (D-35): Ferida
+    Pandemônica e Munição Contaminante já são aplicadas por armas, com dano
+    sobre a vida máxima original e redução de cura. Faltam Contaminação Profana
+    (armadura), Núcleo Pandemônico (golem) e automação completa da Ruptura
+    Profana.
 15. **Definir e integrar os efeitos das 17 runas** (D-33/D-35): cada runa ainda
-    não tem efeito individual na documentação recuperada; faltam também os
-    encaixes de pedra preciosa e os multiplicadores de 50% e 150%.
+    não tem efeito individual na documentação recuperada. O template genérico
+    não oficial (+10% de dano/resistência e 20% de chance por 2 turnos) já
+    existe; faltam as identidades, os encaixes na forja e a aplicação em combate.
