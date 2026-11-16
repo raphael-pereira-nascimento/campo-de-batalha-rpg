@@ -9,6 +9,7 @@ import {
   fumacaDoDisparo,
   rajadaDaArma,
 } from '../src/game/sistema.js';
+import { SPELLS, skillFromSpell } from '../src/game/data.js';
 
 function makeCharacter(overrides = {}) {
   return {
@@ -1398,5 +1399,126 @@ describe('BattleManager — fumaça e dificuldade do d20', () => {
     const mira = manager._rollToHit(atk, def, 'physical');
     expect(mira.roll).toBe(15);
     expect(mira.nivel).toMatchObject({ id: 'dificil', nome: 'Difícil' });
+  });
+});
+
+describe('BattleManager — cura, buffs de grupo e itens', () => {
+  function participante(over = {}) {
+    return {
+      uid: 'p1',
+      characterId: 'c1',
+      charName: 'Clérigo',
+      isMonster: false,
+      role: 'heroi',
+      team: 'A',
+      alive: true,
+      hp: 100,
+      hpMax: 1000,
+      mp: 100,
+      mpMax: 100,
+      attributes: { forca: 5, inteligencia: 10, resistencia: 5, destreza: 5, reflexos: 5 },
+      equipment: {},
+      races: null,
+      classes: null,
+      statuses: [],
+      buffPhysical: 1,
+      buffMagic: 1,
+      buffTurns: 0,
+      cooldowns: {},
+      inventory: [],
+      ...over,
+    };
+  }
+
+  it('Cura em Massa inclui o conjurador, cura aliados e não toca nos inimigos', () => {
+    const { manager } = makeManager();
+    const clerigo = participante({ uid: 'p1', charName: 'Clérigo', hp: 100 });
+    const aliado = participante({ uid: 'p2', charName: 'Aliado', hp: 500 });
+    const monstro = participante({
+      uid: 'm1',
+      charName: 'Monstro',
+      isMonster: true,
+      hp: 500,
+    });
+    const battle = { mode: 'mestre', participants: [clerigo, aliado, monstro], log: [] };
+
+    manager._resolveSkill(battle, clerigo, clerigo, {
+      id: 'cura_massa',
+      nome: 'Cura em Massa',
+      tipo: 'cura',
+      poder: 120,
+      custo: 0,
+      todos: true,
+      status: { tipo: 'regeneracao', turnos: 2, dano: 20 },
+    });
+
+    expect(clerigo.hp).toBeGreaterThan(100);
+    expect(aliado.hp).toBeGreaterThan(500);
+    expect(monstro.hp).toBe(500);
+    expect(clerigo.statuses.some((s) => s.id === 'regeneracao')).toBe(true);
+    expect(aliado.statuses.some((s) => s.id === 'regeneracao')).toBe(true);
+    expect(monstro.statuses).toHaveLength(0);
+  });
+
+  it('Grito de Guerra buffa só o dano físico de aliados e do conjurador', () => {
+    const { manager } = makeManager();
+    const heroi = participante({ uid: 'p1' });
+    const aliado = participante({ uid: 'p2', charName: 'Aliado' });
+    const monstro = participante({ uid: 'm1', charName: 'Monstro', isMonster: true });
+    const battle = { mode: 'mestre', participants: [heroi, aliado, monstro], log: [] };
+
+    const grito = skillFromSpell(SPELLS.grito_de_guerra);
+    manager._resolveSkill(battle, heroi, heroi, grito);
+
+    expect(heroi.buffPhysical).toBeCloseTo(1.15);
+    expect(heroi.buffMagic).toBe(1);
+    expect(aliado.buffPhysical).toBeCloseTo(1.15);
+    expect(aliado.buffMagic).toBe(1);
+    expect(heroi.buffTurns).toBe(3);
+    expect(monstro.buffPhysical).toBe(1);
+    expect(monstro.buffMagic).toBe(1);
+  });
+
+  it('Benção buffa só o dano mágico dos aliados e do conjurador', () => {
+    const { manager } = makeManager();
+    const heroi = participante({ uid: 'p1' });
+    const aliado = participante({ uid: 'p2', charName: 'Aliado' });
+    const battle = { mode: 'mestre', participants: [heroi, aliado], log: [] };
+
+    manager._resolveSkill(battle, heroi, heroi, skillFromSpell(SPELLS['benção']));
+
+    expect(heroi.buffMagic).toBeCloseTo(1.1);
+    expect(heroi.buffPhysical).toBe(1);
+    expect(aliado.buffMagic).toBeCloseTo(1.1);
+    expect(aliado.buffPhysical).toBe(1);
+    expect(heroi.buffTurns).toBe(3);
+  });
+
+  it('cura de item respeita a redução de cura recebida (Contaminação)', () => {
+    const { manager } = makeManager();
+    const p = participante({
+      hp: 100,
+      statuses: [{ id: 'contaminacaoPandemica', turnos: 3, reducaoCuraPct: 25 }],
+    });
+    const pocao = { id: 'pocao_teste', nome: 'Poção de Teste', tipo: 'pocao', cura: 100 };
+    p.inventory.push(pocao);
+    const battle = { log: [] };
+
+    manager._resolveItem(battle, p, pocao);
+
+    expect(p.hp).toBe(175); // 100 × (1 − 25%) = 75
+    expect(p.inventory).toHaveLength(0);
+  });
+
+  it('skillFromSpell preserva os metadados oficiais de grupo e buff', () => {
+    const grito = skillFromSpell(SPELLS.grito_de_guerra);
+    expect(grito).toMatchObject({ afetaAliados: true, buffTipo: 'fisico', duracao: 3, poder: 15 });
+
+    const bencao = skillFromSpell(SPELLS['benção']);
+    expect(bencao).toMatchObject({ afetaAliados: true, buffTipo: 'magico', duracao: 3, poder: 10 });
+
+    const curaMassa = skillFromSpell(SPELLS.cura_massa);
+    expect(curaMassa.todos).toBe(true);
+    expect(curaMassa.afetaAliados).toBe(false);
   });
 });

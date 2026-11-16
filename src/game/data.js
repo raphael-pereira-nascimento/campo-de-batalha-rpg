@@ -111,7 +111,7 @@ export const ELEMENTOS = ['fisico', 'fogo', 'agua', 'terra', 'ar', 'luz', 'treva
 export const SPELLS = {
   golpe_sangrento: { nome: 'Golpe Sangrento', tipo: 'ataque', custo: 5, poder: 2.0, desc: 'Ataque físico brutal com força aumentada.', status: { tipo: 'sangramento', turnos: 2, dano: 60 }, alcanceVertical: 'terrestre' },
   giro_de_espada: { nome: 'Giro de Espada', tipo: 'ataque', custo: 6, poder: 1.5, desc: 'Gira a arma em arco, atingindo vários inimigos à volta.', elemento: 'fisico', alvo: 'cone', alvos: 3, alcanceVertical: 'terrestre' },
-  grito_de_guerra: { nome: 'Grito de Guerra', tipo: 'buff', custo: 6, poder: 0.15, desc: 'Aumenta o dano físico de todos os aliados.' },
+  grito_de_guerra: { nome: 'Grito de Guerra', tipo: 'buff', custo: 6, poder: 0.15, afetaAliados: true, buffTipo: 'fisico', duracao: 3, desc: 'Aumenta o dano físico de todos os aliados.' },
   muralha: { nome: 'Muralha', tipo: 'defesa', custo: 6, poder: 0.25, desc: 'Reduz o dano recebido nesta rodada.' },
 
   bola_de_fogo: { nome: 'Bola de Fogo', tipo: 'ataque', custo: 8, poder: 2.4, desc: 'Explosão de fogo devastadora: atinge o alvo e os vizinhos.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3, dano: 50 }, alvo: 'explosao', alvos: 3, splash: 0.5 },
@@ -126,9 +126,9 @@ export const SPELLS = {
   flecha_ardente: { nome: 'Flecha Ardente', tipo: 'ataque', custo: 6, poder: 1.9, desc: 'Flecha em chamas que causa queimadura.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 3, dano: 60 }, alcanceVertical: 'longo' },
 
   cura: { nome: 'Cura', tipo: 'cura', custo: 6, poder: 2.0, desc: 'Restaura HP com base na inteligência.', elemento: 'luz' },
-  cura_massa: { nome: 'Cura em Massa', tipo: 'cura', custo: 12, poder: 1.2, desc: 'Cura todos os aliados vivos.', elemento: 'luz' },
+  cura_massa: { nome: 'Cura em Massa', tipo: 'cura', custo: 12, poder: 1.2, todos: true, desc: 'Cura todos os aliados vivos.', elemento: 'luz' },
   luz_sagrada: { nome: 'Luz Sagrada', tipo: 'ataque', custo: 7, poder: 1.9, desc: 'Dano divino contra um inimigo.', elemento: 'luz' },
-  benção: { nome: 'Benção', tipo: 'buff', custo: 5, poder: 0.1, desc: 'Aumenta o dano mágico dos aliados.', elemento: 'luz' },
+  benção: { nome: 'Benção', tipo: 'buff', custo: 5, poder: 0.1, afetaAliados: true, buffTipo: 'magico', duracao: 3, desc: 'Aumenta o dano mágico dos aliados.', elemento: 'luz' },
 
   golpe_preciso: { nome: 'Golpe Preciso', tipo: 'ataque', custo: 5, poder: 1.6, desc: 'Ataque certeiro que tem alta chance de crítico.', elemento: 'fisico', alcanceVertical: 'terrestre' },
   veneno: { nome: 'Veneno', tipo: 'ataque', custo: 6, poder: 1.4, desc: 'Envenena o alvo, causando dano contínuo.', elemento: 'trevas', status: { tipo: 'veneno', turnos: 3, dano: 40 } },
@@ -196,7 +196,10 @@ export function skillFromSpell(s) {
     poder: Math.round((s.poder || 1) * 100),
     custo: s.custo || 0,
     cooldown: 0,
-    todos: s.nome === 'Cura em Massa',
+    todos: !!s.todos || s.nome === 'Cura em Massa',
+    afetaAliados: !!s.afetaAliados,
+    buffTipo: s.buffTipo === 'fisico' || s.buffTipo === 'magico' ? s.buffTipo : null,
+    duracao: s.duracao ? Math.max(1, Math.round(s.duracao)) : null,
     alvo: s.alvo || null,
     alvos: s.alvos || null,
     splash: s.splash || null,

@@ -1157,6 +1157,20 @@ export class BattleManager {
     p.contribuicao.suporte += qtd;
   }
 
+  // Aplica buff de dano em uma lista de participantes. `skill.buffTipo` limita o
+  // bônus a um eixo ('fisico' ou 'magico'); sem ele, vale para os dois (legado).
+  _aplicarBuff(alvos, skill) {
+    const pct = Number(skill.poder) || 0;
+    const duracao = Math.max(1, Number(skill.duracao) || 3);
+    const tipo = skill.buffTipo;
+    for (const t of alvos) {
+      if (!t) continue;
+      if (tipo !== 'magico') t.buffPhysical = (t.buffPhysical || 1) + pct / 100;
+      if (tipo !== 'fisico') t.buffMagic = (t.buffMagic || 1) + pct / 100;
+      t.buffTurns = Math.max(t.buffTurns || 0, duracao);
+    }
+  }
+
   // Lista os inimigos vivos de `p` conforme o modo da batalha.
   _inimigos(battle, p) {
     return battle.participants.filter((q) => {
@@ -1175,6 +1189,13 @@ export class BattleManager {
       if (battle.mode === 'equipes') return q.team === p.team;
       return false;
     });
+  }
+
+  // Aliados vivos + o próprio conjurador. Usado por curas/buffs de grupo:
+  // "aliados" inclui quem lançou a magia (Cura em Massa, Grito de Guerra, Benção).
+  _aliadosComVoce(battle, p) {
+    if (!p || !p.alive) return this._aliadosDe(battle, p);
+    return [p, ...this._aliadosDe(battle, p)];
   }
 
   // Seleciona os alvos de um golpe: principal + extras escolhidos (cone/explosão)
@@ -1556,14 +1577,7 @@ export class BattleManager {
     if (skill.tipo === 'cura') {
       // Cura reformada: INT Final × poder% × 1,4 × 10 (mesma escala do dano).
       const healing = curaMagica(this._finalAttrs(p).inteligencia, skill.poder);
-      const allies = battle.participants.filter(
-        (q) =>
-          q.alive &&
-          q !== p &&
-          (battle.mode === 'mestre'
-            ? q.role === p.role
-            : battle.mode !== 'equipes' || q.team === p.team),
-      );
+      const allies = this._aliadosComVoce(battle, p);
       const targets = skill.todos ? allies : [target && target.alive ? target : p];
       targets.forEach((t) => {
         const before = t.hp;
@@ -1574,6 +1588,8 @@ export class BattleManager {
           p.contribuicao.cura += t.hp - before;
         }
         battle.log.push(makeLog(`💚 ${p.charName} usa ${skill.nome} em ${t.charName}: cura ${t.hp - before} de HP.`, 'heal'));
+        // Cura pode carregar status positivo (ex.: regeneração).
+        if (skill.status) this._applyStatus(battle, t, skill.status, p);
       });
       this._marcarSuporte(p, targets.length);
       this._setCooldown(p, skill);
@@ -1581,22 +1597,23 @@ export class BattleManager {
     }
 
     if (skill.tipo === 'buff') {
-      p.buffPhysical = p.buffPhysical || 1;
-      p.buffMagic = p.buffMagic || 1;
-      p.buffPhysical += skill.poder / 100;
-      p.buffMagic += skill.poder / 100;
-      p.buffTurns = 3;
-      battle.log.push(makeLog(`🔮 ${p.charName} usa ${skill.nome}: dano de aliados aumentado em ${skill.poder}%.`, 'buff'));
-      this._marcarSuporte(p);
+      // Buffs de grupo respeitam o texto da magia (afetaAliados) e podem valer
+      // só para um eixo de dano (buffTipo: 'fisico' ou 'magico').
+      const alvos = skill.afetaAliados ? this._aliadosComVoce(battle, p) : [p];
+      const duracao = Math.max(1, Number(skill.duracao) || 3);
+      this._aplicarBuff(alvos, skill);
+      battle.log.push(makeLog(`🔮 ${p.charName} usa ${skill.nome}: dano de aliados aumentado em ${skill.poder}% por ${duracao} turno(s).`, 'buff'));
+      this._marcarSuporte(p, alvos.length);
       this._setCooldown(p, skill);
       return;
     }
 
     if (skill.tipo === 'defesa') {
-      p.defense = true;
-      p.buffTurns = Math.max(p.buffTurns, 1);
+      const alvos = skill.afetaAliados ? this._aliadosComVoce(battle, p) : [p];
+      for (const t of alvos) t.defense = true;
+      p.buffTurns = Math.max(p.buffTurns || 0, 1);
       battle.log.push(makeLog(`🛡️ ${p.charName} usa ${skill.nome}: reduzirá muito o dano recebido.`, 'buff'));
-      this._marcarSuporte(p);
+      this._marcarSuporte(p, alvos.length);
       this._setCooldown(p, skill);
       return;
     }
@@ -1609,14 +1626,7 @@ export class BattleManager {
     if (skill.tipo === 'cura') {
       // Cura mega: mesma fórmula com coeficiente 2,2 (DANO_COEF_MEGA).
       const healing = curaMagica(this._finalAttrs(p).inteligencia, skill.poder, 1, DANO_COEF_MEGA);
-      const allies = battle.participants.filter(
-        (q) =>
-          q.alive &&
-          q !== p &&
-          (battle.mode === 'mestre'
-            ? q.role === p.role
-            : battle.mode !== 'equipes' || q.team === p.team),
-      );
+      const allies = this._aliadosComVoce(battle, p);
       const targets = skill.todos ? allies : [target && target.alive ? target : p];
       targets.forEach((t) => {
         const before = t.hp;
@@ -1627,16 +1637,17 @@ export class BattleManager {
           p.contribuicao.cura += t.hp - before;
         }
         battle.log.push(makeLog(`💚 ${p.charName} desfere ${skill.nome} em ${t.charName}: cura ${t.hp - before} de HP.`, 'heal'));
+        if (skill.status) this._applyStatus(battle, t, skill.status, p);
       });
       this._marcarSuporte(p, targets.length);
       return;
     }
     if (skill.tipo === 'buff') {
-      p.buffPhysical = (p.buffPhysical || 1) + skill.poder / 100;
-      p.buffMagic = (p.buffMagic || 1) + skill.poder / 100;
-      p.buffTurns = Math.max(p.buffTurns, 3);
-      battle.log.push(makeLog(`🔮 ${p.charName} usa ${skill.nome}: poder aliado +${skill.poder}%.`, 'buff'));
-      this._marcarSuporte(p);
+      const alvos = skill.afetaAliados ? this._aliadosComVoce(battle, p) : [p];
+      const duracao = Math.max(1, Number(skill.duracao) || 3);
+      this._aplicarBuff(alvos, skill);
+      battle.log.push(makeLog(`🔮 ${p.charName} usa ${skill.nome}: poder aliado +${skill.poder}% por ${duracao} turno(s).`, 'buff'));
+      this._marcarSuporte(p, alvos.length);
       return;
     }
     if (skill.tipo === 'defesa') {
@@ -1663,7 +1674,8 @@ export class BattleManager {
     const consumiu = [];
     if (item.cura) {
       const before = p.hp;
-      p.hp = clamp(p.hp + item.cura, 0, p.hpMax);
+      // Cura de item sofre a mesma redução de cura recebida (Contaminação etc.).
+      p.hp = clamp(p.hp + this._curaRecebida(p, item.cura), 0, p.hpMax);
       consumiu.push(`cura ${p.hp - before} de HP`);
     }
     if (item.mana) {

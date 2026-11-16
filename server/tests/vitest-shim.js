@@ -6,18 +6,82 @@
 
 export const __testes = [];
 const pilha = [];
+const pilhaHooks = [{ antes: [], depois: [] }];
 
 export function describe(nome, fn) {
   pilha.push(nome);
+  pilhaHooks.push({ antes: [], depois: [] });
   try {
     fn();
   } finally {
+    pilhaHooks.pop();
     pilha.pop();
   }
 }
 
+export function beforeEach(fn) {
+  pilhaHooks[pilhaHooks.length - 1].antes.push(fn);
+}
+
+export function afterEach(fn) {
+  pilhaHooks[pilhaHooks.length - 1].depois.push(fn);
+}
+
+// Spies mínimos: Math.random é o único alvo usado nos testes deste projeto.
+const spies = [];
+function criarMock(original) {
+  let impl = (...args) => original.apply(null, args);
+  const fila = [];
+  const spy = (...args) => {
+    if (fila.length) return fila.shift()(...args);
+    return impl(...args);
+  };
+  spy.mockReturnValue = (valor) => {
+    impl = () => valor;
+    return spy;
+  };
+  spy.mockReturnValueOnce = (valor) => {
+    fila.push(() => valor);
+    return spy;
+  };
+  spy.mockImplementation = (fn) => {
+    impl = fn;
+    return spy;
+  };
+  spy.mockRestore = () => {};
+  return spy;
+}
+
+export const vi = {
+  spyOn(objeto, metodo) {
+    const original = objeto[metodo];
+    const spy = criarMock(original);
+    objeto[metodo] = spy;
+    spies.push({ objeto, metodo, original });
+    return spy;
+  },
+  fn(impl = () => {}) {
+    return criarMock(impl);
+  },
+  restoreAllMocks() {
+    for (let i = spies.length - 1; i >= 0; i -= 1) {
+      const { objeto, metodo, original } = spies[i];
+      objeto[metodo] = original;
+    }
+    spies.length = 0;
+  },
+  clearAllMocks() {
+    spies.length = 0;
+  },
+};
+
 export function it(nome, fn) {
-  __testes.push({ nome: [...pilha, nome].join(' › '), fn });
+  __testes.push({
+    nome: [...pilha, nome].join(' › '),
+    fn,
+    antes: pilhaHooks.flatMap((h) => h.antes),
+    depois: pilhaHooks.flatMap((h) => h.depois),
+  });
 }
 
 function igualProfundo(a, b) {
@@ -31,6 +95,18 @@ function igualProfundo(a, b) {
   if (chavesA.length !== chavesB.length) return false;
   return chavesA.every((chave) => (
     Object.prototype.hasOwnProperty.call(b, chave) && igualProfundo(a[chave], b[chave])
+  ));
+}
+
+// Subconjunto profundo: todo campo de `esperado` precisa existir e bater em `valor`.
+function contemSubconjunto(valor, esperado) {
+  if (Object.is(valor, esperado)) return true;
+  if (esperado == null || typeof esperado !== 'object') return igualProfundo(valor, esperado);
+  if (valor == null || typeof valor !== 'object') return false;
+  if (Array.isArray(esperado) !== Array.isArray(valor)) return false;
+  return Object.keys(esperado).every((chave) => (
+    Object.prototype.hasOwnProperty.call(valor, chave)
+    && contemSubconjunto(valor[chave], esperado[chave])
   ));
 }
 
@@ -102,6 +178,31 @@ function criarExpect(valor, mensagem) {
       const regex = esperado instanceof RegExp ? esperado : new RegExp(esperado);
       if (!regex.test(String(valor))) falhar(`esperado corresponder a ${regex}`);
     },
+    toMatchObject: (esperado) => {
+      if (!contemSubconjunto(valor, esperado)) {
+        falhar(`esperado conter ${descrever(esperado)}, recebido ${descrever(valor)}`);
+      }
+    },
+    toThrow: (esperado) => {
+      if (typeof valor !== 'function') {
+        falhar('toThrow espera uma função');
+        return;
+      }
+      let erro = null;
+      try {
+        valor();
+      } catch (e) {
+        erro = e;
+      }
+      if (!erro) {
+        falhar('esperado que a função lançasse erro');
+        return;
+      }
+      if (esperado === undefined) return;
+      const texto = String(erro?.message || erro);
+      const bate = esperado instanceof RegExp ? esperado.test(texto) : texto.includes(String(esperado));
+      if (!bate) falhar(`esperado erro correspondente a ${descrever(esperado)}, recebido ${descrever(texto)}`);
+    },
     toBeInstanceOf: (esperado) => {
       if (!(valor instanceof esperado)) falhar(`esperado instância de ${esperado?.name}`);
     },
@@ -129,10 +230,17 @@ export async function executarTestes() {
   const resultados = [];
   for (const teste of __testes) {
     try {
+      for (const antes of teste.antes) await antes();
       await teste.fn();
       resultados.push({ nome: teste.nome, ok: true });
     } catch (erro) {
       resultados.push({ nome: teste.nome, ok: false, erro: String(erro?.stack || erro?.message || erro) });
+    } finally {
+      for (const depois of teste.depois) {
+        try {
+          await depois();
+        } catch (_e) { /* hooks de limpeza não derrubam o teste */ }
+      }
     }
   }
   const falharam = resultados.filter((item) => !item.ok);

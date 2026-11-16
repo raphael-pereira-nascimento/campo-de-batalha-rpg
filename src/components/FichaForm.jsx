@@ -30,7 +30,7 @@ import {
   ARMA_CATEGORIA_INFO,
   ALVO_LABEL,
 } from '../game/sistema.js';
-import { CLASSES } from '../game/data.js';
+import { CLASSES, STATUS_DEFS, STATUS_KEYS } from '../game/data.js';
 
 const STEP_NAMES = [
   'Identidade',
@@ -720,35 +720,134 @@ function ClassesStep({ gameData, customClasses, classes, onAdd, onRemove, onPrim
   );
 }
 
+const SKILL_FORM_VAZIO = {
+  nome: '',
+  tipo: 'magia',
+  poder: 150,
+  custo: 5,
+  cooldown: 0,
+  todos: false,
+  afetaAliados: false,
+  buffTipo: '',
+  duracao: 3,
+  alvo: 'unico',
+  alvos: 3,
+  splash: 0.5,
+  statusTipo: '',
+  statusTurnos: 2,
+  statusDano: 50,
+  desc: '',
+};
+
+let skillSeq = 0;
+const novoSkillId = () => `golpe_${Date.now()}_${(skillSeq += 1)}`;
+const clampNum = (v, min, max, padrao) => {
+  const n = Number(v);
+  return Math.max(min, Math.min(max, Math.round(Number.isFinite(n) ? n : padrao)));
+};
+
+// Monta o golpe no formato persistido (normalizeSkill do servidor). Só inclui
+// campos que fazem sentido para o tipo escolhido, para não criar lixo.
+function montarGolpe(form, id) {
+  const tipo = SKILL_TYPES[form.tipo] ? form.tipo : 'magia';
+  const golpe = {
+    id,
+    nome: String(form.nome || '').trim().slice(0, 40),
+    tipo,
+    poder: clampNum(form.poder, 10, 1000, 100),
+    custo: clampNum(form.custo, 0, 99, 0),
+    cooldown: clampNum(form.cooldown, 0, 20, 0),
+    todos: tipo === 'cura' ? !!form.todos : false,
+    desc: String(form.desc || '').trim().slice(0, 200),
+  };
+  if (tipo === 'buff' || tipo === 'defesa') {
+    golpe.afetaAliados = !!form.afetaAliados;
+    golpe.duracao = clampNum(form.duracao, 1, 8, 3);
+  }
+  if (tipo === 'buff') {
+    golpe.buffTipo = form.buffTipo === 'fisico' || form.buffTipo === 'magico'
+      ? form.buffTipo
+      : null;
+  }
+  if (tipo === 'fisico' || tipo === 'magia') {
+    const alvo = ALVO_LABEL[form.alvo] ? form.alvo : 'unico';
+    golpe.alvo = alvo;
+    if (alvo !== 'unico') {
+      golpe.alvos = clampNum(form.alvos, 2, 10, 3);
+      golpe.splash = Math.max(0.1, Math.min(1, Number(form.splash) || 0.5));
+    }
+  }
+  // Status (queimadura, sangramento, regeneração...) só em golpes de dano/cura.
+  if (tipo === 'fisico' || tipo === 'magia' || tipo === 'cura') {
+    const def = STATUS_DEFS[form.statusTipo];
+    if (def) {
+      golpe.status = {
+        tipo: form.statusTipo,
+        turnos: clampNum(form.statusTurnos, 1, 8, def.duracaoPadrao || 2),
+        dano: clampNum(form.statusDano, 0, 999, def.danoPadrao || 0),
+      };
+    }
+  }
+  return golpe;
+}
+
 function SkillsStep({ skills, setSkills, customSkills, player }) {
-  const [form, setForm] = useState({ nome: '', tipo: 'magia', poder: 150, custo: 5, cooldown: 0, todos: false, alvo: 'unico', alvos: 3, splash: 0.5 });
+  const [form, setForm] = useState(SKILL_FORM_VAZIO);
   const [pickCustom, setPickCustom] = useState('');
   const [publish, setPublish] = useState(false);
   const isDano = form.tipo === 'fisico' || form.tipo === 'magia';
+  const aceitaStatus = isDano || form.tipo === 'cura';
+  const statusDef = STATUS_DEFS[form.statusTipo] || null;
 
   const add = async () => {
     if (!form.nome.trim()) return;
-    const skill = { id: `golpe_${Date.now()}`, ...form };
+    const skill = montarGolpe(form, novoSkillId());
     setSkills((prev) => [...prev, skill]);
     if (publish) {
       try {
-        await api.createCustomSkill({ creatorId: player.id, is_public: true, nome: form.nome, tipo: form.tipo, poder: form.poder, custo: form.custo, cooldown: form.cooldown, todos: form.todos, alvo: form.alvo, alvos: form.alvos, splash: form.splash });
+        await api.createCustomSkill({
+          creatorId: player.id,
+          is_public: true,
+          nome: skill.nome,
+          tipo: skill.tipo,
+          poder: skill.poder,
+          custo: skill.custo,
+          cooldown: skill.cooldown,
+          todos: skill.todos,
+          alvo: skill.alvo,
+          alvos: skill.alvos,
+          splash: skill.splash,
+          descricao: skill.desc,
+        });
       } catch (_e) { /* opcional */ }
     }
-    setForm({ nome: '', tipo: 'magia', poder: 150, custo: 5, cooldown: 0, todos: false, alvo: 'unico', alvos: 3, splash: 0.5 });
+    setForm(SKILL_FORM_VAZIO);
   };
 
   const addCustom = () => {
     const c = customSkills.find((s) => s.id === pickCustom);
     if (!c) return;
-    setSkills((prev) => [...prev, { id: `golpe_${Date.now()}`, nome: c.nome, tipo: c.tipo, poder: Number(c.poder), custo: Number(c.custo), cooldown: Number(c.cooldown), todos: !!c.todos, alvo: c.alvo || 'unico', alvos: c.alvos || 3, splash: c.splash || 0.5 }]);
+    const golpe = montarGolpe({
+      ...SKILL_FORM_VAZIO,
+      nome: c.nome,
+      tipo: c.tipo,
+      poder: Number(c.poder),
+      custo: Number(c.custo),
+      cooldown: Number(c.cooldown),
+      todos: !!c.todos,
+      alvo: c.alvo || 'unico',
+      alvos: c.alvos || 3,
+      splash: c.splash || 0.5,
+      desc: c.descricao || '',
+    }, novoSkillId());
+    setSkills((prev) => [...prev, golpe]);
     setPickCustom('');
   };
 
   return (
     <div className="stack">
       <p className="muted small">
-        Crie golpes próprios (físicos ou mágicos). Eles se somam aos golpes base das classes escolhidas.
+        Crie golpes próprios (físicos, mágicos, cura, buff ou defesa). Eles se somam aos golpes base das classes escolhidas.
       </p>
 
       {customSkills.length > 0 && (
@@ -803,9 +902,64 @@ function SkillsStep({ skills, setSkills, customSkills, player }) {
         {form.tipo === 'cura' && (
           <label className="check-label">
             <input type="checkbox" checked={form.todos} onChange={(e) => setForm((f) => ({ ...f, todos: e.target.checked }))} />
-            Cura em massa (todos os aliados)
+            Cura em massa (todos os aliados, incluindo você)
           </label>
         )}
+        {(form.tipo === 'buff' || form.tipo === 'defesa') && (
+          <>
+            <label className="check-label">
+              <input type="checkbox" checked={form.afetaAliados} onChange={(e) => setForm((f) => ({ ...f, afetaAliados: e.target.checked }))} />
+              Afeta todos os aliados (incluindo você)
+            </label>
+            <label>
+              Duração (turnos)
+              <input type="number" min={1} max={8} value={form.duracao} onChange={(e) => setForm((f) => ({ ...f, duracao: Number(e.target.value) }))} />
+            </label>
+          </>
+        )}
+        {form.tipo === 'buff' && (
+          <label>
+            Tipo de bônus
+            <select value={form.buffTipo} onChange={(e) => setForm((f) => ({ ...f, buffTipo: e.target.value }))}>
+              <option value="">Físico e mágico</option>
+              <option value="fisico">Somente físico</option>
+              <option value="magico">Somente mágico</option>
+            </select>
+          </label>
+        )}
+        {aceitaStatus && (
+          <div className="form-row">
+            <label>
+              Status aplicado
+              <select value={form.statusTipo} onChange={(e) => setForm((f) => ({ ...f, statusTipo: e.target.value }))}>
+                <option value="">Nenhum</option>
+                {STATUS_KEYS.filter((k) => {
+                  const def = STATUS_DEFS[k];
+                  if (form.tipo === 'cura') return def.tipo === 'hot';
+                  return def.tipo !== 'hot';
+                }).map((k) => (
+                  <option key={k} value={k}>{STATUS_DEFS[k].nome}</option>
+                ))}
+              </select>
+            </label>
+            {statusDef && (
+              <>
+                <label>
+                  Turnos do status
+                  <input type="number" min={1} max={8} value={form.statusTurnos} onChange={(e) => setForm((f) => ({ ...f, statusTurnos: Number(e.target.value) }))} />
+                </label>
+                <label>
+                  Dano/cura por turno
+                  <input type="number" min={0} max={999} value={form.statusDano} onChange={(e) => setForm((f) => ({ ...f, statusDano: Number(e.target.value) }))} />
+                </label>
+              </>
+            )}
+          </div>
+        )}
+        <label>
+          Descrição (opcional)
+          <input value={form.desc} onChange={(e) => setForm((f) => ({ ...f, desc: e.target.value }))} maxLength={200} placeholder="O que acontece ao usar?" />
+        </label>
         <label className="check-label">
           <input type="checkbox" checked={publish} onChange={(e) => setPublish(e.target.checked)} />
           Publicar no Registro do Mundo
@@ -815,14 +969,18 @@ function SkillsStep({ skills, setSkills, customSkills, player }) {
 
       <div className="chosen-list">
         {skills.map((s, i) => (
-          <div className="chosen-chip" key={i}>
+          <div className="chosen-chip" key={s.id || i}>
             <strong>{s.nome}</strong>
             <span className="tag">{SKILL_TYPES[s.tipo]}</span>
             <span className="tag">{s.poder}%</span>
             <span className="tag">MP {s.custo}</span>
             {s.cooldown > 0 && <span className="tag">⏳ {s.cooldown}t</span>}
             {s.todos && <span className="tag">✦ Todos</span>}
+            {s.afetaAliados && <span className="tag">✦ Aliados</span>}
+            {s.buffTipo && <span className="tag">{s.buffTipo === 'fisico' ? '💪 Físico' : '🔮 Mágico'}</span>}
+            {s.duracao && (s.tipo === 'buff' || s.tipo === 'defesa') && <span className="tag">{s.duracao}t</span>}
             {s.alvo && s.alvo !== 'unico' && <span className="tag">◎ {ALVO_LABEL[s.alvo] || s.alvo}</span>}
+            {s.status && <span className="tag">{STATUS_DEFS[s.status.tipo]?.icon} {STATUS_DEFS[s.status.tipo]?.nome || s.status.tipo}</span>}
             <button className="ghost remove-x" onClick={() => setSkills((prev) => prev.filter((_, x) => x !== i))}>✕</button>
           </div>
         ))}
@@ -832,40 +990,71 @@ function SkillsStep({ skills, setSkills, customSkills, player }) {
   );
 }
 
+const MODO_PADRAO = { turnos: 3, danoMultPct: 50 };
+
+function megaFormInicial(allowModo) {
+  return {
+    nome: '',
+    tipo: 'magia',
+    poder: 300,
+    custo: 0,
+    desc: '',
+    todos: false,
+    afetaAliados: false,
+    buffTipo: '',
+    duracao: 3,
+    alvo: 'unico',
+    alvos: 3,
+    splash: 0.5,
+    statusTipo: '',
+    statusTurnos: 2,
+    statusDano: 50,
+    modo: allowModo ? { ...MODO_PADRAO } : null,
+  };
+}
+
 function MegaSkillStep({ title, value, onChange, allowModo }) {
-  const [form, setForm] = useState(
-    value || {
-      nome: '',
-      tipo: 'magia',
-      poder: 300,
-      custo: 0,
-      desc: '',
-      condicao: null,
-      alvo: 'unico',
-      alvos: 3,
-      splash: 0.5,
-      modo: allowModo ? { turnos: 3, danoMultPct: 50 } : null,
-    },
-  );
-  const [hasCond, setHasCond] = useState(false);
-  const [condTipo, setCondTipo] = useState('danoRecebido');
-  const [condValor, setCondValor] = useState(50);
+  const [form, setForm] = useState(() => ({
+    ...megaFormInicial(allowModo),
+    ...(value || {}),
+    // `modo` antigo podia vir nulo mesmo em ultimate: o editor sempre tem um.
+    modo: allowModo ? { ...MODO_PADRAO, ...(value?.modo || {}) } : null,
+  }));
+  const [hasCond, setHasCond] = useState(!!value?.condicao);
+  const [condTipo, setCondTipo] = useState(value?.condicao?.tipo || 'danoRecebido');
+  const [condValor, setCondValor] = useState(value?.condicao?.valor ?? 50);
   const isDano = form.tipo === 'fisico' || form.tipo === 'magia';
+  const aceitaStatus = isDano || form.tipo === 'cura';
+  const statusDef = STATUS_DEFS[form.statusTipo] || null;
+  const modo = form.modo || MODO_PADRAO;
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const setModo = (k) => (e) => setForm((f) => ({
+    ...f,
+    modo: { ...(f.modo || MODO_PADRAO), [k]: Number(e.target.value) },
+  }));
 
   const finalize = () => {
-    if (!form.nome.trim()) return;
-    onChange({
-      ...form,
-      poder: Number(form.poder),
-      custo: Number(form.custo),
-      condicao: hasCond ? { tipo: condTipo, valor: Number(condValor) } : null,
-    });
+    const base = montarGolpe(form, value?.id || novoSkillId());
+    if (!base.nome) return;
+    const payload = {
+      ...base,
+      condicao: hasCond
+        ? { tipo: condTipo, valor: Math.max(0, Math.round(Number(condValor) || 0)) }
+        : null,
+      modo: allowModo
+        ? {
+          turnos: clampNum(modo.turnos, 1, 10, 3),
+          danoMultPct: clampNum(modo.danoMultPct, 0, 300, 50),
+        }
+        : null,
+    };
+    onChange(payload);
   };
 
   return (
     <div className="stack">
+      <h3>{title}</h3>
       <p className="muted small">
         {allowModo
           ? 'Barra de Ultimate (0-100%) enche com dano causado e recebido. Ativar custa 100% e entra em Modo Ultimate.'
@@ -907,15 +1096,73 @@ function MegaSkillStep({ title, value, onChange, allowModo }) {
           />
         )}
 
+        {form.tipo === 'cura' && (
+          <label className="check-label">
+            <input type="checkbox" checked={form.todos} onChange={(e) => setForm((f) => ({ ...f, todos: e.target.checked }))} />
+            Cura em massa (todos os aliados, incluindo você)
+          </label>
+        )}
+        {(form.tipo === 'buff' || form.tipo === 'defesa') && (
+          <>
+            <label className="check-label">
+              <input type="checkbox" checked={form.afetaAliados} onChange={(e) => setForm((f) => ({ ...f, afetaAliados: e.target.checked }))} />
+              Afeta todos os aliados (incluindo você)
+            </label>
+            <label>
+              Duração (turnos)
+              <input type="number" min={1} max={8} value={form.duracao} onChange={(e) => setForm((f) => ({ ...f, duracao: Number(e.target.value) }))} />
+            </label>
+          </>
+        )}
+        {form.tipo === 'buff' && (
+          <label>
+            Tipo de bônus
+            <select value={form.buffTipo} onChange={(e) => setForm((f) => ({ ...f, buffTipo: e.target.value }))}>
+              <option value="">Físico e mágico</option>
+              <option value="fisico">Somente físico</option>
+              <option value="magico">Somente mágico</option>
+            </select>
+          </label>
+        )}
+        {aceitaStatus && (
+          <div className="form-row">
+            <label>
+              Status aplicado
+              <select value={form.statusTipo} onChange={(e) => setForm((f) => ({ ...f, statusTipo: e.target.value }))}>
+                <option value="">Nenhum</option>
+                {STATUS_KEYS.filter((k) => {
+                  const def = STATUS_DEFS[k];
+                  if (form.tipo === 'cura') return def.tipo === 'hot';
+                  return def.tipo !== 'hot';
+                }).map((k) => (
+                  <option key={k} value={k}>{STATUS_DEFS[k].nome}</option>
+                ))}
+              </select>
+            </label>
+            {statusDef && (
+              <>
+                <label>
+                  Turnos do status
+                  <input type="number" min={1} max={8} value={form.statusTurnos} onChange={(e) => setForm((f) => ({ ...f, statusTurnos: Number(e.target.value) }))} />
+                </label>
+                <label>
+                  Dano/cura por turno
+                  <input type="number" min={0} max={999} value={form.statusDano} onChange={(e) => setForm((f) => ({ ...f, statusDano: Number(e.target.value) }))} />
+                </label>
+              </>
+            )}
+          </div>
+        )}
+
         {allowModo && (
           <div className="form-row">
             <label>
               Turnos do Modo Ultimate
-              <input type="number" min={1} max={10} value={form.modo.turnos} onChange={(e) => setForm((f) => ({ ...f, modo: { ...f.modo, turnos: Number(e.target.value) } }))} />
+              <input type="number" min={1} max={10} value={modo.turnos} onChange={setModo('turnos')} />
             </label>
             <label>
               Bônus de dano no modo (%)
-              <input type="number" min={0} max={300} value={form.modo.danoMultPct} onChange={(e) => setForm((f) => ({ ...f, modo: { ...f.modo, danoMultPct: Number(e.target.value) } }))} />
+              <input type="number" min={0} max={300} value={modo.danoMultPct} onChange={setModo('danoMultPct')} />
             </label>
           </div>
         )}
@@ -953,11 +1200,16 @@ function MegaSkillStep({ title, value, onChange, allowModo }) {
           <strong>{value.nome}</strong>
           <span className="tag">{SKILL_TYPES[value.tipo]}</span>
           <span className="tag">{value.poder}%</span>
+          {value.custo > 0 && <span className="tag">MP {value.custo}</span>}
+          {value.todos && <span className="tag">✦ Todos</span>}
+          {value.afetaAliados && <span className="tag">✦ Aliados</span>}
           {value.alvo && value.alvo !== 'unico' && (
             <span className="tag">◎ {ALVO_LABEL[value.alvo] || value.alvo}</span>
           )}
+          {value.status && <span className="tag">{STATUS_DEFS[value.status.tipo]?.icon} {STATUS_DEFS[value.status.tipo]?.nome || value.status.tipo}</span>}
           {value.condicao && <span className="tag">🔒 {CONDITION_TYPES[value.condicao.tipo]} {value.condicao.valor}</span>}
           {value.modo && <span className="tag">🔥 {value.modo.turnos}t · +{value.modo.danoMultPct}%</span>}
+          {value.desc && <span className="muted small">{value.desc}</span>}
         </div>
       )}
     </div>

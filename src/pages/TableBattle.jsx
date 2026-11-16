@@ -2,9 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ATTRIBUTE_NAMES } from '../config.js';
 import {
   danoFisicoAtaque,
+  danoFisicoGolpe,
   danoBaseDaArma,
   danoMagico,
+  curaMagica,
   alvoNormalizado,
+  ARMAS_SLOTS,
+  ARMA_CATEGORIA_INFO,
+  categoriaDeArma,
   SUPERAQUECIMENTO,
   FUMACA,
   armaDeFogo,
@@ -20,7 +25,11 @@ import {
   dificuldadeDoGolpe,
 } from '../game/sistema.js';
 import { MONSTERS } from '../game/monsters.js';
-import { SPELLS, STATUS_DEFS, armasDeEquipamento, skillFromSpell } from '../game/data.js';
+import { SPELLS, STATUS_DEFS, EQUIPMENT, armasDeEquipamento, skillFromSpell } from '../game/data.js';
+
+// Catálogo de armas para o painel de Arsenais: armas gerais + peças de artilharia.
+const CATALOGO_ARMAS = { ...EQUIPMENT.armas, ...EQUIPMENT.canoes };
+
 
 // Recarga efetiva de uma arma (canhões usam `recargaTurnos`; dados antigos usam `recarga`).
 const recargaDeArma = (arma) => Math.max(0, Number(arma?.recargaTurnos ?? arma?.recarga ?? 0) || 0);
@@ -142,6 +151,94 @@ function processProtectionTick(fighters) {
 let _nextId = 1;
 const uid = () => `tb_${_nextId++}`;
 
+// Um item só entra na lista de uso em combate se tiver algum efeito real.
+function itemTemEfeito(it) {
+  if (!it || it.tipo === 'equipamento') return false;
+  return !!(
+    it.cura || it.mana || it.status || it.removeStatus
+    || it.buffFisico || it.buffMagico || it.drunk
+  );
+}
+
+// Normaliza um golpe personalizado da ficha para o formato de combate da mesa.
+// `poder` das fichas já é percentual (100 = golpe comum).
+function normalizarGolpeDeFicha(s = {}) {
+  const tipos = ['fisico', 'magia', 'cura', 'buff', 'defesa'];
+  return {
+    id: String(s.id || s.nome || 'golpe'),
+    nome: String(s.nome || 'Golpe'),
+    tipo: tipos.includes(s.tipo) ? s.tipo : 'magia',
+    poder: Math.max(1, Math.round(Number(s.poder) || 100)),
+    custo: Math.max(0, Number(s.custo) || 0),
+    cooldown: Math.max(0, Number(s.cooldown) || 0),
+    todos: !!s.todos,
+    afetaAliados: !!s.afetaAliados,
+    buffTipo: s.buffTipo === 'fisico' || s.buffTipo === 'magico' ? s.buffTipo : null,
+    duracao: s.duracao ? Math.max(1, Math.round(Number(s.duracao))) : 3,
+    alvo: s.alvo || null,
+    alvos: s.alvos || null,
+    splash: s.splash ?? null,
+    danoMult: s.danoMult ?? null,
+    status: s.status || null,
+    elemento: s.elemento || null,
+    desc: s.desc || '',
+  };
+}
+
+// Converte um status de golpe/arma (STATUS_DEFS) num efeito de mesa com
+// dano/cura por rodada. `stat: 'custom'` evita contar o valor duas vezes.
+function statusParaEfeito(status) {
+  if (!status || !status.tipo) return null;
+  const def = STATUS_DEFS[status.tipo] || {};
+  const valor = Math.max(0, Number(status.dano ?? def.danoPadrao ?? 0) || 0);
+  const dot = def.tipo === 'dot' ? valor : 0;
+  const hot = def.tipo === 'hot' ? valor : 0;
+  return {
+    uid: uid(),
+    name: def.nome || status.tipo,
+    icon: def.icon || '✦',
+    stat: 'custom',
+    statusId: status.tipo,
+    dot,
+    hot,
+    value: valor,
+    duration: Math.max(1, Number(status.turnos) || def.duracaoPadrao || 2),
+    type: def.tipo === 'hot' ? 'buff' : 'debuff',
+  };
+}
+
+// Bônus percentual de dano (buffs) por eixo. Compatível com efeitos manuais.
+function multiplicadorDano(f, tipo) {
+  let pct = 0;
+  for (const e of f?.statusEffects || []) {
+    const v = Number(e.value) || 0;
+    if (e.stat === 'dano') pct += v;
+    else if (tipo === 'fisico' && e.stat === 'danoFisico') pct += v;
+    else if (tipo === 'magia' && e.stat === 'danoMagico') pct += v;
+  }
+  return 1 + pct / 100;
+}
+
+// Redução percentual do dano recebido (magias de defesa), com teto de 75%.
+function reducaoDanoRecebido(f) {
+  let pct = 0;
+  for (const e of f?.statusEffects || []) {
+    if (e.stat === 'defesa') pct += Math.abs(Number(e.value) || 0);
+  }
+  return Math.min(75, pct);
+}
+
+// Remove efeitos nocivos por id/nome (itens com `removeStatus`).
+function removerStatus(f, ids) {
+  const alvos = Array.isArray(ids) ? ids : [ids];
+  const nomes = alvos.map((id) => (STATUS_DEFS[id]?.nome || id).toLowerCase());
+  return (f.statusEffects || []).filter((e) => {
+    const id = e.statusId || '';
+    const nome = String(e.name || '').toLowerCase();
+    return !alvos.includes(id) && !nomes.includes(nome);
+  });
+}
+
 function makeFighter(name, team, attrs = {}, extra = {}) {
   const a = { forca: 5, inteligencia: 5, resistencia: 5, destreza: 5, reflexos: 5, ...attrs };
   const hpMax = 500 + (a.resistencia || 5) * 10;
@@ -154,6 +251,7 @@ function makeFighter(name, team, attrs = {}, extra = {}) {
     resistencia: a.resistencia || 5, destreza: a.destreza || 5,
     statusEffects: [],
     initiative: null,
+    cooldowns: {},
     protection: extra.protection || null,
     equipment: extra.equipment || {},
     spells: extra.spells || [],
@@ -199,7 +297,8 @@ function computeDamage(attacker, isCrit) {
   // Mesmo sistema do combate principal: (FOR Final + danoBase da arma) × 10 — sem dados.
   // Lutadores de mesa não têm equipamento => mãos nuas (danoBaseDaArma(null) = 2).
   const base = danoFisicoAtaque(effectiveStat(attacker, 'forca'), danoBaseDaArma(null));
-  return isCrit ? base * 2 : base;
+  const buff = multiplicadorDano(attacker, 'fisico');
+  return Math.max(1, Math.round(base * (isCrit ? 2 : 1) * buff));
 }
 
 export default function TableBattle({ onBack, characters = [], gameData }) {
@@ -314,15 +413,50 @@ const [lastRoll, setLastRoll] = useState(null);
 
   const magiasDoLutador = useCallback((f) => {
     if (!f) return [];
-    return (f.spells || [])
-      .map((sid) => ({ sid, spell: SPELLS[sid], skill: skillFromSpell(sid, gameData) }))
-      .filter((x) => x.spell);
-  }, [gameData, SPELLS]);
+    const out = [];
+    const vistos = new Set();
+    const push = (chave, spell, skill) => {
+      if (!skill) return;
+      const nome = skill.nome || spell?.nome || chave;
+      const dedupe = String(nome).toLowerCase();
+      if (vistos.has(dedupe)) return;
+      vistos.add(dedupe);
+      out.push({ sid: String(chave), spell: spell || null, skill });
+    };
+    // Fichas novas guardam ids em `spells`; fichas antigas guardam nomes.
+    for (const ref of f.spells || []) {
+      if (!ref) continue;
+      const spell = SPELLS[ref] || Object.values(SPELLS).find((s) => s.nome === ref);
+      if (spell) {
+        push(SPELLS[ref] ? ref : spell.nome, spell, skillFromSpell(spell));
+        continue;
+      }
+      const s = (f.skills || []).find((x) => x && (x.id === ref || x.nome === ref));
+      if (s) push(ref, null, normalizarGolpeDeFicha(s));
+    }
+    // Golpes personalizados da ficha.
+    for (const s of f.skills || []) {
+      if (!s || !s.nome) continue;
+      push(s.id || s.nome, null, normalizarGolpeDeFicha(s));
+    }
+    return out;
+  }, []);
 
   const itensDoLutador = useCallback((f) => {
     if (!f) return [];
-    return (f.inventory || []).filter((it) => it && it.tipo !== 'equipamento');
+    return (f.inventory || []).filter(itemTemEfeito);
   }, []);
+
+  // Magia/golpe selecionado nas Ações Rápidas (para alvos e botão).
+  const magiaSelecionada = useMemo(() => {
+    const atk = fighters.find((f) => f.id === actAttacker);
+    if (!atk) return null;
+    return magiasDoLutador(atk).find((x) => x.sid === selSpellId) || null;
+  }, [fighters, actAttacker, selSpellId, magiasDoLutador]);
+  const magiaSuporte = !!magiaSelecionada
+    && ['cura', 'buff', 'defesa'].includes(magiaSelecionada.skill.tipo);
+  const magiaEmGrupo = !!magiaSelecionada
+    && (magiaSelecionada.skill.todos || magiaSelecionada.skill.afetaAliados);
 
   // Resolve o modo de alvo de um golpe (unico/area/cone/explosao) e devolve os
   // alvos válidos: somente inimigos vivos, com o alvo principal escolhido
@@ -349,6 +483,20 @@ const [lastRoll, setLastRoll] = useState(null);
       if (!alvos.includes(t)) alvos.push(t);
     }
     return { spec, alvos };
+  }, [fighters, actTargets]);
+
+  // Alvos de magias de suporte (cura/buff/defesa). Em grupo: todos os aliados
+  // vivos + o conjurador. Buff/defesa individual vale só para quem conjurou
+  // (como no motor); cura individual pode escolher um aliado.
+  const alvosDeSuporte = useCallback((attacker, skill) => {
+    if (!attacker) return [];
+    const aliadosVivos = fighters.filter((f) => f.hp > 0 && f.team === attacker.team);
+    if (skill?.todos || skill?.afetaAliados) return aliadosVivos;
+    if (skill?.tipo === 'buff' || skill?.tipo === 'defesa') return [attacker];
+    const escolhidos = actTargets
+      .map((id) => fighters.find((f) => f.id === id))
+      .filter((f) => f && f.hp > 0 && f.team === attacker.team);
+    return escolhidos.length ? [escolhidos[0]] : [attacker];
   }, [fighters, actTargets]);
 
   const addLog = useCallback((text) => {
@@ -389,6 +537,42 @@ const [lastRoll, setLastRoll] = useState(null);
     }
     return { usos, recarga };
   }, [armasDoLutador]);
+
+  // Equipa uma arma/canhão no slot escolhido. Inicializa usos e recarga do
+  // armamento novo (o efeito de inicialização só roda para lutadores novos).
+  const equiparArma = useCallback((fighterId, slot, armaId) => {
+    const def = armaId ? CATALOGO_ARMAS[armaId] : null;
+    // Ids fora do catálogo (armas customizadas/legado) só podem permanecer.
+    if (armaId && !def) return;
+    // O catálogo é indexado por id; o id entra na arma equipada porque usos e
+    // recarga são controlados por ele.
+    const nova = def ? { ...def, id: armaId, categoria: slot } : null;
+    setFighters((prev) => prev.map((f) => {
+      if (f.id !== fighterId) return f;
+      const armas = { ...(f.equipment?.armas || {}), [slot]: nova };
+      return { ...f, equipment: { ...(f.equipment || {}), armas } };
+    }));
+    setWpnUsos((prev) => {
+      const mapa = { ...(prev[fighterId] || {}) };
+      if (nova) {
+        if (nova.usosMax) mapa[nova.id] = nova.usosMax;
+        else delete mapa[nova.id];
+      }
+      return { ...prev, [fighterId]: mapa };
+    });
+    setWpnRecarga((prev) => {
+      const mapa = { ...(prev[fighterId] || {}) };
+      if (nova) mapa[nova.id] = armaUsaRecarga(nova) ? 0 : mapa[nova.id] || 0;
+      return { ...prev, [fighterId]: mapa };
+    });
+    if (fighterId === actAttacker) {
+      setSelWeaponId(nova ? nova.id : '');
+    }
+    const dono = fighters.find((f) => f.id === fighterId);
+    addLog(nova
+      ? `🧰 ${dono?.name || 'Combatente'} equipa ${nova.nome}${nova.usosMax ? ` (${nova.usosMax} uso(s))` : ''}.`
+      : `🧰 ${dono?.name || 'Combatente'} fica desarmado no slot ${ARMA_CATEGORIA_INFO[slot]?.nome || slot}.`);
+  }, [actAttacker, fighters, addLog]);
 
   const addFighter = useCallback(() => {
     if (!newName.trim()) return;
@@ -497,7 +681,7 @@ const [lastRoll, setLastRoll] = useState(null);
       `${bossEclipse && def.varianteEclipse ? '🌑 ' : ''}${def.icone || '👑'} ${def.nome}${bossEclipse && def.varianteEclipse ? ` (${def.varianteEclipse.sufixo || 'Eclipse'})` : ''}`,
       'enemy',
       { ...def.attributes },
-      { protection, _bossId: def.id, _eclipse: bossEclipse && def.varianteEclipse ? true : null }
+      { protection, _bossId: def.id, _eclipse: bossEclipse && def.varianteEclipse ? true : null, spells: def.spells || [] }
     );
     setFighters((prevFighters) => {
       const next = [...prevFighters, f];
@@ -700,6 +884,7 @@ const [lastRoll, setLastRoll] = useState(null);
       }
 
       const danoBase = danoFisicoAtaque(effectiveStat(attacker, 'forca'), danoBaseDaArma(arma));
+      const buffDano = multiplicadorDano(attacker, 'fisico');
       // Dificuldade do golpe (rolar-menor): ataque comum = 100% (dif. 0);
       // armas com efeito pesado (ex.: congelamento) reduzem o alvo de acerto.
       const dificuldade = dificuldadeDoGolpe({
@@ -734,26 +919,26 @@ const [lastRoll, setLastRoll] = useState(null);
           return;
         }
 
-        const dmg = Math.max(1, Math.round(danoBase * (isCrit ? 2 : 1) * mult));
+        const reducao = reducaoDanoRecebido(alvo);
+        const dmg = Math.max(1, Math.round(
+          danoBase * (isCrit ? 2 : 1) * mult * buffDano * (1 - reducao / 100),
+        ));
         const res = applyDamageWithProtection(alvo, dmg);
         resultados.push({ id: alvo.id, res });
         const multTxt = mult < 1 ? ` (${Math.round(mult * 100)}%)` : '';
-        const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${multTxt}` : '';
+        const redTxt = reducao > 0 ? ` (defesa −${reducao}%)` : '';
+        const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${multTxt}${redTxt}` : '';
         addLog(`⚔️ ${attacker.name} ataca ${alvoTxt} com ${arma.nome || 'desarmado'} → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold}${difTxt}) ${isCrit ? 'CRÍTICO ' : ''}${suffix}`);
         if (res.protecaoQuebrou) addLog(res.msg);
 
         // Efeito da arma (ex.: congelamento) só em quem foi atingido e sobreviveu.
         const hpDepois = Math.max(0, alvo.hp - res.danoReal);
         if (arma.efeito && hpDepois > 0) {
-          const ef = arma.efeito;
-          const def = STATUS_DEFS[ef.tipo] || {};
-          const eff = {
-            uid: uid(), name: def.nome || ef.tipo, icon: def.icon || '✦',
-            stat: 'custom', value: ef.dano || 0,
-            duration: ef.turnos || 2, type: 'debuff',
-          };
-          efeitosPorAlvo.set(alvo.id, eff);
-          addLog(`✨ ${alvo.name} recebe ${eff.name} por ${eff.duration} rodadas`);
+          const eff = statusParaEfeito(arma.efeito);
+          if (eff) {
+            efeitosPorAlvo.set(alvo.id, eff);
+            addLog(`✨ ${alvo.name} recebe ${eff.name} por ${eff.duration} rodadas`);
+          }
         }
       });
 
@@ -774,24 +959,113 @@ const [lastRoll, setLastRoll] = useState(null);
     if (actionMode === 'spell') {
       const m = magiasDoLutador(attacker).find((x) => x.sid === selSpellId);
       if (!m) return;
-      const custo = m.spell.custo || 0;
+      const skill = m.skill;
+      const custo = skill.custo || 0;
       if ((attacker.mp || 0) < custo) { addLog(`🔮 ${attacker.name} não tem MP suficiente (${custo})`); return; }
-      const { spec, alvos } = alvosDoGolpe(attacker, m.spell);
-      if (alvos.length === 0) {
-        addLog(`🎯 ${attacker.name} não encontrou inimigos vivos para ${m.spell.nome}.`);
+      const cd = Number(attacker.cooldowns?.[skill.id]) || 0;
+      if (cd > 0) {
+        addLog(`⏳ ${skill.nome} está em recarga (${cd} rodada(s)).`);
+        return;
+      }
+      const cooldownsNovos = skill.cooldown > 0
+        ? { ...(attacker.cooldowns || {}), [skill.id]: skill.cooldown }
+        : attacker.cooldowns;
+      const pagarCusto = (f) => (
+        f.id === attacker.id
+          ? { ...f, mp: Math.max(0, f.mp - custo), cooldowns: cooldownsNovos }
+          : f
+      );
+
+      // ── Magias de suporte: cura, buff e defesa ──
+      if (magiaSuporte) {
+        const alvos = alvosDeSuporte(attacker, skill);
+        if (alvos.length === 0) {
+          addLog(`🎯 ${attacker.name} não encontrou aliados vivos para ${skill.nome}.`);
+          return;
+        }
+
+        if (skill.tipo === 'cura') {
+          const curaBase = Math.max(0, Math.round(
+            curaMagica(effectiveStat(attacker, 'inteligencia'), skill.poder),
+          ));
+          // Cura pode carregar status positivo (ex.: regeneração).
+          const efeitoCura = skill.status ? statusParaEfeito(skill.status) : null;
+          setFighters((prev) => prev.map((f) => {
+            const nf = pagarCusto(f);
+            if (!alvos.some((a) => a.id === nf.id)) return nf;
+            const cura = Math.max(0, Math.min(nf.hpMax - nf.hp, curaBase));
+            return {
+              ...nf,
+              hp: nf.hp + cura,
+              statusEffects: efeitoCura
+                ? [...nf.statusEffects, { ...efeitoCura, uid: uid() }]
+                : nf.statusEffects,
+            };
+          }));
+          alvos.forEach((a) => {
+            const cura = Math.max(0, Math.min(a.hpMax - a.hp, curaBase));
+            addLog(`💚 ${attacker.name} usa ${skill.nome} em ${a.name}: cura ${cura} de HP (MP ${custo}).`);
+            if (efeitoCura) addLog(`✨ ${a.name} recebe ${efeitoCura.name} por ${efeitoCura.duration} rodada(s).`);
+          });
+          setActTargets([]);
+          return;
+        }
+
+        const duracao = skill.tipo === 'defesa'
+          ? 1
+          : Math.max(1, Number(skill.duracao) || 3);
+        const valor = skill.tipo === 'defesa'
+          ? Math.max(1, Number(skill.poder) || 25)
+          : Math.max(1, Number(skill.poder) || 10);
+        const stat = skill.tipo === 'defesa'
+          ? 'defesa'
+          : skill.buffTipo === 'fisico' ? 'danoFisico'
+            : skill.buffTipo === 'magico' ? 'danoMagico' : 'dano';
+        const icone = skill.tipo === 'defesa'
+          ? '🛡️'
+          : skill.buffTipo === 'fisico' ? '💪' : skill.buffTipo === 'magico' ? '🔮' : '✨';
+        const base = { name: skill.nome, icon: icone, stat, value: valor, duration: duracao, type: 'buff' };
+        setFighters((prev) => prev.map((f) => {
+          const nf = pagarCusto(f);
+          if (!alvos.some((a) => a.id === nf.id)) return nf;
+          return { ...nf, statusEffects: [...nf.statusEffects, { ...base, uid: uid() }] };
+        }));
+        const nomes = alvos.map((a) => a.name).join(', ');
+        if (skill.tipo === 'defesa') {
+          addLog(`🛡️ ${attacker.name} usa ${skill.nome}: ${nomes} reduz o dano recebido em ${valor}% (MP ${custo}).`);
+        } else {
+          const eixo = skill.buffTipo === 'fisico' ? 'dano físico'
+            : skill.buffTipo === 'magico' ? 'dano mágico' : 'dano';
+          addLog(`${icone} ${attacker.name} usa ${skill.nome}: ${nomes} ganha +${valor}% ${eixo} por ${duracao} rodada(s) (MP ${custo}).`);
+        }
         setActTargets([]);
         return;
       }
 
-      const poder = m.spell.poder || 1.6;
-      const danoBase = danoMagico(effectiveStat(attacker, 'inteligencia'), poder);
+      // ── Magias/golpes de dano ──
+      const { spec, alvos } = alvosDoGolpe(attacker, skill);
+      if (alvos.length === 0) {
+        addLog(`🎯 ${attacker.name} não encontrou inimigos vivos para ${skill.nome}.`);
+        setActTargets([]);
+        return;
+      }
+
+      const poder = Math.max(1, Number(skill.poder) || 100);
+      const danoBase = skill.tipo === 'fisico'
+        ? danoFisicoGolpe(
+          effectiveStat(attacker, 'forca'),
+          poder,
+          multiplicadorDano(attacker, 'fisico'),
+        )
+        : danoMagico(
+          effectiveStat(attacker, 'inteligencia'),
+          poder,
+          multiplicadorDano(attacker, 'magia'),
+        );
       const multi = spec.tipo !== 'unico';
-      // Dificuldade da magia só pesa quando há rolagem de acerto (multi-alvo).
+      // Dificuldade do golpe só pesa quando há rolagem de acerto (multi-alvo).
       const dificuldade = multi
-        ? dificuldadeDoGolpe({
-          poder: Math.round(poder * 100),
-          status: m.spell.status || null,
-        })
+        ? dificuldadeDoGolpe({ poder, status: skill.status || null })
         : 0;
       const resultados = [];
       const efeitosPorAlvo = new Map();
@@ -820,42 +1094,39 @@ const [lastRoll, setLastRoll] = useState(null);
         const difTxt = dificuldade > 0 ? ` · dif. +${dificuldade}` : '';
 
         if (!hit) {
-          addLog(`🔮 ${attacker.name} erra ${m.spell.nome} em ${alvoTxt} → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold}${difTxt})${i === 0 ? ` (MP ${custo})` : ''}`);
+          addLog(`🔮 ${attacker.name} erra ${skill.nome} em ${alvoTxt} → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold}${difTxt})${i === 0 ? ` (MP ${custo})` : ''}`);
           return;
         }
 
-        const dmg = Math.max(1, Math.round(danoBase * (isCrit ? 2 : 1) * mult));
+        const reducao = reducaoDanoRecebido(alvo);
+        const dmg = Math.max(1, Math.round(
+          danoBase * (isCrit ? 2 : 1) * mult * (1 - reducao / 100),
+        ));
         const res = applyDamageWithProtection(alvo, dmg);
         resultados.push({ id: alvo.id, res });
         const multTxt = mult < 1 ? ` (${Math.round(mult * 100)}%)` : '';
+        const redTxt = reducao > 0 ? ` (defesa −${reducao}%)` : '';
         const rollTxt = multi ? ` → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold}${difTxt})${isCrit ? ' CRÍTICO' : ''}` : '';
-        const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${multTxt}` : '';
-        addLog(`🔮 ${attacker.name} lança ${m.spell.nome} em ${alvoTxt}${rollTxt}${suffix}${i === 0 ? ` (MP ${custo})` : ''}`);
+        const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${multTxt}${redTxt}` : '';
+        addLog(`🔮 ${attacker.name} lança ${skill.nome} em ${alvoTxt}${rollTxt}${suffix}${i === 0 ? ` (MP ${custo})` : ''}`);
         if (res.protecaoQuebrou) addLog(res.msg);
 
         // Efeito da magia só em quem foi atingido e sobreviveu.
         const hpDepois = Math.max(0, alvo.hp - res.danoReal);
-        if (m.spell.status && hpDepois > 0) {
-          const st = m.spell.status;
-          const def = STATUS_DEFS[st.tipo] || {};
-          const tipoBuff = st.tipo === 'dot' || st.tipo === 'veneno' ? 'debuff' : st.tipo === 'hot' ? 'buff' : 'debuff';
-          const statMap = { veneno: 'poison', regeneracao: 'regen' };
-          const eff = {
-            uid: uid(), name: def.nome || st.tipo, icon: def.icon || '✦',
-            stat: statMap[st.tipo] || 'custom', value: st.dano || 0,
-            duration: st.turnos || 2, type: tipoBuff,
-          };
-          efeitosPorAlvo.set(alvo.id, eff);
-          addLog(`✨ ${alvo.name} recebe ${eff.name} por ${eff.duration} rodadas`);
+        if (skill.status && hpDepois > 0) {
+          const eff = statusParaEfeito(skill.status);
+          if (eff) {
+            efeitosPorAlvo.set(alvo.id, eff);
+            addLog(`✨ ${alvo.name} recebe ${eff.name} por ${eff.duration} rodadas`);
+          }
         }
       });
 
       setFighters((prev) => prev.map((f) => {
-        let nf = f;
-        if (f.id === attacker.id) nf = { ...nf, mp: Math.max(0, nf.mp - custo) };
-        const r = resultados.find((x) => x.id === f.id);
+        let nf = pagarCusto(f);
+        const r = resultados.find((x) => x.id === nf.id);
         if (r) nf = aplicarDanoAoCombatente(nf, r.res);
-        const eff = efeitosPorAlvo.get(f.id);
+        const eff = efeitosPorAlvo.get(nf.id);
         if (eff) nf = { ...nf, statusEffects: [...nf.statusEffects, eff] };
         return nf;
       }));
@@ -864,26 +1135,62 @@ const [lastRoll, setLastRoll] = useState(null);
     }
 
     if (actionMode === 'item') {
-      const itens = itensDoLutador(attacker);
-      const it = itens.find((x) => x.id === selItemId);
+      const it = itensDoLutador(attacker).find((x) => x.id === selItemId);
       if (!it) return;
-      const alvo = fighters.find((f) => f.id === actTargets[0]) || attacker;
-      let hpDelta = 0, mpDelta = 0;
-      if (it.cura) hpDelta += it.cura;
-      if (it.mana) mpDelta += it.mana;
+      const alvo = fighters.find((f) => f.id === actTargets[0] && f.hp > 0) || attacker;
+      const detalhes = [];
+      const efeitos = [];
+      if (it.cura) detalhes.push(`+${Math.max(0, Math.min(alvo.hpMax - alvo.hp, it.cura))} HP`);
+      if (it.mana) detalhes.push(`+${Math.max(0, Math.min(alvo.mpMax - alvo.mp, it.mana))} MP`);
+      if (it.status) {
+        const eff = statusParaEfeito(it.status);
+        if (eff) {
+          efeitos.push(eff);
+          detalhes.push(`${eff.name} por ${eff.duration} rodada(s)`);
+        }
+      }
+      if (it.removeStatus) detalhes.push('remove efeito(s) nocivo(s)');
+      if (it.buffFisico) {
+        efeitos.push({
+          uid: uid(), name: it.nome, icon: '💪', stat: 'danoFisico',
+          value: Math.round(it.buffFisico * 100), duration: it.buffTurns || 3, type: 'buff',
+        });
+        detalhes.push(`+${Math.round(it.buffFisico * 100)}% dano físico`);
+      }
+      if (it.buffMagico) {
+        efeitos.push({
+          uid: uid(), name: it.nome, icon: '🔮', stat: 'danoMagico',
+          value: Math.round(it.buffMagico * 100), duration: it.buffTurns || 3, type: 'buff',
+        });
+        detalhes.push(`+${Math.round(it.buffMagico * 100)}% dano mágico`);
+      }
+      if (it.drunk) detalhes.push('fica bêbado');
+
       setFighters((prev) => prev.map((f) => {
-        if (f.id !== alvo.id) return f;
-        let hp = Math.max(0, Math.min(f.hpMax, f.hp + hpDelta));
-        let mp = Math.max(0, Math.min(f.mpMax, f.mp + mpDelta));
-        return { ...f, hp, mp };
+        // O item é consumido do inventário de quem o usou.
+        let nf = f.id === attacker.id
+          ? { ...f, inventory: (f.inventory || []).filter((x) => x.id !== it.id) }
+          : f;
+        if (nf.id !== alvo.id) return nf;
+        let hp = nf.hp;
+        let mp = nf.mp;
+        if (it.cura) hp = Math.max(0, Math.min(nf.hpMax, hp + it.cura));
+        if (it.mana) mp = Math.max(0, Math.min(nf.mpMax, mp + it.mana));
+        const statusEffects = [
+          ...(it.removeStatus ? removerStatus(nf, it.removeStatus) : nf.statusEffects),
+          ...efeitos.map((e) => ({ ...e, uid: uid() })),
+        ];
+        return { ...nf, hp, mp, statusEffects };
       }));
-      addLog(`🧪 ${attacker.name} usa ${it.nome} em ${alvo.name}${hpDelta ? ` +${hpDelta} HP` : ''}${mpDelta ? ` +${mpDelta} MP` : ''}`);
+      addLog(`🧪 ${attacker.name} usa ${it.nome} em ${alvo.name}${detalhes.length ? `: ${detalhes.join(', ')}` : ''}.`);
+      setSelItemId('');
       setActTargets([]);
       return;
     }
   }, [
     fighters, actAttacker, actTargets, actionMode, selWeaponId, selSpellId, selItemId,
-    armasDoLutador, magiasDoLutador, itensDoLutador, alvosDoGolpe, addLog, STATUS_DEFS, SPELLS,
+    armasDoLutador, magiasDoLutador, itensDoLutador, alvosDoGolpe, alvosDeSuporte,
+    magiaSuporte, addLog,
     initiativeRolled, initiativeOrder, currentTurnIndex, wpnRecarga, wpnUsos,
     wpnCalor, wpnSuperaquecido, fumaca,
   ]);
@@ -897,16 +1204,24 @@ const [lastRoll, setLastRoll] = useState(null);
     setFighters((prev) => prev.map((f) => {
       let hpDelta = 0;
       for (const e of f.statusEffects) {
-        if (e.stat === 'regen' && e.duration > 0) hpDelta += e.value;
-        if (e.stat === 'poison' && e.duration > 0) hpDelta -= e.value;
+        if ((e.duration || 0) <= 0) continue;
+        if (e.stat === 'regen') hpDelta += Number(e.value) || 0;
+        if (e.stat === 'poison') hpDelta -= Number(e.value) || 0;
+        if (e.dot) hpDelta -= Number(e.dot) || 0;
+        if (e.hot) hpDelta += Number(e.hot) || 0;
       }
       const updated = f.statusEffects.map((e) => ({ ...e, duration: e.duration - 1 })).filter((e) => e.duration > 0);
-      if (hpDelta !== 0) {
-        if (hpDelta > 0) addLog(`💚 ${f.name} regenera ${hpDelta} HP`);
-        if (hpDelta < 0) addLog(`☠️ ${f.name} sofre ${Math.abs(hpDelta)} de veneno`);
-        return { ...f, statusEffects: updated, hp: Math.max(0, Math.min(f.hpMax, f.hp + hpDelta)) };
+      // Recargas de golpes diminuem a cada rodada.
+      const cooldowns = {};
+      for (const [k, v] of Object.entries(f.cooldowns || {})) {
+        if (Number(v) > 1) cooldowns[k] = Number(v) - 1;
       }
-      return { ...f, statusEffects: updated };
+      if (hpDelta !== 0) {
+        if (hpDelta > 0) addLog(`💚 ${f.name} recupera ${hpDelta} HP`);
+        if (hpDelta < 0) addLog(`☠️ ${f.name} sofre ${Math.abs(hpDelta)} de dano de efeito`);
+        return { ...f, statusEffects: updated, cooldowns, hp: Math.max(0, Math.min(f.hpMax, f.hp + hpDelta)) };
+      }
+      return { ...f, statusEffects: updated, cooldowns };
     }));
   }, [addLog]);
 
@@ -950,7 +1265,8 @@ const [lastRoll, setLastRoll] = useState(null);
         const isFail = finalRoll === 1;
         const hit = isCrit || (!isFail && finalRoll <= threshold);
         if (hit) {
-          const dmg = computeDamage(attacker, isCrit);
+          const reducao = reducaoDanoRecebido(defender);
+          const dmg = Math.max(1, Math.round(computeDamage(attacker, isCrit) * (1 - reducao / 100)));
           const res = applyDamageWithProtection(defender, dmg);
           setFighters((prev) => prev.map((f) => (
             f.id === defender.id ? aplicarDanoAoCombatente(f, res) : f
@@ -1270,6 +1586,36 @@ const [lastRoll, setLastRoll] = useState(null);
             ))}
           </div>
         )}
+        {/* Arsenais: um item por slot. Inclui os canhões de artilharia. */}
+        <div className="fighter-card-arsenal" style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #3a2e54' }}>
+          <span className="bar-label">🧰 Arsenal</span>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6, marginTop: 4 }}>
+            {ARMAS_SLOTS.map((slot) => {
+              const equipada = f.equipment?.armas?.[slot] || null;
+              const info = ARMA_CATEGORIA_INFO[slot] || {};
+              const opcoes = Object.entries(CATALOGO_ARMAS)
+                .filter(([, a]) => categoriaDeArma(a) === slot);
+              const foraDoCatalogo = equipada && !opcoes.some(([id]) => id === equipada.id);
+              return (
+                <label key={slot} className="action-field" style={{ fontSize: 11 }}>
+                  <span className="muted">{info.icon} {info.nome || slot}</span>
+                  <select
+                    value={equipada?.id || ''}
+                    onChange={(e) => equiparArma(f.id, slot, e.target.value)}
+                  >
+                    <option value="">— vazio —</option>
+                    {foraDoCatalogo && (
+                      <option value={equipada.id}>{equipada.nome} (atual)</option>
+                    )}
+                    {opcoes.map(([id, a]) => (
+                      <option key={id} value={id}>{a.nome}</option>
+                    ))}
+                  </select>
+                </label>
+              );
+            })}
+          </div>
+        </div>
       </div>
     );
   };
@@ -1599,7 +1945,9 @@ const [lastRoll, setLastRoll] = useState(null);
                     <select value={selSpellId} onChange={(e) => setSelSpellId(e.target.value)}>
                       <option value="">— Escolha uma magia —</option>
                       {magiasDoLutador(fighters.find((f) => f.id === actAttacker)).map((x) => (
-                        <option key={x.sid} value={x.sid}>{x.spell.nome} (MP {x.spell.custo || 0})</option>
+                        <option key={x.sid} value={x.sid}>
+                          {x.skill.nome} (MP {x.skill.custo || 0}{x.skill.tipo === 'cura' ? ' · cura' : x.skill.tipo === 'buff' ? ' · buff' : x.skill.tipo === 'defesa' ? ' · defesa' : ''})
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -1624,24 +1972,42 @@ const [lastRoll, setLastRoll] = useState(null);
               {actAttacker && (
                 <div className="actions-row">
                   <div className="action-field action-field-full">
-                    <label>Alvo(s)</label>
+                    <label>{magiaSuporte ? 'Aliado(s)' : 'Alvo(s)'}</label>
                     <select multiple size={Math.min(4, Math.max(1, alive.length))} value={actTargets} onChange={(e) => {
                       const vals = Array.from(e.target.selectedOptions).map((o) => o.value);
                       setActTargets(vals);
                     }}>
-                      {alive.filter((f) => f.id !== actAttacker).map((f) => (
-                        <option key={f.id} value={f.id}>{f.team === 'ally' ? '🛡️' : '⚔️'} {f.name} (HP {f.hp})</option>
-                      ))}
+                      {alive
+                        .filter((f) => f.id !== actAttacker)
+                        .filter((f) => (magiaSuporte ? f.team === (fighters.find((a) => a.id === actAttacker)?.team) : true))
+                        .map((f) => (
+                          <option key={f.id} value={f.id}>{f.team === 'ally' ? '🛡️' : '⚔️'} {f.name} (HP {f.hp})</option>
+                        ))}
                       {alive.length <= 1 && <option disabled>Sem outros alvos vivos</option>}
                     </select>
-                    <small className="muted">Segure Ctrl/Cmd para múltiplos alvos. Armas/magias de área, cone e explosão atingem vários inimigos (cada um rola o próprio acerto).</small>
+                    <small className="muted">
+                      {magiaSuporte
+                        ? 'Cura individual: escolha um aliado (ou nenhum para usar em si). Buff/defesa individual vale só para o conjurador; magias de grupo afetam todos os aliados automaticamente.'
+                        : 'Segure Ctrl/Cmd para múltiplos alvos. Armas/magias de área, cone e explosão atingem vários inimigos (cada um rola o próprio acerto).'}
+                    </small>
                   </div>
                 </div>
               )}
 
               {/* Botão executar */}
               <div className="actions-row actions-row-execute">
-                <button className="dice-btn dice-btn-execute" onClick={executarAcao} disabled={!actAttacker || actTargets.length === 0 || (actionMode === 'spell' && !selSpellId) || (actionMode === 'item' && !selItemId) || (actionMode === 'attack' && armaSelecionadaTravada)}>
+                <button
+                  className="dice-btn dice-btn-execute"
+                  onClick={executarAcao}
+                  disabled={
+                    !actAttacker
+                    || (actionMode === 'attack' && actTargets.length === 0)
+                    || (actionMode === 'spell' && !selSpellId)
+                    || (actionMode === 'spell' && !magiaSuporte && !magiaEmGrupo && actTargets.length === 0)
+                    || (actionMode === 'item' && !selItemId)
+                    || (actionMode === 'attack' && armaSelecionadaTravada)
+                  }
+                >
                   ▶ Executar Ação
                 </button>
               </div>
