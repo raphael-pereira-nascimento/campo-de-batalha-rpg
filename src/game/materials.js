@@ -1252,28 +1252,104 @@ const DADOS_OFICIAIS = {
   vibranium:        {
     raridade: 'mitica', qualidade: 'perfeito', precoPorKg: { ouro: 100 },
     descricao: 'Absorve, armazena e redistribui energia, com especialização em energia cinética e impactos.',
+    fisica: {
+      caracteristicas: 'Absorve energia cinética, armazena em Pontos de Energia (PE) e redistribui em liberações controladas.',
+      dureza: '30% superior ao aço.',
+      resistencia: '40% superior ao aço; +60% contra impactos.',
+      peso: '10% mais pesado que o aço.',
+      densidade: 'Aproximadamente 8,6 g/cm³ (aço ≈7,8 g/cm³).',
+      flexibilidade: '20% menos maleável que o aço.',
+      condutividadeMagica: '25% superior ao aço; a energia armazenada é física, não mágica.',
+    },
+    compatibilidade: [
+      'armadura', 'armaLamina', 'armaImpacto', 'armaFogo',
+      'acessorio', 'equipamentoMagico', 'golem',
+    ],
     caracteristicasEspeciais: [
       'Absorção de energia.',
       'Armazenamento de energia.',
       'Redistribuição de energia.',
       'Especialização em energia cinética e impactos.',
+      'Absorção Cinética: converte 25% do dano cinético efetivo em PE e abate essa fração do dano sofrido.',
+      'Capacidade de armazenamento: 40 PE/kg × multiplicador de qualidade (Perfeito ×1,5 = 60 PE/kg).',
+      'Sobrecarga: excedente não é armazenado; 25% de chance de descarga descontrolada (15% em Perfeito).',
     ],
-    // Apenas a direção dos efeitos foi aprovada; não há percentuais recuperados.
     efeitos: {
-      armadura:          { desc: 'Absorve parte da energia dos impactos recebidos.' },
-      armaLamina:        { desc: 'Acumula energia durante os golpes.' },
-      armaImpacto:       { desc: 'Libera energia acumulada nos ataques.' },
-      armaFogo:          { desc: 'Absorve ou controla o recuo dos disparos.' },
-      acessorio:         { desc: 'Oferece proteção contra impactos.' },
-      equipamentoMagico: { desc: 'Armazena energia para utilização mágica posterior.' },
-      golem:             { desc: 'Absorve ataques e devolve a energia aos adversários.' },
+      armadura: {
+        desc: 'Absorve parte da energia dos impactos recebidos.',
+        percentuais: {
+          'resistência cinética': 35,
+          'resistência estrutural': 10,
+        },
+        penalidades: {
+          'resistência psíquica': -10,
+          velocidade: -5,
+        },
+        condicoes: [
+          'Só absorve dano cinético: corpo a corpo, impacto, projéteis, queda e a parte física de explosões.',
+          'Com a capacidade de PE cheia não há absorção: o dano entra integralmente.',
+        ],
+        especial: 'Absorve 25% do dano cinético efetivo, converte a fração absorvida em PE (até a capacidade) e sofre apenas o restante. Gasta 10 PE para +10% de resistência por 1 turno.',
+      },
+      armaLamina: {
+        desc: 'Acumula energia durante os golpes.',
+        percentuais: { dano: 15 },
+        condicoes: ['Liberação limitada a 20 PE por turno e a 1 liberação por turno.'],
+        especial: 'Armazena 1 PE a cada 10 de dano causado (máximo de 5 PE por golpe). Pode liberar até 20 PE por turno como +1 de dano por PE.',
+      },
+      armaImpacto: {
+        desc: 'Libera energia acumulada nos ataques.',
+        percentuais: { dano: 20 },
+        penalidades: { 'chance de acerto': -10 },
+        condicoes: ['A penalidade de acerto só vale com a capacidade de PE cheia.'],
+        especial: 'Armazena 2 PE por golpe. Onda de choque: gasta até 50% do PE acumulado como dano em 3 m, 1 vez por turno.',
+      },
+      armaFogo: {
+        desc: 'Absorve ou controla o recuo dos disparos.',
+        percentuais: {
+          recuo: -25,
+          precisão: 10,
+        },
+        especial: 'Armazena 1 PE por disparo. Gasta 5 PE para ignorar uma penalidade de recarga.',
+      },
+      acessorio: {
+        desc: 'Oferece proteção contra impactos e ventilação de energia.',
+        percentuais: {
+          'resistência contra impactos': 10,
+          'capacidade de PE': 10,
+        },
+        penalidades: { 'resistência mental': -5 },
+        especial: 'Ventila 5 PE por turno. O bônus de capacidade aplica-se à peça empunhada.',
+      },
+      equipamentoMagico: {
+        desc: 'Armazena energia para utilização mágica posterior.',
+        percentuais: { 'potência de magias de força e cinéticas': 15 },
+        condicoes: ['Não concede bônus a magias de ilusão ou controle mental.'],
+        especial: 'Gasta 10 PE para +10% de potência ou -10% de custo de mana.',
+      },
+      golem: {
+        desc: 'Absorve ataques e devolve a energia aos adversários.',
+        percentuais: {
+          'resistência cinética': 35,
+          'vida máxima': 20,
+        },
+        penalidades: { velocidade: -10 },
+        especial: 'Absorve 25% do dano cinético efetivo e abate essa fração do dano. Descarga: 50% do PE acumulado em 3 m, 1 vez por turno. Capacidade fixa de 600 PE no núcleo.',
+      },
     },
     efeitosNegativos: [
       'Capacidade máxima de armazenamento.',
       'Possibilidade de sobrecarga.',
       'Dificuldade de fabricação.',
+      'Com a capacidade cheia não absorve mais dano: o golpe entra integralmente.',
+      'Não absorve dano não cinético (fogo, gelo, raio, veneno, maldição, ilusão ou controle mental).',
     ],
-    observacoes: 'Direção dos efeitos aprovada, mas os valores numéricos individuais ainda não foram recuperados e não são regras definitivas.',
+    restricoes: [
+      'Só absorve energia cinética.',
+      'O excedente além da capacidade não é armazenado e pode causar descarga descontrolada.',
+      'A qualidade só altera a capacidade: Perfeito ×1,5; as demais qualidades usam multiplicador 1 até definição oficial.',
+    ],
+    observacoes: 'Ficha numérica aprovada: absorção de 25% sobre o dano efetivo, com abatimento do dano sofrido e conversão em PE. Regras de PE, sobrecarga e massas em `src/game/vibranium.js`. Origem/bioma não constam na documentação.',
   },
   prataPandemomico: {
     raridade: 'lendaria', qualidade: 'excepcional', precoPorKg: { ouro: 75 },

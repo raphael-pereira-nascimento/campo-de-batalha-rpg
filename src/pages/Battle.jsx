@@ -1382,6 +1382,9 @@ function FfFighter({ p, index, mirrored, current, gameData, floats = [], selecte
         <>
           <StatBar label="HP" value={p.hp} max={p.hpMax} color="#e63946" />
           {!p.isMonster && <StatBar label="MP" value={p.mp} max={p.mpMax} color="#4a90e2" />}
+          {!p.isMonster && p.vibraniumPE && (
+            <StatBar label="PE" value={p.vibraniumPE.pe} max={p.vibraniumPE.peMax} color="#8b5fbf" />
+          )}
           {!p.isMonster && (
             <div className="mega-bars">
               <span className="bar-row">

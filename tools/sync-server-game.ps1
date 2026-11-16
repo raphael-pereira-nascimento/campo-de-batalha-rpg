@@ -10,7 +10,7 @@ $src = Join-Path $root 'src\game'
 $dst = Join-Path $root 'server\src\game'
 
 # Arquivos sem diferencas intencionais conhecidas.
-# combatEffects/podridao/contaminacao/corrupcao/runas sao modulos puros
+# combatEffects/podridao/contaminacao/corrupcao/runas/vibranium sao modulos puros
 # compartilhados entre cliente e servidor (sem dependencia de DOM nem de Node).
 $identicos = @(
   'sistema.js',
@@ -22,7 +22,8 @@ $identicos = @(
   'podridao.js',
   'contaminacao.js',
   'corrupcao.js',
-  'runas.js'
+  'runas.js',
+  'vibranium.js'
 )
 foreach ($f in $identicos) {
   Copy-Item (Join-Path $src $f) (Join-Path $dst $f) -Force

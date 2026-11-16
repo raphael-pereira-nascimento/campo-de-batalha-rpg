@@ -61,6 +61,14 @@ import {
 } from './combatEffects.js';
 import { calcularEstadoCorrupcao } from './corrupcao.js';
 import { participanteConcedeImunidadePodridao } from './podridao.js';
+import {
+  absorverDanoCinetico,
+  configVibraniumDoParticipante,
+  danoDeDescarga,
+  estadoInicialPE,
+  registrarTrinca,
+  TRINCAS_DESTRUICAO,
+} from './vibranium.js';
 
 let logCounter = 0;
 
@@ -133,6 +141,15 @@ function statusEffects(p) {
     if (s.id === 'fraqueza') out.danoMult *= 0.8;
   }
   return out;
+}
+
+// Vibranium: estado de PE do participante durante o combate. O item guarda apenas
+// a configuração (capacidade e taxa); o PE atual é recriado a cada batalha.
+function vibraniumDe(p) {
+  const config = configVibraniumDoParticipante(p);
+  if (!config) return null;
+  if (!p.vibraniumPE) p.vibraniumPE = estadoInicialPE(config);
+  return { config, estado: p.vibraniumPE };
 }
 
 function condicaoTexto(cond) {
@@ -349,6 +366,9 @@ export class BattleManager {
       // ── XP por participação ──
       contribuicao: { dano: 0, cura: 0, acertos: 0, acoes: 0, suporte: 0 },
     });
+    const participante = battle.participants[battle.participants.length - 1];
+    const configPE = configVibraniumDoParticipante(participante);
+    if (configPE) participante.vibraniumPE = estadoInicialPE(configPE);
     battle.log.push(
       makeLog(`${playerName} entra na batalha com ${character.name} (${classNameOf(battle.participants[battle.participants.length - 1])})`),
     );
@@ -936,7 +956,51 @@ export class BattleManager {
       baseDamage = Math.round(baseDamage * (1 - efeito.reducaoDanoMagico));
     }
     const reduced = Math.max(0, baseDamage - target.defesa);
-    const finalDamage = reduced === 0 ? Math.max(1, Math.round(baseDamage * 0.1)) : reduced;
+    let finalDamage = reduced === 0 ? Math.max(1, Math.round(baseDamage * 0.1)) : reduced;
+
+    // ── Vibranium: absorção cinética aprovada ─────────────────────────────────
+    // Apenas dano físico (cinético). A fração absorvida vira PE e abate o dano;
+    // com a capacidade cheia não há absorção e o dano entra integralmente.
+    if (kind === 'physical') {
+      const vib = vibraniumDe(target);
+      if (vib) {
+        const absorcao = absorverDanoCinetico({
+          danoEfetivo: finalDamage,
+          peAtual: vib.estado.pe,
+          peMax: vib.estado.peMax,
+          qualidade: vib.config.qualidade,
+        });
+        vib.estado.pe = absorcao.peAtual;
+        finalDamage = absorcao.danoFinal;
+        if (absorcao.peGanhos > 0) {
+          battle.log.push(makeLog(
+            `🔋 ${target.charName} absorve ${absorcao.peGanhos} PE de Vibranium `
+            + `(${vib.estado.pe}/${vib.estado.peMax}).`,
+            'info',
+          ));
+        }
+        if (absorcao.sobrecarga?.disparou) {
+          const descarga = danoDeDescarga(vib.estado.pe);
+          vib.estado.pe = 0;
+          const trinca = registrarTrinca(vib.estado.trincas);
+          vib.estado.trincas = trinca.trincas;
+          battle.log.push(makeLog(
+            `⚡ Sobrecarga de Vibranium: descarga de ${descarga} em ${target.charName} `
+            + `(trinca ${trinca.trincas}/${TRINCAS_DESTRUICAO}).`,
+            'damage',
+          ));
+          if (descarga > 0) {
+            target.hp = clamp(target.hp - descarga, 0, target.hpMax);
+            target.danoRecebido = (target.danoRecebido || 0) + descarga;
+            this._killIfDead(battle, target);
+            if (!target.alive) return finalDamage;
+          }
+          if (trinca.destruido) {
+            battle.log.push(makeLog(`💥 A peça de Vibranium de ${target.charName} foi destruída pela sobrecarga!`, 'death'));
+          }
+        }
+      }
+    }
 
     // ── Horda: o HP é um pool e os corpos caem conforme o pool cruza os
     // limites de hpPorUnidade (funciona em qualquer escala de dano/vida) ──

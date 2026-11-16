@@ -14,6 +14,7 @@ import {
 import { PODRIDAO_ARMA, criarStatusPodridaoArma } from './podridao.js';
 import { CONTAMINACAO_APLICACOES, criarStatusContaminacao } from './contaminacao.js';
 import { validarRunas } from './runas.js';
+import { ABSORCAO_PCT, FRACAO_SECUNDARIO, capacidadePE } from './vibranium.js';
 
 // ============================================================================
 // CÁLCULO DE PREÇO DE EQUIPAMENTO (delega para equipments.js)
@@ -182,6 +183,32 @@ export function calcularAtributosPersonagem(personagem, equipamentoEquipado = {}
 // CÁLCULO DE ATRIBUTOS DO EQUIPAMENTO CRAFTADO (com materiais primário/secundário)
 // ============================================================================
 
+// Vibranium: a peça guarda apenas a configuração estática (capacidade e taxa de
+// absorção). O PE atual é estado de combate e nunca é persistido no item.
+// Principal concede 100% da capacidade; secundário, 25% (regra do catálogo).
+export function configVibraniumDaPeca(materialPrimario, materialSecundario, categoriaEfeito) {
+  const principal = materialPrimario?.id === 'vibranium';
+  const secundario = materialSecundario?.id === 'vibranium';
+  if (!principal && !secundario) return null;
+
+  const material = principal ? materialPrimario : materialSecundario;
+  const qualidade = material?.qualidade || 'perfeito';
+  const peMax = capacidadePE({
+    categoria: categoriaEfeito,
+    qualidade,
+    fracaoMaterial: principal ? 1 : FRACAO_SECUNDARIO,
+  });
+  if (!peMax) return null;
+
+  return {
+    materialId: 'vibranium',
+    papel: principal ? 'principal' : 'secundario',
+    absorcaoPct: ABSORCAO_PCT,
+    qualidade,
+    peMax,
+  };
+}
+
 export function calcularAtributosEquipamento(equipId, materialPrimarioId, materialSecundarioId, gemasSlotadas = []) {
   const equip = getEquipamentoById(equipId);
   if (!equip) return { ok: false, motivo: 'Equipamento não encontrado.' };
@@ -222,6 +249,7 @@ export function calcularAtributosEquipamento(equipId, materialPrimarioId, materi
   // usando exatamente os mesmos bônus de antes.
   const perfilMecanico = composicao.perfilMecanico || null;
   const statusAplicavel = efeitoDeStatusDoPerfil(perfilMecanico, categoriaEfeito);
+  const vibranium = configVibraniumDaPeca(matPrimario, matSecundario, categoriaEfeito);
 
   for (const g of gemasSlotadas) {
     if (!g || !g.gemaId) continue;
@@ -236,7 +264,12 @@ export function calcularAtributosEquipamento(equipId, materialPrimarioId, materi
 
   return {
     ok: true,
-    equip: { ...equip, materialPrimario: matPrimario?.id, materialSecundario: matSecundario?.id },
+    equip: {
+      ...equip,
+      materialPrimario: matPrimario?.id,
+      materialSecundario: matSecundario?.id,
+      ...(vibranium ? { vibranium } : {}),
+    },
     atributos,
     atributosSemGemas,
     materiais: { primario: matPrimario, secundario: matSecundario },
@@ -244,6 +277,7 @@ export function calcularAtributosEquipamento(equipId, materialPrimarioId, materi
     composicao,
     perfilMecanico,
     statusAplicavel,
+    vibranium,
   };
 }
 
@@ -440,6 +474,7 @@ export function craftarEquipamento(equipId, materialPrimarioId, materialSecundar
     categoriaEfeito: resultado.categoriaEfeito,
     perfilMecanico: resultado.perfilMecanico,
     composicao: resultado.composicao,
+    vibranium: resultado.vibranium,
     runas: runasValidadas,
     honrineo,
   };

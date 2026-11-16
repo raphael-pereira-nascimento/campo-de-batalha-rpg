@@ -150,15 +150,28 @@ describe('catálogo — integridade das fichas', () => {
     expect(vibranium.caracteristicasEspeciais.some((t) => t.includes('cinética'))).toBe(true);
   });
 
-  it('Vibranium registra a direção dos efeitos sem percentuais', () => {
+  it('Vibranium registra a ficha numérica aprovada', () => {
     const vibranium = getMaterialById('vibranium');
     expect(vibranium.efeitos.armadura.desc).toContain('Absorve');
     expect(vibranium.efeitos.golem.desc).toContain('devolve a energia');
-    for (const efeito of Object.values(vibranium.efeitos).filter(Boolean)) {
-      // A normalização representa ausência de valores como objeto vazio.
-      expect(efeito.percentuais || {}).toEqual({});
-      expect(efeito.bonus || {}).toEqual({});
-    }
+    expect(vibranium.efeitos.armadura.percentuais).toEqual({
+      'resistência cinética': 35,
+      'resistência estrutural': 10,
+    });
+    expect(vibranium.efeitos.armaLamina.percentuais).toEqual({ dano: 15 });
+    expect(vibranium.efeitos.armaImpacto.percentuais).toEqual({ dano: 20 });
+    expect(vibranium.efeitos.armaFogo.percentuais).toEqual({ recuo: -25, precisão: 10 });
+    expect(vibranium.efeitos.acessorio.percentuais).toEqual({
+      'resistência contra impactos': 10,
+      'capacidade de PE': 10,
+    });
+    expect(vibranium.efeitos.equipamentoMagico.percentuais).toEqual({
+      'potência de magias de força e cinéticas': 15,
+    });
+    expect(vibranium.efeitos.golem.percentuais).toEqual({
+      'resistência cinética': 35,
+      'vida máxima': 20,
+    });
     expect(vibranium.efeitosNegativos.some((t) => t.includes('sobrecarga'))).toBe(true);
   });
 

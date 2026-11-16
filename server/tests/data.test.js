@@ -454,8 +454,13 @@ describe('armas de fogo novas + escolha da arma no ataque', () => {
 });
 
 describe('STATUS_DEFS — catálogo central de status', () => {
-  it('os 8 status têm os campos do catálogo', () => {
-    const ids = ['queimadura', 'sangramento', 'veneno', 'regeneracao', 'lentidao', 'cegueira', 'fraqueza', 'congelamento'];
+  it('os 10 status têm os campos do catálogo', () => {
+    // 8 status básicos + 2 condições próprias de material acrescentadas depois:
+    // Podridão (Tenebrium) e Contaminação Pandemônica (Prata Pandemônica).
+    const ids = [
+      'queimadura', 'sangramento', 'veneno', 'regeneracao', 'lentidao', 'cegueira', 'fraqueza', 'congelamento',
+      'podridao', 'contaminacaoPandemonica',
+    ];
     expect(Object.keys(STATUS_DEFS).sort()).toEqual(ids.sort());
     for (const id of ids) {
       const s = STATUS_DEFS[id];
@@ -466,6 +471,11 @@ describe('STATUS_DEFS — catálogo central de status', () => {
       expect(s.acumulo, id).toBe('renova');
       expect(Array.isArray(s.remocao) && s.remocao.length > 0, id).toBe(true);
     }
+    // Condições de material: cada uma mantém sua identidade própria.
+    expect(STATUS_DEFS.podridao.sistema).toBe('podridao');
+    expect(STATUS_DEFS.podridao.danoPctVidaMaxima).toBe(20);
+    expect(STATUS_DEFS.contaminacaoPandemonica.sistema).toBe('contaminacaoPandemica');
+    expect(STATUS_DEFS.contaminacaoPandemonica.reducaoCuraPct).toBe(25);
   });
 
   it('durações e intensidades padrão vêm do uso real nos golpes', () => {

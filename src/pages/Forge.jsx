@@ -283,6 +283,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
         // para não duplicar os atributos no cálculo de combate.
         atributosFinais: resultadoCraft.atributosSemGemas,
         materiais: resultadoCraft.equip.materiais,
+        ...(resultadoCraft.equip.vibranium ? { vibranium: resultadoCraft.equip.vibranium } : {}),
         runas: resultadoCraft.equip.runas || [],
         custo: resultadoCraft.custo,
         honrineoAplicado: resultadoCraft.equip.honrineoAplicado,
@@ -777,6 +778,18 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
                         ))}
                       </div>
                     </div>
+
+                    {preview.vibranium && (
+                      <div style={{ marginBottom: 16, padding: 10, border: '1px solid #444', borderRadius: 6, background: '#1e142c' }}>
+                        <h4 style={{ margin: '0 0 8px', color: '#b8a9cf' }}>Vibranium — Pontos de Energia</h4>
+                        <div style={{ fontSize: '0.9em', color: '#eee' }}>
+                          Capacidade: <strong>{preview.vibranium.peMax} PE</strong> · Absorção: <strong>{preview.vibranium.absorcaoPct}%</strong> do dano cinético efetivo
+                        </div>
+                        <div style={{ fontSize: '0.8em', color: '#888' }}>
+                          Papel: {preview.vibranium.papel === 'principal' ? 'primário (100%)' : 'secundário (25%)'} · o PE começa em 0 a cada combate
+                        </div>
+                      </div>
+                    )}
 
                     <div style={{ marginBottom: 16 }}>
                       <h4 style={{ margin: '0 0 8px', color: '#b8a9cf' }}>Custo de Fabricação</h4>

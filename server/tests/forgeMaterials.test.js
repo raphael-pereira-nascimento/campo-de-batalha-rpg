@@ -4,6 +4,7 @@ import {
   calcularCustoFabricacao,
   craftarEquipamento,
   podeUsarFerroEstigio,
+  configVibraniumDaPeca,
   calcularBonusConjunto,
   tipoInventarioEquipamento,
   gemasSlotadasParaSocketedGems,
@@ -255,6 +256,56 @@ describe('forja — Ferro Estígio', () => {
       { treinamentos: ['ferroEstigio'] },
     );
     expect(resultado.ok).toBe(true);
+  });
+});
+
+describe('forja — Vibranium', () => {
+  it('grava a capacidade de PE da peça com Vibranium principal', () => {
+    const vibranium = getMaterialById('vibranium');
+
+    const armadura = configVibraniumDaPeca(vibranium, null, 'armadura');
+    expect(armadura).toMatchObject({
+      materialId: 'vibranium',
+      papel: 'principal',
+      absorcaoPct: 25,
+      qualidade: 'perfeito',
+      peMax: 720,
+    });
+
+    const lamina = configVibraniumDaPeca(vibranium, null, 'armaLamina');
+    expect(lamina.peMax).toBe(120);
+  });
+
+  it('aplica 25% da capacidade quando o Vibranium é secundário', () => {
+    const vibranium = getMaterialById('vibranium');
+    const armadura = configVibraniumDaPeca(getMaterialById('ferro'), vibranium, 'armadura');
+
+    expect(armadura).toMatchObject({
+      papel: 'secundario',
+      peMax: 180,
+    });
+  });
+
+  it('não cria configuração sem Vibranium ou sem massa conhecida', () => {
+    const vibranium = getMaterialById('vibranium');
+    expect(configVibraniumDaPeca(getMaterialById('ferro'), null, 'armadura')).toBeNull();
+    expect(configVibraniumDaPeca(null, null, 'armadura')).toBeNull();
+    expect(configVibraniumDaPeca(vibranium, null, 'inexistente')).toBeNull();
+  });
+
+  it('craftarEquipamento guarda a configuração no item e no resultado', () => {
+    const resultado = craftarEquipamento('armadura_de_placas', 'vibranium', null);
+
+    expect(resultado.ok).toBe(true);
+    expect(resultado.vibranium).toMatchObject({ peMax: 720, absorcaoPct: 25 });
+    expect(resultado.equip.vibranium).toMatchObject({ peMax: 720, absorcaoPct: 25 });
+  });
+
+  it('peça sem Vibranium não recebe a configuração', () => {
+    const resultado = craftarEquipamento('armadura_de_placas', 'ferro', null);
+    expect(resultado.ok).toBe(true);
+    expect(resultado.equip.vibranium).toBeUndefined();
+    expect(resultado.vibranium).toBeNull();
   });
 });
 
