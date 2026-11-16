@@ -15,8 +15,10 @@ import {
   inicializarDurabilidade, calcularDurabilidadeMax, calcularCustoReparoPorPonto,
   calcularCustoReparoCompleto, repararEquipamento, desmontarEquipamento,
   tipoInventarioEquipamento, gemasSlotadasParaSocketedGems,
+  equipamentoTemAcoRunico, validarRunasEquipamento,
 } from '../game/forge.js';
 import { getGemaById, GEM_LIST } from '../game/gems.js';
+import { RUNAS_ELEMENTOS, efeitoRuna } from '../game/runas.js';
 import { api } from '../api.js';
 
 const RARITY_COLOR = {
@@ -61,6 +63,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
   const [materialPrimarioId, setMaterialPrimarioId] = useState(null);
   const [materialSecundarioId, setMaterialSecundarioId] = useState(null);
   const [gemasSlotadas, setGemasSlotadas] = useState([]);
+  const [runasSelecionadas, setRunasSelecionadas] = useState([]);
   const [personagemSelecionado, setPersonagemSelecionado] = useState(null);
   const [resultado, setResultado] = useState(null);
   const [mensagem, setMensagem] = useState('');
@@ -172,7 +175,32 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
     );
   }, [equipSelecionado, equipId, materialPrimarioId, materialSecundarioId, gemasSlotadas]);
 
-  const podeCraftar = walletCents >= custoTotal && !!equipSelecionado && !!materialPrimarioId;
+  const podeCraftar = walletCents >= custoTotal
+    && !!equipSelecionado
+    && !!materialPrimarioId
+    && validacaoRunas.ok;
+
+  // Runas: a regra do Aço Rúnico vem dos materiais escolhidos. A validação não
+  // inventa compatibilidade por elemento; só aplica limite, elementos
+  // diferentes e a potência documentada.
+  const temAcoRunico = useMemo(
+    () => equipamentoTemAcoRunico(materialPrimarioId, materialSecundarioId),
+    [materialPrimarioId, materialSecundarioId],
+  );
+
+  const validacaoRunas = useMemo(
+    () => validarRunasEquipamento(runasSelecionadas, materialPrimarioId, materialSecundarioId),
+    [runasSelecionadas, materialPrimarioId, materialSecundarioId],
+  );
+
+  const alternarRuna = (elemento) => {
+    setRunasSelecionadas((atuais) => {
+      if (atuais.includes(elemento)) return atuais.filter((e) => e !== elemento);
+      const max = temAcoRunico ? 2 : 1;
+      if (atuais.length >= max) return atuais;
+      return [...atuais, elemento];
+    });
+  };
 
   const verificarFerroEstigio = useMemo(() => {
     if (!materialPrimarioId && !materialSecundarioId) return null;
@@ -214,6 +242,10 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
       setMensagem(verificarFerroEstigio.motivo);
       return;
     }
+    if (!validacaoRunas.ok) {
+      setMensagem(validacaoRunas.erros.join(' '));
+      return;
+    }
 
     const resultadoCraft = craftarEquipamento(
       equipId,
@@ -221,6 +253,8 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
       materialSecundarioId,
       gemasSlotadas,
       personagem,
+      null,
+      runasSelecionadas,
     );
 
     if (!resultadoCraft.ok) {
@@ -249,6 +283,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
         // para não duplicar os atributos no cálculo de combate.
         atributosFinais: resultadoCraft.atributosSemGemas,
         materiais: resultadoCraft.equip.materiais,
+        runas: resultadoCraft.equip.runas || [],
         custo: resultadoCraft.custo,
         honrineoAplicado: resultadoCraft.equip.honrineoAplicado,
         gemasSlotadas: resultadoCraft.equip.gemasSlotadas || [],
@@ -607,9 +642,67 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
                   ))}
                 </div>
 
+                <h3 style={{ marginTop: 0, color: '#b8a9cf' }}>5. Runas Elementais</h3>
+                <p style={{ fontSize: '0.85em', color: '#b8a9cf', margin: '0 0 8px' }}>
+                  Cada runa ocupa um encaixe de pedra preciosa. Sem Aço Rúnico: 1 runa com efeito
+                  reduzido em 50%. Com Aço Rúnico: 2 runas, efeito +50%, sempre de elementos
+                  diferentes.
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 8, marginBottom: 8 }}>
+                  {RUNAS_ELEMENTOS.map((el) => {
+                    const ativa = runasSelecionadas.includes(el.id);
+                    return (
+                      <button
+                        key={el.id}
+                        onClick={() => alternarRuna(el.id)}
+                        style={{
+                          padding: '7px',
+                          border: '1px solid ' + (ativa ? '#ffd166' : '#444'),
+                          borderRadius: 6,
+                          background: ativa ? '#4a3a6e' : '#1e142c',
+                          color: ativa ? '#ffd166' : '#eee',
+                          cursor: 'pointer',
+                          fontSize: '0.8em',
+                        }}
+                      >
+                        {ativa ? '✦ ' : ''}{el.nome}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p style={{ fontSize: '0.8em', color: '#888', margin: '0 0 8px' }}>
+                  {temAcoRunico
+                    ? 'Aço Rúnico detectado: até 2 runas simultâneas.'
+                    : 'Sem Aço Rúnico: apenas 1 runa, com efeito reduzido.'}
+                  {' '}O efeito individual de cada runa continua <strong>pendente</strong> de
+                  definição oficial; a prévia abaixo é a proposta genérica, não oficial.
+                </p>
+                {!validacaoRunas.ok && (
+                  <div style={{ padding: 8, border: '1px solid #ff5c8a', borderRadius: 6, background: '#3a1a2a', marginBottom: 8, fontSize: '0.8em', color: '#ff5c8a' }}>
+                    {validacaoRunas.erros.join(' ')}
+                  </div>
+                )}
+                {runasSelecionadas.length > 0 && (
+                  <div style={{ padding: 10, border: '1px solid #444', borderRadius: 6, background: '#1e142c', marginBottom: 16, fontSize: '0.8em', color: '#b8a9cf' }}>
+                    {runasSelecionadas.map((elemento) => {
+                      const fx = efeitoRuna(elemento, temAcoRunico);
+                      const nome = RUNAS_ELEMENTOS.find((e) => e.id === elemento)?.nome || elemento;
+                      if (!fx) return null;
+                      return (
+                        <div key={elemento} style={{ marginBottom: 4 }}>
+                          <strong style={{ color: '#ffd166' }}>{nome}</strong>
+                          {' — '}+{fx.passivo.bonusDanoPct}% dano, +{fx.passivo.resistenciaPct}%
+                          resistência, {fx.ativo.chancePct}% de chance por {fx.ativo.duracaoTurnos} turnos.
+                          <em style={{ color: '#888' }}> (provisório, não oficial)</em>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {personagem && (
                   <>
-                    <h3 style={{ marginTop: 0, color: '#b8a9cf' }}>5. Honríneo (adaptar ao usuário)</h3>
+                    <h3 style={{ marginTop: 0, color: '#b8a9cf' }}>6. Honríneo (adaptar ao usuário)</h3>
                     <p style={{ fontSize: '0.85em', color: '#b8a9cf', margin: '0 0 8px' }}>
                       Adapta o equipamento ao atributo principal de {personagem.nome}.
                     </p>

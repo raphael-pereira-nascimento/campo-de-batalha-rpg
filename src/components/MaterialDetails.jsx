@@ -139,7 +139,7 @@ function EfeitoBloco({ chave, info, material }) {
         )}
       </div>
 
-      {!efeito && <span className="material-pendente-texto">Efeito pendente para esta categoria.</span>}
+      {!efeito && <span className="material-pendente-texto">Não definido.</span>}
 
       {efeito && (
         <>

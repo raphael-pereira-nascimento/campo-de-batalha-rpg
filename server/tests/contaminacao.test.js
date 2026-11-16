@@ -12,6 +12,9 @@ import {
   reduzirPotenciaCura,
   descreverResistenciaACorrupcao,
   descreverContaminacao,
+  criarStatusContaminacao,
+  criarEfeitoContaminacaoProfana,
+  criarEfeitoNucleoPandemico,
 } from '../../src/game/contaminacao.js';
 
 describe('Contaminação Pandemônica — identidade', () => {
@@ -127,5 +130,44 @@ describe('Contaminação Pandemônica — cura e descrição', () => {
     const inicio = iniciarContaminacao('municaoContaminante');
     expect(descreverContaminacao(inicio.estado)).toContain('Munição Contaminante');
     expect(descreverContaminacao('inexistente')).toBe('Contaminação Pandemônica');
+  });
+});
+
+describe('Contaminação Pandemônica — aplicações oficiais', () => {
+  it('prepara a Contaminação Profana sem ativá-la automaticamente', () => {
+    const efeito = criarEfeitoContaminacaoProfana();
+    expect(efeito.tipo).toBe(CONTAMINACAO_ID);
+    expect(efeito.aplicacaoId).toBe('contaminacaoProfana');
+    expect(efeito.automatico).toBe(false);
+    expect(efeito.chance).toBe(0.2);
+    expect(efeito.turnos).toBe(2);
+    expect(efeito.gatilho).toContain('armadura');
+    expect(efeito.motivoPendente).toContain('ainda não conectada');
+  });
+
+  it('prepara o Núcleo Pandemônico sem ativá-lo automaticamente', () => {
+    const efeito = criarEfeitoNucleoPandemico();
+    expect(efeito.tipo).toBe(CONTAMINACAO_ID);
+    expect(efeito.aplicacaoId).toBe('nucleoPandemico');
+    expect(efeito.automatico).toBe(false);
+    expect(efeito.turnos).toBe(2);
+    expect(efeito.reducaoPotenciaCuraProtecao).toBe(25);
+    expect(efeito.gatilho).toContain('golem');
+  });
+
+  it('mapeia a Ruptura Profana apenas para acertos críticos', () => {
+    const aplicacao = getAplicacaoContaminacao('rupturaProfana');
+    expect(aplicacao.chance).toBe(30);
+    expect(aplicacao.duracao).toBe(2);
+    expect(aplicacao.somenteCritico).toBe(true);
+    expect(aplicacao.interrompeCuraProtecao).toBe(true);
+
+    const status = criarStatusContaminacao('rupturaProfana');
+    expect(status.tipo).toBe(CONTAMINACAO_ID);
+    expect(status.chance).toBe(0.3);
+    expect(status.turnos).toBe(2);
+    expect(status.somenteCritico).toBe(true);
+    expect(status.interrompeCuraProtecao).toBe(true);
+    expect(status.origem).toBe('Ruptura Profana');
   });
 });

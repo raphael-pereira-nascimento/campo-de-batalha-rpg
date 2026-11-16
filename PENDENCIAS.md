@@ -1,6 +1,7 @@
 # Pendências — Materiais, Metais e Podridão
 
-Atualizado em 12/11/2026 — Etapa 8 (complemento do catálogo e integrações da forja).
+Atualizado em 15/11/2026 — Etapa 9 (runas na forja, Corrupção com API/UI,
+imunidade do Tenebrium e preparação de Contaminação Profana/Núcleo Pandemônico).
 
 Este arquivo separa o que já foi **aprovado**, o que foi implementado como
 **provisório**, o que continua **pendente** e o que é apenas **sugestão**.
@@ -24,7 +25,7 @@ Legenda:
 
 ---
 
-## Índice das decisões D-01 a D-35
+## Índice das decisões D-01 a D-43
 
 | Código | Assunto | Status |
 | --- | --- | --- |
@@ -63,6 +64,14 @@ Legenda:
 | D-33 | Runas elementais com 17 elementos e regras de uso | Efeito genérico aprovado; identidades pendentes |
 | D-34 | Metal das Almas duplica a Pedra da Alma, sem duplicar regras de combate | Implementado |
 | D-35 | Integração de Contaminação e runas ao combate | Armas de Contaminação implementadas; runas pendentes |
+| D-36 | Fichas individuais das 17 runas | Estrutura criada; efeito individual pendente |
+| D-37 | Seleção e persistência de runas na forja | Implementado; compatibilidade oficial pendente |
+| D-38 | Imunidade à Podridão pela armadura de Tenebrium | Implementado; alcance a confirmar |
+| D-39 | Persistência, API, interface e histórico da Corrupção | Implementado; “Consumido” pendente |
+| D-40 | Estado “Consumido” controlado pelo mestre | Estrutura implementada; regras adicionais pendentes |
+| D-41 | Contaminação Profana e Núcleo Pandemônico | Estrutura descritiva preparada; automação pendente |
+| D-42 | Ruptura Profana em acertos críticos | Implementado; alcance a confirmar |
+| D-43 | Categorias de efeito sem definição exibidas como “Não definido” | Implementado |
 
 ---
 
@@ -301,7 +310,62 @@ ter interpretação mecânica explícita.
 Ainda não automatizado nesta etapa: recuperação/API/UI da Corrupção, seleção e
 armazenamento de runas na forja, aplicações reativas (armadura de Tenebrium,
 aura de golem), identidades individuais das runas e o comportamento completo do
-estado “Consumido”.
+estado “Consumido”. **(Superado pela Etapa 9 — ver 1.6.)**
+
+### 1.6 Implementações da Etapa 9 (D-36 a D-43)
+
+Nenhuma regra nova foi criada nesta etapa: as estruturas abaixo apenas expõem,
+validam ou persistem o que já estava aprovado, e deixam explícito o que continua
+pendente.
+
+- **D-36 — Fichas individuais das 17 runas:** `RUNAS_FICHAS`, `fichaRuna` e
+  `descreverFichaRuna` em `src/game/runas.js` organizam uma ficha por elemento
+  (nome, identidade, regra de Aço Rúnico, efeito genérico). Como os efeitos
+  individuais não existem no material recuperado, `efeitoIndividual` permanece
+  `null`, `efeitoOficial` é `false` e `status` é `'pendente'`. O template
+  genérico continua marcado como **não oficial**.
+- **D-37 — Runas na forja:** `equipamentoTemAcoRunico`, `validarRunasEquipamento`
+  e `normalizarRunasParaItem` em `src/game/forge.js`; `craftarEquipamento` aceita
+  `runas`, valida limite (1 sem Aço Rúnico, 2 com), elementos diferentes e
+  persiste `runas` no item. `Forge.jsx` oferece a seleção das 17 runas e mostra a
+  prévia genérica com aviso de que não é oficial. O servidor
+  (`sanitizarItemCraftado`) deriva o Aço Rúnico dos materiais e rejeita runas
+  inválidas. Nenhuma compatibilidade runa↔equipamento foi inventada.
+- **D-38 — Imunidade do Tenebrium:** `TENEBRIUM_RESTRICAO_ARMADURA_INTEIRA`,
+  `TENEBRIUM_IMUNIDADE_PODRIDAO` e os helpers `materialConcedeImunidadePodridao`,
+  `itemConcedeImunidadePodridao`, `equipamentoConcedeImunidadePodridao` e
+  `participanteConcedeImunidadePodridao` em `src/game/podridao.js`. A imunidade é
+  **derivada do equipamento vestido**: vale enquanto a armadura craftada tiver
+  Tenebrium como material primário ou secundário e deixa de valer ao trocá-la.
+  Aplica-se a personagens, não a monstros, e **não** altera a restrição de que
+  Tenebrium não pode ser usado na armadura inteira.
+- **D-39 — Corrupção persistida com API e interface:** rotas
+  `GET/POST /api/characters/:id/corrupcao` em `server/src/index.js`;
+  `registrarHistoricoCorrupcao`/`getHistoricoCorrupcao` e `setCorrupcao` com
+  tipo/motivo em `server/src/services/characters.js`; migração
+  `0011_corrupcao_historico.sql`; `api.getCorrupcao`/`api.setCorrupcao`
+  (online e offline com clamp 0–100); painel em `CharacterSheet.jsx` com pontos,
+  barra, estágio, penalidades, chance, potência, aviso de mudança de estágio,
+  histórico e controles do mestre.
+- **D-40 — “Consumido”:** a ficha mostra o aviso de que o mestre assume
+  temporariamente o controle e que **não** é morte automática. O botão “Marcar
+  Consumido (100)” apenas define a pontuação; duração, cura, consequências
+  permanentes e recuperação continuam pendentes (ver D-40 na seção 3).
+- **D-41 — Contaminação Profana e Núcleo Pandemônico:** `criarEfeitoContaminacaoProfana`
+  e `criarEfeitoNucleoPandemico` em `src/game/contaminacao.js` descrevem as
+  aplicações com `automatico: false`. Nenhum dano, chance ou efeito novo foi
+  ativado; o combate continua aplicando apenas Ferida Pandemônica e Munição
+  Contaminante.
+- **D-42 — Ruptura Profana:** `CONTAMINACAO_POR_CATEGORIA.armaImpacto` em
+  `src/game/forge.js` deriva `rupturaProfana` (30% de chance, 2 turnos,
+  `somenteCritico`, interrompe cura/proteção). O `battleManager` só aplica quando
+  o resultado do ataque é crítico.
+- **D-43 — “Não definido”:** `MaterialDetails.jsx` passou a exibir “Não definido.”
+  quando a categoria não tem efeito, em vez de “Efeito pendente para esta
+  categoria.”, sem criar efeitos para preencher a tabela.
+- **Testes:** `runas.test.js`, `podridao.test.js`, `contaminacao.test.js` e
+  `forgeMaterials.test.js` foram estendidos. O harness de navegador passou
+  **261/261** testes.
 
 ---
 
@@ -451,6 +515,81 @@ criador antes de virarem regra definitiva.
   repositório ou viram ferramentas locais descartáveis; o envio dos commits ao
   remoto também depende do criador.
 
+#### D-36 — Efeitos individuais das 17 runas
+
+- **O que falta:** identidade mecânica de cada runa (efeito passivo, ativação,
+  alvo, duração, custo, restrições) e eventual compatibilidade com categorias de
+  equipamento.
+- **Por que é necessário:** sem esses dados, a forja só pode aplicar o template
+  genérico **não oficial**; qualquer valor por elemento seria invenção.
+- **Onde será usado:** `src/game/runas.js` (`RUNAS_FICHAS`), `Forge.jsx`,
+  `src/game/forge.js` e o motor de combate.
+- **Afetados:** ficha individual, prévia da forja, persistência do item e
+  aplicação automática em combate.
+- **Decisão necessária:** fornecer o texto/valores oficiais ou autorizar
+  explicitamente o template genérico como regra oficial.
+
+#### D-37 — Compatibilidade entre runas e equipamentos
+
+- **O que falta:** lista oficial de quais categorias aceitam quais runas e se
+  existe custo/requisito além do encaixe de pedra preciosa.
+- **Por que é necessário:** a implementação atual valida apenas limite, elementos
+  diferentes e Aço Rúnico; não inventa compatibilidade.
+- **Onde será usado:** `validarRunasEquipamento`, `Forge.jsx` e
+  `sanitizarItemCraftado`.
+- **Afetados:** seleção na forja e itens já persistidos.
+- **Decisão necessária:** definir a matriz runa × categoria (ou confirmar que
+  qualquer runa cabe em qualquer equipamento com encaixe).
+
+#### D-38 — Alcance da imunidade do Tenebrium
+
+- **O que falta:** definir se a imunidade cobre **toda** Podridão ou apenas a
+  causada por Tenebrium; se vale para golens, monstros ou apenas personagens; e
+  como interage com armas de Tenebrium.
+- **Por que é necessário:** a regra aprovada garante imunidade à Podridão, mas a
+  documentação recuperada não detalha as fontes cobertas.
+- **Onde será usado:** `itemConcedeImunidadePodridao`,
+  `participanteConcedeImunidadePodridao` e `_applyStatus` do `battleManager`.
+- **Afetados:** combate online/offline e ficha de equipamento.
+- **Decisão necessária:** confirmar o escopo da imunidade sem alterar a
+  restrição de não usar Tenebrium na armadura inteira.
+
+#### D-40 — Comportamento completo de “Consumido”
+
+- **O que falta:** duração, condições de recuperação, consequências permanentes,
+  quem controla o personagem, o que acontece fora de combate e se há morte
+  possível por outras causas.
+- **Por que é necessário:** a única regra aprovada é que o mestre assume
+  temporariamente o controle e que **não** há morte automática.
+- **Onde será usado:** painel de Corrupção em `CharacterSheet.jsx`, API de
+  Corrupção e eventual estado de combate.
+- **Afetados:** personagem, histórico, combate e permissões do mestre.
+- **Decisão necessária:** aprovar as regras adicionais; até lá, a implementação
+  mantém apenas o controle manual e o aviso.
+
+#### D-41 — Contaminação Profana e Núcleo Pandemônico
+
+- **O que falta:** gatilho exato da Contaminação Profana em armadura, progressão
+  por exposição, remoção/purificação, materiais e instalação do Núcleo
+  Pandemônico, custo de ativação, efeitos e limitações no golem.
+- **Por que é necessário:** existem descrições oficiais parciais, mas não há
+  números ou condições suficientes para automação.
+- **Onde será usado:** `src/game/contaminacao.js`, `forge.js`, ficha de
+  equipamento e futuro sistema de golens.
+- **Afetados:** combate, forja, itens e golens.
+- **Decisão necessária:** fornecer os detalhes oficiais; as estruturas
+  permanecem com `automatico: false`.
+
+#### D-42 — Condições da Ruptura Profana
+
+- **O que falta:** confirmar se a Ruptura Profana existe apenas em armas de
+  impacto e apenas em acertos críticos, e se outros equipamentos podem aplicá-la.
+- **Por que é necessário:** a implementação atual segue exatamente o bloco
+  recuperado (30%, 2 turnos, somente crítico), sem ampliar o alcance.
+- **Onde será usado:** `CONTAMINACAO_POR_CATEGORIA` e `_applyStatus`.
+- **Afetados:** armas de impacto e testes de forja/combate.
+- **Decisão necessária:** confirmar o alcance ou indicar outras categorias.
+
 ### 3.2 Dados oficiais ainda ausentes
 
 Situação atual do catálogo:
@@ -507,23 +646,29 @@ O que falta preencher com o criador/documentação:
 - **Receitas:** nenhuma receita nova de equipamento foi aprovada. A
   compatibilidade existe no schema, mas nenhum material real declara uma lista
   oficial de categorias compatíveis.
-- **Armadura de Tenebrium:** a imunidade documentada no PDF ainda não foi
-  implementada no combate (permanece descritiva).
+- **Armadura de Tenebrium:** a imunidade documentada no PDF foi implementada
+  como derivada do equipamento (D-38). A armadura craftada com Tenebrium no
+  primário ou no secundário concede imunidade à Podridão enquanto estiver
+  equipada. A restrição de não usar Tenebrium na armadura inteira continua
+  valendo. Fontes da Podridão cobertas pela imunidade, interação com armas de
+  Tenebrium e efeito em golens continuam pendentes.
 - **Podridão no combate:** a Podridão de arma já é aplicada por Tenebrium. A
   exposição por turnos, a progressão de estágios e o tratamento continuam
   disponíveis como módulo puro, sem gatilho automático no `battleManager`.
-- **Contaminação Pandemônica no combate (D-35):** armas de lâmina e de fogo já
-  aplicam Ferida Pandemônica e Munição Contaminante, com dano sobre a vida
-  máxima original e redução de cura. Contaminação Profana (armadura), Núcleo
-  Pandemônico (golem) e Ruptura Profana (crítico) ainda não têm automação
-  completa.
-- **Corrupção no combate (D-29):** as penalidades do estágio já entram em
-  `_finalAttrs` e a pontuação é persistida. Faltam rota de API, exibição na ficha
-  do cliente e definição do comportamento completo de “Consumido”.
-- **Runas no combate (D-35):** o efeito genérico aprovado existe em
-  `efeitoRuna`/`modificadoresRuna`, mas as identidades individuais das 17 runas
-  não foram definidas. Seleção/armazenamento na forja e aplicação automática
-  continuam pendentes.
+- **Contaminação Pandemônica no combate (D-35/D-41):** armas de lâmina e de fogo
+  já aplicam Ferida Pandemônica e Munição Contaminante, com dano sobre a vida
+  máxima original e redução de cura. A Ruptura Profana é aplicada em acertos
+  críticos (D-42). Contaminação Profana (armadura) e Núcleo Pandemônico (golem)
+  têm apenas estrutura descritiva com `automatico: false`; a automação depende
+  das decisões ainda abertas em D-41.
+- **Corrupção no combate (D-29/D-39):** as penalidades do estágio já entram em
+  `_finalAttrs`, a pontuação é persistida, as rotas de API existem, a ficha exibe
+  pontos/estágio/penalidades/histórico e o mestre pode ajustar. O comportamento
+  completo de “Consumido” continua pendente (D-40).
+- **Runas no combate (D-35/D-37):** o efeito genérico aprovado existe em
+  `efeitoRuna`/`modificadoresRuna`; a forja permite selecionar, validar e
+  persistir as runas. As identidades e os efeitos individuais das 17 runas
+  continuam pendentes, então não há aplicação automática por elemento no combate.
 - **Paridade offline/online:** a forja e o combate têm caminhos separados; falta
   garantir que todos os efeitos valham nos dois. Na Etapa 8, o salvamento do
   item craftado, a dedução da carteira, a preferência pelo item do inventário e
@@ -540,10 +685,14 @@ O que falta preencher com o criador/documentação:
   preciso usar `npm.cmd`. Nesse ambiente, **421/421 testes unitários** passaram
   (`npm.cmd run test --prefix server`) e o build de produção
   (`npm.cmd run build`) concluiu sem erro.
-- Resultado do harness neste ambiente após a integração dos efeitos:
+- Resultado do harness após a integração dos efeitos (Etapa 8):
   **242/242 testes passam**, sem falhas, incluindo os novos testes de
   `combatEffects`, perfil mecânico, status derivados da forja e efeito genérico
   das runas.
+- Resultado do harness na Etapa 9: **261/261 testes passam**, sem falhas e sem
+  erros no console, incluindo fichas de runas, validação/persistência de runas na
+  forja, imunidade do Tenebrium, Contaminação Profana/Núcleo Pandemônico e
+  Ruptura Profana em crítico.
 - Nesta rodada, `npm run test:unit`, `npm run test:e2e` e `npm run build` não
   puderam ser executados porque `node`/`npm` continuam fora do `PATH`; a
   validação foi feita pelo bundle do esbuild e pelo harness de navegador.
@@ -663,6 +812,29 @@ Nenhuma regra, fórmula ou valor oficial foi alterado.
 | Efeitos gerais | `getEfeitoPorEquipamento` combina `efeitosGerais` com o efeito da categoria, preserva o fallback de `efeitos.geral` e mantém golens fora desse fallback; `MaterialDetails` exibe os modificadores resultantes e rotula `efeitosGerais` como efeito geral |
 | Testes | 421/421 testes unitários passavam na auditoria da Etapa 8; o harness local valida 200/200, incluindo 6 testes novos de resolução de efeitos por equipamento |
 
+### 3.9 Correções e integrações aplicadas na Etapa 9
+
+Nenhuma regra, fórmula ou valor oficial foi alterado. As alterações apenas
+expõem, validam ou persistem o que já estava aprovado.
+
+| Área | Alteração |
+| --- | --- |
+| Fichas de runas | `RUNAS_FICHAS`, `fichaRuna` e `descreverFichaRuna` em `src/game/runas.js`; efeito individual permanece `null` e `status: 'pendente'` |
+| Runas na forja | `equipamentoTemAcoRunico`, `validarRunasEquipamento` e `normalizarRunasParaItem` em `src/game/forge.js`; `craftarEquipamento` valida e persiste `runas` |
+| UI da forja | `Forge.jsx` seleciona as 17 runas, aplica limite por Aço Rúnico, bloqueia elementos repetidos e exibe a prévia genérica marcada como provisória |
+| Servidor — runas | `sanitizarItemCraftado` deriva Aço Rúnico dos materiais e rejeita runas inválidas |
+| Imunidade do Tenebrium | Constantes e helpers em `src/game/podridao.js`; imunidade aplicada em `_applyStatus` nas duas cópias de `battleManager.js` |
+| Contaminação Profana | `criarEfeitoContaminacaoProfana` com `automatico: false` em `src/game/contaminacao.js` |
+| Núcleo Pandemônico | `criarEfeitoNucleoPandemico` com `automatico: false` em `src/game/contaminacao.js` |
+| Ruptura Profana | `armaImpacto: 'rupturaProfana'` em `CONTAMINACAO_POR_CATEGORIA`; status 30% / 2 turnos / `somenteCritico` |
+| Corrupção — persistência | `setCorrupcao` com tipo/motivo, `registrarHistoricoCorrupcao` e `getHistoricoCorrupcao` em `server/src/services/characters.js` |
+| Corrupção — migração | `server/src/db/migrations/0011_corrupcao_historico.sql` cria `character_corruption_history` com índice |
+| Corrupção — API | Rotas `GET/POST /api/characters/:id/corrupcao` com checagem de dono e suporte a `pontos`, `ganho` e `recuperacao` |
+| Corrupção — cliente | `api.getCorrupcao`/`api.setCorrupcao` online/offline com clamp 0–100 e histórico local |
+| Corrupção — UI | Painel em `CharacterSheet.jsx` com pontos, barra, estágio, penalidades, chance, potência, aviso de mudança, histórico e controles do mestre |
+| MaterialDetails | Categorias sem efeito exibem “Não definido.” |
+| Testes | `runas.test.js`, `podridao.test.js`, `contaminacao.test.js` e `forgeMaterials.test.js` estendidos; harness **261/261** |
+
 ---
 
 ## 4. Sugestão
@@ -686,10 +858,11 @@ Nenhuma regra, fórmula ou valor oficial foi alterado.
    materiais/gemas, sem duplicar regras.
 7. **Usar `compatibilidade` de verdade** quando as receitas oficiais forem
    definidas, em vez de manter o campo apenas no schema.
-8. **Integrar a Corrupção do Ruidium ao combate** (D-29): as penalidades de
-   estágio já entram em `_finalAttrs` e a pontuação é persistida. Faltam rota de
-   API, exibição na ficha do cliente, gatilhos de ganho/recuperação e a potência
-   mágica adicional nas habilidades.
+8. **Integrar a Corrupção do Ruidium ao combate** (D-29/D-39): as penalidades
+   de estágio entram em `_finalAttrs`; a pontuação é persistida; as rotas de API,
+   o painel da ficha e o histórico já existem. Faltam gatilhos automáticos de
+   ganho/recuperação, a potência mágica adicional nas habilidades e o
+   comportamento completo de “Consumido” (D-40).
 9. **Decidir a transição dos drops de mineração** dos `id`s refinados para os
    minérios brutos, com migração dos veios existentes.
 10. **Automatizar a validação** em CI com `npm test` e `npm run build` em um
@@ -704,12 +877,13 @@ Nenhuma regra, fórmula ou valor oficial foi alterado.
 13. **Revisar a ordem das pendências gerais:** P-01, P-02 e P-03 (nível e XP)
     primeiro; depois P-04 e P-05 (chefes e masmorras); em seguida P-06, P-07 e
     P-09 (equipamento, inventário e desgaste); por fim P-08, P-10 a P-18.
-14. **Integrar a Contaminação Pandemônica ao combate** (D-35): Ferida
+14. **Integrar a Contaminação Pandemônica ao combate** (D-35/D-41/D-42): Ferida
     Pandemônica e Munição Contaminante já são aplicadas por armas, com dano
-    sobre a vida máxima original e redução de cura. Faltam Contaminação Profana
-    (armadura), Núcleo Pandemônico (golem) e automação completa da Ruptura
-    Profana.
-15. **Definir e integrar os efeitos das 17 runas** (D-33/D-35): cada runa ainda
-    não tem efeito individual na documentação recuperada. O template genérico
-    não oficial (+10% de dano/resistência e 20% de chance por 2 turnos) já
-    existe; faltam as identidades, os encaixes na forja e a aplicação em combate.
+    sobre a vida máxima original e redução de cura; a Ruptura Profana já é
+    aplicada em crítico. Faltam Contaminação Profana (armadura) e Núcleo
+    Pandemônico (golem), que dependem da decisão D-41.
+15. **Definir e integrar os efeitos das 17 runas** (D-33/D-36/D-37): cada runa
+    ainda não tem efeito individual na documentação recuperada. O template
+    genérico não oficial (+10% de dano/resistência e 20% de chance por 2 turnos)
+    já existe; a forja já seleciona, valida e persiste as runas. Faltam as
+    identidades e a aplicação por elemento no combate.

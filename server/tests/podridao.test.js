@@ -10,6 +10,12 @@ import {
   tratarPodridao,
   rolarPodridaoArma,
   descreverEstagio,
+  TENEBRIUM_RESTRICAO_ARMADURA_INTEIRA,
+  TENEBRIUM_IMUNIDADE_PODRIDAO,
+  materialConcedeImunidadePodridao,
+  itemConcedeImunidadePodridao,
+  equipamentoConcedeImunidadePodridao,
+  participanteConcedeImunidadePodridao,
 } from '../../src/game/podridao.js';
 
 describe('Podridão — estágios', () => {
@@ -269,5 +275,64 @@ describe('Podridão — efeito das armas (documento oficial)', () => {
     expect(texto).toContain('45%');
     expect(texto).toContain('25%');
     expect(descreverEstagio(null)).toContain('inválido');
+  });
+});
+
+describe('Tenebrium — restrição e imunidade à Podridão', () => {
+  it('preserva a restrição de não usar Tenebrium na armadura inteira', () => {
+    expect(TENEBRIUM_RESTRICAO_ARMADURA_INTEIRA.materialId).toBe('tenebrium');
+    expect(TENEBRIUM_RESTRICAO_ARMADURA_INTEIRA.podeUsarNaArmaduraInteira).toBe(false);
+    expect(TENEBRIUM_IMUNIDADE_PODRIDAO.tipo).toBe('podridao');
+  });
+
+  it('reconhece Tenebrium apenas como material de armadura', () => {
+    expect(materialConcedeImunidadePodridao('tenebrium')).toBe(true);
+    expect(materialConcedeImunidadePodridao('Tenebrium')).toBe(true);
+    expect(materialConcedeImunidadePodridao('acoRunico')).toBe(false);
+    expect(materialConcedeImunidadePodridao(null)).toBe(false);
+  });
+
+  it('concede imunidade à armadura craftada com Tenebrium em qualquer posição', () => {
+    expect(itemConcedeImunidadePodridao({
+      tipo: 'armadura',
+      materiais: { primario: { id: 'tenebrium' }, secundario: null },
+    })).toBe(true);
+    expect(itemConcedeImunidadePodridao({
+      tipo: 'armadura',
+      materiais: { primario: { id: 'ferro' }, secundario: { id: 'tenebrium' } },
+    })).toBe(true);
+  });
+
+  it('não concede imunidade a armas, acessórios ou itens sem Tenebrium', () => {
+    expect(itemConcedeImunidadePodridao({
+      tipo: 'arma',
+      materiais: { primario: { id: 'tenebrium' } },
+    })).toBe(false);
+    expect(itemConcedeImunidadePodridao({
+      tipo: 'acessorio',
+      materiais: { primario: { id: 'tenebrium' } },
+    })).toBe(false);
+    expect(itemConcedeImunidadePodridao({
+      tipo: 'armadura',
+      materiais: { primario: { id: 'ferro' } },
+    })).toBe(false);
+  });
+
+  it('deriva a imunidade do equipamento e a remove ao trocar a armadura', () => {
+    const equipamento = {
+      armadura: { tipo: 'armadura', materiais: { primario: { id: 'tenebrium' } } },
+    };
+    expect(equipamentoConcedeImunidadePodridao(equipamento)).toBe(true);
+    expect(equipamentoConcedeImunidadePodridao({ armadura: { tipo: 'armadura', materiais: { primario: { id: 'ferro' } } } })).toBe(false);
+    expect(equipamentoConcedeImunidadePodridao({})).toBe(false);
+  });
+
+  it('aplica a imunidade ao participante, mas não a monstros', () => {
+    const equipamento = {
+      armadura: { tipo: 'armadura', materiais: { primario: { id: 'tenebrium' } } },
+    };
+    expect(participanteConcedeImunidadePodridao({ equipment: equipamento })).toBe(true);
+    expect(participanteConcedeImunidadePodridao({ equipment: equipamento, isMonster: true })).toBe(false);
+    expect(participanteConcedeImunidadePodridao(null)).toBe(false);
   });
 });

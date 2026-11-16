@@ -13,6 +13,9 @@ import {
   RUNAS_EFEITO_BASE,
   efeitoRuna,
   modificadoresRuna,
+  RUNAS_FICHAS,
+  fichaRuna,
+  descreverFichaRuna,
 } from '../../src/game/runas.js';
 
 describe('Runas elementais — dados aprovados', () => {
@@ -158,5 +161,43 @@ describe('Runas elementais — efeito genérico aprovado', () => {
     expect(bonus.valor).toBe(15);
     expect(resistencia.valor).toBe(15);
     expect(chance.valor).toBe(30);
+  });
+});
+
+describe('Runas elementais — fichas individuais', () => {
+  it('tem uma ficha para cada uma das 17 runas', () => {
+    expect(RUNAS_FICHAS).toHaveLength(17);
+    expect(RUNAS_FICHAS.map((f) => f.id)).toEqual(RUNAS_ELEMENTOS.map((e) => e.id));
+  });
+
+  it('mantém o efeito individual como pendente, sem inventar valores', () => {
+    for (const ficha of RUNAS_FICHAS) {
+      expect(ficha.nome).toContain('Runa de');
+      expect(ficha.efeitoIndividual).toBeNull();
+      expect(ficha.efeitoOficial).toBe(false);
+      expect(ficha.status).toBe('pendente');
+    }
+  });
+
+  it('combina identidade, regra e efeito genérico na ficha', () => {
+    const ficha = fichaRuna('fogo', true);
+    expect(ficha.elemento).toBe('fogo');
+    expect(ficha.elementoNome).toBe('Fogo');
+    expect(ficha.regra.maxRunas).toBe(2);
+    expect(ficha.regra.multiplicadorEfeito).toBe(1.5);
+    expect(ficha.efeitoGenerico.oficial).toBe(false);
+    expect(ficha.efeitoGenerico.passivo.bonusDanoPct).toBe(15);
+    expect(ficha.efeitoGenerico.ativo.chancePct).toBe(30);
+  });
+
+  it('não cria ficha para elemento desconhecido', () => {
+    expect(fichaRuna('inexistente')).toBeNull();
+    expect(descreverFichaRuna('inexistente')).toBe('Runa desconhecida.');
+  });
+
+  it('descreve a ficha sem apresentar o efeito individual como oficial', () => {
+    const texto = descreverFichaRuna('agua', false);
+    expect(texto).toContain('Runa de Água');
+    expect(texto).toContain('pendente');
   });
 });

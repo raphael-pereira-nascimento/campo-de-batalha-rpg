@@ -4,6 +4,11 @@ import { ATTRIBUTES, ATTRIBUTE_NAMES } from '../config.js';
 import { GEM_RARITY, getGemaById } from '../game/gems.js';
 import { cargaMaxima, VOO, armasDeEquipamento, categoriaDeArma, ARMAS_SLOTS, ARMA_CATEGORIA_INFO, ALVO_LABEL } from '../game/sistema.js';
 import { deriveStats, skillFromSpell } from '../game/data.js';
+import {
+  calcularEstadoCorrupcao,
+  CORRUPCAO_GANHOS,
+  CORRUPCAO_RECUPERACOES,
+} from '../game/corrupcao.js';
 import StatBar from './StatBar.jsx';
 
 const CLASS_ICONS = {
@@ -25,6 +30,15 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
   const [dragGem, setDragGem] = useState(null); // gemId sendo arrastada
   const [dropSlot, setDropSlot] = useState(null); // { equipSlot, slotIndex } alvo
 
+  // Corrupção do Ruidium (0–100). O estágio é sempre derivado dos pontos.
+  const [corrupcaoEstado, setCorrupcaoEstado] = useState(
+    () => calcularEstadoCorrupcao(character.corrupcao || 0),
+  );
+  const [corrupcaoHistorico, setCorrupcaoHistorico] = useState([]);
+  const [corrupcaoInput, setCorrupcaoInput] = useState(String(character.corrupcao || 0));
+  const [corrupcaoAberto, setCorrupcaoAberto] = useState(false);
+  const [avisoCorrupcao, setAvisoCorrupcao] = useState('');
+
   useEffect(() => {
     api
       .listCustomEquipment()
@@ -40,6 +54,26 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
     // Também recarrega quando o equipamento muda: trocar de arma devolve as
     // gemas encaixadas ao inventário, e a lista precisa refletir isso.
   }, [character.id, character.equipment]);
+
+  // Carrega Corrupção persistida e o histórico. O estágio local é recalculado
+  // imediatamente para a ficha não exibir um valor desatualizado enquanto a
+  // requisição não retorna.
+  useEffect(() => {
+    setCorrupcaoEstado(calcularEstadoCorrupcao(character.corrupcao || 0));
+    setCorrupcaoInput(String(character.corrupcao || 0));
+    let ativo = true;
+    api
+      .getCorrupcao(character.id)
+      .then((d) => {
+        if (!ativo) return;
+        if (d.estado) setCorrupcaoEstado(d.estado);
+        if (Array.isArray(d.historico)) setCorrupcaoHistorico(d.historico);
+      })
+      .catch(() => {});
+    return () => {
+      ativo = false;
+    };
+  }, [character.id, character.corrupcao]);
 
   // Status da batalha atual (via prop; a ficha fora de batalha não guarda status).
   const listaStatus = statuses ?? character.statuses ?? [];
@@ -119,6 +153,32 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
       if (d.character) onChanged(d.character);
       const gems = await api.getCharacterGemsDetailed(character.id);
       setCharacterGems(gems.gems || []);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // Ajuste de Corrupção: ganho, recuperação ou definição direta pelo mestre.
+  // Ao mudar de estágio, a ficha avisa — e 100 apenas marca "Consumido",
+  // nunca aplica morte automática.
+  const alterarCorrupcao = async (payload) => {
+    setBusy('corrupcao');
+    const anterior = corrupcaoEstado;
+    try {
+      const d = await api.setCorrupcao(character.id, payload);
+      if (d.estado) setCorrupcaoEstado(d.estado);
+      if (Array.isArray(d.historico)) setCorrupcaoHistorico(d.historico);
+      if (d.corrupcao != null) setCorrupcaoInput(String(d.corrupcao));
+      if (d.estado && d.estado.estagio.id !== anterior.estagio.id) {
+        setAvisoCorrupcao(
+          `Corrupção mudou de estágio: ${anterior.estagio.nome} → ${d.estado.estagio.nome}.`,
+        );
+      } else {
+        setAvisoCorrupcao('');
+      }
+      if (onChanged) onChanged(d.personagem);
     } catch (e) {
       alert(e.message);
     } finally {
@@ -332,6 +392,170 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
             <strong>{character.attributes[k]}</strong>
           </div>
         ))}
+      </div>
+
+      <div className="sheet-section">
+        <h4>☣️ Corrupção do Ruidium</h4>
+        <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+          <div>
+            <div className="muted small">Pontuação</div>
+            <strong style={{ fontSize: '1.35em', color: corrupcaoEstado.consumido ? '#ff5c8a' : '#b8a9cf' }}>
+              {corrupcaoEstado.pontos}/100
+            </strong>
+          </div>
+          <div>
+            <div className="muted small">Estágio</div>
+            <strong style={{ color: corrupcaoEstado.consumido ? '#ff5c8a' : '#eee' }}>
+              {corrupcaoEstado.estagio.nome}
+            </strong>
+          </div>
+          <div>
+            <div className="muted small">Potência mágica</div>
+            <strong>
+              {corrupcaoEstado.potenciaMagica != null
+                ? `+${corrupcaoEstado.potenciaMagica}%`
+                : (corrupcaoEstado.potenciaMagicaDescricao || '—')}
+            </strong>
+          </div>
+        </div>
+
+        <div style={{ height: 10, borderRadius: 6, background: '#1e142c', overflow: 'hidden', marginBottom: 8 }}>
+          <div style={{
+            height: '100%',
+            width: `${corrupcaoEstado.pontos}%`,
+            background: corrupcaoEstado.consumido ? '#ff5c8a' : '#8b5fbf',
+            transition: 'width 200ms ease',
+          }} />
+        </div>
+
+        <p className="muted small" style={{ margin: '0 0 4px' }}>{corrupcaoEstado.efeito}</p>
+        <p className="muted small" style={{ margin: '0 0 4px' }}>
+          Penalidades: {Object.keys(corrupcaoEstado.penalidades || {}).length
+            ? Object.entries(corrupcaoEstado.penalidades)
+                .map(([k, v]) => `-${v}% ${ATTRIBUTE_NAMES[k] || k}`)
+                .join(', ')
+            : 'nenhuma'}
+          {corrupcaoEstado.chanceEfeito > 0
+            ? ` · ${corrupcaoEstado.chanceEfeito}% de chance de efeito negativo`
+            : ''}
+        </p>
+
+        {corrupcaoEstado.consumido && (
+          <div style={{ padding: 8, border: '1px solid #ff5c8a', borderRadius: 6, background: '#3a1a2a', color: '#ff5c8a', fontSize: '0.85em', marginBottom: 8 }}>
+            ⚠️ <strong>Consumido:</strong> o mestre assume temporariamente o controle do personagem.
+            Isto <strong>não</strong> é morte automática.
+          </div>
+        )}
+
+        {avisoCorrupcao && (
+          <div style={{ padding: 8, border: '1px solid #ffd166', borderRadius: 6, background: '#2e2a1d', color: '#ffd166', fontSize: '0.85em', marginBottom: 8 }}>
+            {avisoCorrupcao}
+          </div>
+        )}
+
+        <button className="ghost small" onClick={() => setCorrupcaoAberto((v) => !v)}>
+          {corrupcaoAberto ? 'Fechar ajuste do mestre' : '⚙️ Ajuste do mestre'}
+        </button>
+
+        {corrupcaoAberto && (
+          <div style={{ marginTop: 10, padding: 12, border: '1px solid #444', borderRadius: 8, background: '#1e142c' }}>
+            <p className="muted small" style={{ margin: '0 0 8px' }}>
+              Ferramenta do mestre. A pontuação fica sempre entre 0 e 100 e cada alteração
+              é registrada no histórico.
+            </p>
+
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={corrupcaoInput}
+                onChange={(e) => setCorrupcaoInput(e.target.value)}
+                style={{ width: 80, padding: '6px 8px', borderRadius: 6, border: '1px solid #444', background: '#120c1d', color: '#eee' }}
+              />
+              <button
+                className="ghost small"
+                disabled={busy === 'corrupcao'}
+                onClick={() => alterarCorrupcao({ pontos: Number(corrupcaoInput), motivo: 'Ajuste manual do mestre' })}
+              >
+                Definir pontos
+              </button>
+              <button
+                className="ghost small"
+                disabled={busy === 'corrupcao'}
+                onClick={() => alterarCorrupcao({ pontos: 100, motivo: 'Mestre marcou Consumido' })}
+              >
+                Marcar Consumido (100)
+              </button>
+              <button
+                className="ghost small"
+                disabled={busy === 'corrupcao'}
+                onClick={() => alterarCorrupcao({ pontos: 0, motivo: 'Mestre removeu a Corrupção' })}
+              >
+                Zerar
+              </button>
+            </div>
+
+            <div style={{ marginBottom: 10 }}>
+              <div className="muted small" style={{ marginBottom: 4 }}>Ganhos oficiais</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {Object.values(CORRUPCAO_GANHOS).map((g) => (
+                  <button
+                    key={g.id}
+                    className="ghost small"
+                    disabled={busy === 'corrupcao'}
+                    title={`Adiciona +${g.pontos} ponto(s) de Corrupção`}
+                    onClick={() => alterarCorrupcao({ ganho: g.id })}
+                  >
+                    +{g.pontos} {g.nome}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="muted small" style={{ marginBottom: 4 }}>Recuperação</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {Object.values(CORRUPCAO_RECUPERACOES).map((r) => (
+                  <button
+                    key={r.id}
+                    className="ghost small"
+                    disabled={busy === 'corrupcao'}
+                    title={r.reducao === 'total' ? 'Remove toda a Corrupção' : `Reduz ${r.reducao} ponto(s)`}
+                    onClick={() => alterarCorrupcao({ recuperacao: r.id })}
+                  >
+                    {r.nome} ({r.reducao === 'total' ? 'total' : `-${r.reducao}`})
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {corrupcaoHistorico.length > 0 && (
+          <details style={{ marginTop: 10 }}>
+            <summary className="muted small" style={{ cursor: 'pointer' }}>
+              Histórico de Corrupção ({corrupcaoHistorico.length})
+            </summary>
+            <div style={{ maxHeight: 180, overflowY: 'auto', marginTop: 6 }}>
+              {corrupcaoHistorico.map((h) => (
+                <div
+                  key={h.id}
+                  style={{ fontSize: '0.8em', borderBottom: '1px solid #2a1d3e', padding: '4px 0', color: '#b8a9cf' }}
+                >
+                  <strong style={{ color: h.delta > 0 ? '#ff5c8a' : '#3ddc84' }}>
+                    {h.delta > 0 ? '+' : ''}{h.delta}
+                  </strong>
+                  {' '}{h.pontos_anteriores}→{h.pontos_novos} · {h.tipo}
+                  {h.motivo ? ` · ${h.motivo}` : ''}
+                  {h.criado_em ? (
+                    <span style={{ color: '#666' }}> · {new Date(h.criado_em).toLocaleString()}</span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
       </div>
 
       <div className="sheet-section">

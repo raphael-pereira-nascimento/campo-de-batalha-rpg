@@ -7,6 +7,9 @@ import {
   calcularBonusConjunto,
   tipoInventarioEquipamento,
   gemasSlotadasParaSocketedGems,
+  equipamentoTemAcoRunico,
+  validarRunasEquipamento,
+  normalizarRunasParaItem,
 } from '../../src/game/forge.js';
 import { getMaterialById } from '../../src/game/materials.js';
 import {
@@ -393,13 +396,20 @@ describe('forja — perfil mecânico e status derivados', () => {
     expect(efeito.origem).toBe('Munição Contaminante');
   });
 
-  it('não automatiza a Ruptura Profana (só em crítico)', () => {
+  it('automatiza a Ruptura Profana somente em acertos críticos', () => {
     const resultado = craftarEquipamento('machado_de_guerra', 'prataPandemomico');
 
     expect(resultado.ok).toBe(true);
     expect(resultado.categoriaEfeito).toBe('armaImpacto');
-    expect(resultado.perfilMecanico.status).toBe(null);
-    expect(resultado.equip.efeito).toBeUndefined();
+    expect(resultado.perfilMecanico.status.id).toBe('contaminacaoPandemonica');
+
+    const efeito = resultado.equip.efeito;
+    expect(efeito.tipo).toBe('contaminacaoPandemonica');
+    expect(efeito.chance).toBe(0.3);
+    expect(efeito.turnos).toBe(2);
+    expect(efeito.somenteCritico).toBe(true);
+    expect(efeito.interrompeCuraProtecao).toBe(true);
+    expect(efeito.origem).toBe('Ruptura Profana');
   });
 
   it('normaliza o perfil mecânico por tipo', () => {
@@ -419,5 +429,41 @@ describe('forja — perfil mecânico e status derivados', () => {
     expect(resultado.ok).toBe(true);
     expect(resultado.perfilMecanico.avisos.some((aviso) => aviso.includes('não acumula'))).toBe(true);
     expect(resultado.perfilMecanico.porTipo.bonus).toHaveLength(2);
+  });
+});
+
+describe('forja — runas elementais', () => {
+  it('detecta Aço Rúnico no primário ou no secundário', () => {
+    expect(equipamentoTemAcoRunico('acoRunico', null)).toBe(true);
+    expect(equipamentoTemAcoRunico('ferro', 'acoRunico')).toBe(true);
+    expect(equipamentoTemAcoRunico('ferro', 'cobre')).toBe(false);
+    expect(equipamentoTemAcoRunico(null, null)).toBe(false);
+  });
+
+  it('sem Aço Rúnico aceita 1 runa e bloqueia 2', () => {
+    expect(validarRunasEquipamento(['fogo'], 'ferro', null).ok).toBe(true);
+    const duas = validarRunasEquipamento(['fogo', 'gelo'], 'ferro', null);
+    expect(duas.ok).toBe(false);
+    expect(duas.erros.some((erro) => erro.includes('limite'))).toBe(true);
+  });
+
+  it('com Aço Rúnico aceita dois elementos diferentes e rejeita repetidos', () => {
+    expect(validarRunasEquipamento(['fogo', 'gelo'], 'acoRunico', null).ok).toBe(true);
+    expect(validarRunasEquipamento(['fogo', 'fogo'], 'acoRunico', null).ok).toBe(false);
+  });
+
+  it('persiste apenas o elemento de cada runa', () => {
+    expect(normalizarRunasParaItem(['fogo', { elemento: 'gelo' }, { id: 'agua' }, null]))
+      .toEqual([{ elemento: 'fogo' }, { elemento: 'gelo' }, { elemento: 'agua' }]);
+  });
+
+  it('craftarEquipamento grava as runas validadas e bloqueia inválidas', () => {
+    const valido = craftarEquipamento('espada_longa', 'acoRunico', null, [], null, null, ['fogo', 'gelo']);
+    expect(valido.ok).toBe(true);
+    expect(valido.equip.runas).toEqual([{ elemento: 'fogo' }, { elemento: 'gelo' }]);
+
+    const invalido = craftarEquipamento('espada_longa', 'ferro', null, [], null, null, ['fogo', 'gelo']);
+    expect(invalido.ok).toBe(false);
+    expect(invalido.motivo).toContain('limite');
   });
 });
