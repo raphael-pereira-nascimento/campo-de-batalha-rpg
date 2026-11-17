@@ -202,6 +202,10 @@ function statusParaEfeito(status) {
     dot,
     hot,
     value: valor,
+    // Contaminação/Ferida Pandemônica reduzem a cura recebida (igual ao motor).
+    reducaoCuraPct: Math.max(0, Number(
+      status.reducaoCuraPct ?? def.reducaoCuraPct ?? def.reducaoPotenciaCuraProtecao ?? 0,
+    ) || 0),
     duration: Math.max(1, Number(status.turnos) || def.duracaoPadrao || 2),
     type: def.tipo === 'hot' ? 'buff' : 'debuff',
   };
@@ -226,6 +230,24 @@ function reducaoDanoRecebido(f) {
     if (e.stat === 'defesa') pct += Math.abs(Number(e.value) || 0);
   }
   return Math.min(75, pct);
+}
+
+// Redução percentual de cura recebida (Contaminação Pandemônica etc.), com o
+// mesmo teto de 100% do motor. Sem status, cura integral.
+function reducaoDeCuraRecebida(f) {
+  let pct = 0;
+  for (const e of f?.statusEffects || []) {
+    pct += Math.max(0, Number(e.reducaoCuraPct ?? e.reducaoPotenciaCuraProtecao ?? 0) || 0);
+  }
+  return Math.min(100, pct);
+}
+
+// Aplica a redução de cura recebida ao valor bruto, arredondando como o motor.
+function curaRecebida(f, quantidade) {
+  const bruto = Math.max(0, Number(quantidade) || 0);
+  if (bruto <= 0) return 0;
+  const reducao = reducaoDeCuraRecebida(f);
+  return Math.max(0, Math.round(bruto * (1 - reducao / 100)));
 }
 
 // Remove efeitos nocivos por id/nome (itens com `removeStatus`).
@@ -410,6 +432,9 @@ const [lastRoll, setLastRoll] = useState(null);
 
   const armaSelecionadaTravada = !!armaSelecionada
     && (((wpnSuperaquecido[actAttacker] || {})[armaSelecionada.id]) || 0) > 0;
+  // Armas de área (ex.: canhões de explosão) escolhem os inimigos sozinhas.
+  const armaAutoAlvo = !!armaSelecionada
+    && alvoNormalizado(armaSelecionada).tipo === 'area';
 
   const magiasDoLutador = useCallback((f) => {
     if (!f) return [];
@@ -457,6 +482,10 @@ const [lastRoll, setLastRoll] = useState(null);
     && ['cura', 'buff', 'defesa'].includes(magiaSelecionada.skill.tipo);
   const magiaEmGrupo = !!magiaSelecionada
     && (magiaSelecionada.skill.todos || magiaSelecionada.skill.afetaAliados);
+  // Magias de dano em área escolhem todos os inimigos sozinhas, sem exigir alvo.
+  const magiaAutoAlvo = !!magiaSelecionada
+    && !magiaSuporte
+    && alvoNormalizado(magiaSelecionada.skill || {}).tipo === 'area';
 
   // Resolve o modo de alvo de um golpe (unico/area/cone/explosao) e devolve os
   // alvos válidos: somente inimigos vivos, com o alvo principal escolhido
@@ -746,7 +775,7 @@ const [lastRoll, setLastRoll] = useState(null);
   // Executa uma ação rápida: ataque físico, magia (consome MP) ou item (cura).
   const executarAcao = useCallback(() => {
     const attacker = fighters.find((f) => f.id === actAttacker);
-    if (!attacker || attacker.hp <= 0 || actTargets.length === 0) return;
+    if (!attacker || attacker.hp <= 0) return;
 
     // Respeita a ordem de turno quando a iniciativa já foi rolada.
     if (initiativeRolled && initiativeOrder.length > 0) {
@@ -993,7 +1022,7 @@ const [lastRoll, setLastRoll] = useState(null);
           setFighters((prev) => prev.map((f) => {
             const nf = pagarCusto(f);
             if (!alvos.some((a) => a.id === nf.id)) return nf;
-            const cura = Math.max(0, Math.min(nf.hpMax - nf.hp, curaBase));
+            const cura = Math.max(0, Math.min(nf.hpMax - nf.hp, curaRecebida(nf, curaBase)));
             return {
               ...nf,
               hp: nf.hp + cura,
@@ -1003,7 +1032,7 @@ const [lastRoll, setLastRoll] = useState(null);
             };
           }));
           alvos.forEach((a) => {
-            const cura = Math.max(0, Math.min(a.hpMax - a.hp, curaBase));
+            const cura = Math.max(0, Math.min(a.hpMax - a.hp, curaRecebida(a, curaBase)));
             addLog(`💚 ${attacker.name} usa ${skill.nome} em ${a.name}: cura ${cura} de HP (MP ${custo}).`);
             if (efeitoCura) addLog(`✨ ${a.name} recebe ${efeitoCura.name} por ${efeitoCura.duration} rodada(s).`);
           });
@@ -1137,10 +1166,12 @@ const [lastRoll, setLastRoll] = useState(null);
     if (actionMode === 'item') {
       const it = itensDoLutador(attacker).find((x) => x.id === selItemId);
       if (!it) return;
-      const alvo = fighters.find((f) => f.id === actTargets[0] && f.hp > 0) || attacker;
+      const alvo = fighters.find((f) => f.id === actTargets[0] && f.hp > 0 && f.team === attacker.team) || attacker;
       const detalhes = [];
       const efeitos = [];
-      if (it.cura) detalhes.push(`+${Math.max(0, Math.min(alvo.hpMax - alvo.hp, it.cura))} HP`);
+      // Cura de item obedece à redução de cura recebida (Contaminação etc.).
+      const curaItem = it.cura ? curaRecebida(alvo, it.cura) : 0;
+      if (it.cura) detalhes.push(`+${Math.max(0, Math.min(alvo.hpMax - alvo.hp, curaItem))} HP`);
       if (it.mana) detalhes.push(`+${Math.max(0, Math.min(alvo.mpMax - alvo.mp, it.mana))} MP`);
       if (it.status) {
         const eff = statusParaEfeito(it.status);
@@ -1174,7 +1205,7 @@ const [lastRoll, setLastRoll] = useState(null);
         if (nf.id !== alvo.id) return nf;
         let hp = nf.hp;
         let mp = nf.mp;
-        if (it.cura) hp = Math.max(0, Math.min(nf.hpMax, hp + it.cura));
+        if (it.cura) hp = Math.max(0, Math.min(nf.hpMax, hp + curaItem));
         if (it.mana) mp = Math.max(0, Math.min(nf.mpMax, mp + it.mana));
         const statusEffects = [
           ...(it.removeStatus ? removerStatus(nf, it.removeStatus) : nf.statusEffects),
@@ -2001,9 +2032,9 @@ const [lastRoll, setLastRoll] = useState(null);
                   onClick={executarAcao}
                   disabled={
                     !actAttacker
-                    || (actionMode === 'attack' && actTargets.length === 0)
+                    || (actionMode === 'attack' && actTargets.length === 0 && !armaAutoAlvo)
                     || (actionMode === 'spell' && !selSpellId)
-                    || (actionMode === 'spell' && !magiaSuporte && !magiaEmGrupo && actTargets.length === 0)
+                    || (actionMode === 'spell' && !magiaSuporte && !magiaEmGrupo && !magiaAutoAlvo && actTargets.length === 0)
                     || (actionMode === 'item' && !selItemId)
                     || (actionMode === 'attack' && armaSelecionadaTravada)
                   }

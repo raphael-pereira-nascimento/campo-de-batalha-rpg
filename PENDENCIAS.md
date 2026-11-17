@@ -25,7 +25,7 @@ Legenda:
 
 ---
 
-## Índice das decisões D-01 a D-43
+## Índice das decisões D-01 a D-47
 
 | Código | Assunto | Status |
 | --- | --- | --- |
@@ -72,6 +72,10 @@ Legenda:
 | D-41 | Contaminação Profana e Núcleo Pandemônico | Estrutura descritiva preparada; automação pendente |
 | D-42 | Ruptura Profana em acertos críticos | Implementado; alcance a confirmar |
 | D-43 | Categorias de efeito sem definição exibidas como “Não definido” | Implementado |
+| D-44 | Buffs/debuffs com eixo (físico/mágico), duração e grupo | Implementado |
+| D-45 | Cura reformada: redução de cura recebida e status positivo no alvo | Implementado |
+| D-46 | Ações Rápidas utilizáveis na Batalha de Mesa | Implementado |
+| D-47 | Arsenal de 3 slots e canhões na Batalha de Mesa | Implementado |
 
 ---
 
@@ -366,6 +370,40 @@ pendente.
 - **Testes:** `runas.test.js`, `podridao.test.js`, `contaminacao.test.js` e
   `forgeMaterials.test.js` foram estendidos. O harness de navegador passou
   **261/261** testes.
+
+### 1.7 Buffs, cura, Ações Rápidas e canhões (D-44 a D-47)
+
+Nenhum valor oficial foi alterado. Os metadados abaixo apenas tornam explícito o
+que as magias e golpes já descrevem, e a mesa passou a usar o mesmo motor do
+Campo de Batalha.
+
+- **D-44 — Buffs/debuffs com eixo, duração e grupo:** `skillFromSpell` converte
+  o `poder` fracionário da magia em percentual (`0.15 → 15`) e propaga
+  `buffTipo`, `duracao`, `afetaAliados` e `todos`. O motor soma
+  `poder / 100` ao eixo indicado (`buffPhysical`/`buffMagic`) e mantém o buff
+  por `duracao` turnos (mínimo 1, padrão 3). Golpe sem `buffTipo` continua
+  valendo para físico e mágico, por compatibilidade. Buffs e defesas
+  individuais valem só para o conjurador; magias de grupo aplicam a todos os
+  aliados vivos, incluindo o conjurador. `grito_de_guerra` (+15% físico) e
+  `benção` (+10% mágico) foram marcados como oficiais em `data.js`.
+- **D-45 — Cura reformada:** toda cura (magia ou item, cliente e servidor)
+  passa por `reducaoCuraPct`/`reducaoPotenciaCuraProtecao`, com teto de 100% e o
+  mesmo arredondamento do motor. Cura individual pode escolher um aliado; cura
+  de item só pode ser aplicada em aliado. Cura com `status` aplica o status
+  positivo no(s) alvo(s). `cura_massa` usa `todos: true` e inclui o conjurador.
+- **D-46 — Ações Rápidas na Batalha de Mesa:** o painel passou a executar
+  ataque, magia e item com cooldown, custo de MP, alvos, cura, buff, defesa e
+  status. Ações em si (cura/buff/defesa), área automática e item dispensam alvo
+  manual. O bloqueio global por alvo vazio foi removido; cada modo valida o que
+  precisa. A ordem de iniciativa continua respeitada.
+- **D-47 — Arsenal e canhões na mesa:** cada lutador tem três slots
+  (corpo a corpo, distância e utilitária) preenchidos por `EQUIPMENT.armas`
+  somado a `EQUIPMENT.canoes`. Canhões utilitários usam `usosMax` e
+  `recargaTurnos`; a artilharia usa `recarga`. A mesa controla recarga, usos,
+  calor (superaquecimento) e fumaça, e armas fora do catálogo entram como opção
+  “(atual)”.
+- **Testes:** `battle.test.js` ganhou cinco casos de magia/buff/cura e um de
+  redução de cura recebida; o harness de navegador passou **336/336**.
 
 ---
 
@@ -673,7 +711,15 @@ O que falta preencher com o criador/documentação:
   garantir que todos os efeitos valham nos dois. Na Etapa 8, o salvamento do
   item craftado, a dedução da carteira, a preferência pelo item do inventário e
   os atributos finais foram alinhados; agora o perfil mecânico também é
-  preservado no servidor.
+  preservado no servidor. Nesta rodada, `skillFromSpell` e o motor de
+  buff/cura/status foram mantidos idênticos no cliente e no servidor.
+- **Golpes no Registro do Mundo:** `validateCustomSkill` só aceita nome, tipo,
+  poder, custo, cooldown, `todos`, descrição, alvo, alvos e splash. Os metadados
+  novos (`status`, `afetaAliados`, `buffTipo`, `duracao`) ficam apenas em
+  `character.skills`, sem coluna no schema/DB do Registro do Mundo.
+- **Defesa na mesa × motor:** o motor trata defesa com `p.defense` (dano pela
+  metade); a Batalha de Mesa usa redução percentual de dano recebido (teto 75%).
+  A divergência é intencional e precisa de decisão antes de unificar.
 
 ### 3.4 Validação e limitações do ambiente
 
@@ -693,6 +739,10 @@ O que falta preencher com o criador/documentação:
   erros no console, incluindo fichas de runas, validação/persistência de runas na
   forja, imunidade do Tenebrium, Contaminação Profana/Núcleo Pandemônico e
   Ruptura Profana em crítico.
+- Resultado do harness nesta rodada (buff/cura/Ações Rápidas/canhões):
+  **336/336 testes passam**, sem falhas e sem erros no console, incluindo os
+  novos casos de Cura em Massa, Grito de Guerra, Benção, item com redução de cura
+  e cura de magia em aliado com Contaminação Pandemônica.
 - Nesta rodada, `npm run test:unit`, `npm run test:e2e` e `npm run build` não
   puderam ser executados porque `node`/`npm` continuam fora do `PATH`; a
   validação foi feita pelo bundle do esbuild e pelo harness de navegador.
@@ -835,6 +885,28 @@ expõem, validam ou persistem o que já estava aprovado.
 | MaterialDetails | Categorias sem efeito exibem “Não definido.” |
 | Testes | `runas.test.js`, `podridao.test.js`, `contaminacao.test.js` e `forgeMaterials.test.js` estendidos; harness **261/261** |
 
+### 3.10 Correções aplicadas na rodada de buffs, cura e Ações Rápidas
+
+Nenhuma regra, fórmula ou valor oficial foi alterado. As correções alinham a
+Batalha de Mesa ao motor do Campo de Batalha e fecham defeitos da criação de
+golpes.
+
+| Área | Correção |
+| --- | --- |
+| Motor — buffs | `_aplicarBuff` soma `poder / 100` no eixo `buffTipo`, respeita `duracao` e mantém buff sem eixo valendo para físico e mágico |
+| Motor — aliados | `_aliadosComVoce` inclui o conjurador nas magias de grupo, sem contar duas vezes o mesmo alvo |
+| Motor — cura | Cura de magia e de item aplica `_curaRecebida` (redução de cura, teto 100%); cura com `status` aplica o status positivo no alvo |
+| Dados | `grito_de_guerra`, `benção` e `cura_massa` receberam `buffTipo`, `duracao`, `afetaAliados` e `todos` oficiais; `skillFromSpell` propaga os campos |
+| Ficha — servidor | `normalizeSkill` passou a persistir `status`, `todos`, `afetaAliados`, `buffTipo` e `duracao` |
+| Ficha — golpes | `SkillsStep` reescrito com ids únicos, clamps, status, `todos`, `afetaAliados`, `buffTipo`, `duracao`, descrição, condição, modo padrão e validação/seed |
+| Ficha — especiais/ultimate | `MegaSkillStep` reescrito com a mesma normalização e validação dos golpes |
+| Mesa — Arsenal | Três slots por lutador com canhões; recarga, usos, calor, fumaça e superaquecimento; arma fora do catálogo aparece como “(atual)” |
+| Mesa — Ações Rápidas | Ataque, magia e item com cooldown, MP, alvos, cura/buff/defesa; alvo vazio deixou de bloquear ações em si; área automática dispensa alvo |
+| Mesa — cura | `statusParaEfeito` carrega `reducaoCuraPct`; `reducaoDeCuraRecebida`/`curaRecebida` aplicam a redução com o arredondamento do motor; item só cura aliado |
+| Mesa — equipar | Equipar arma grava `id`; arsenal aceita arma fora do catálogo |
+| Testes | `battle.test.js` com 70 casos (6 novos de magia/buff/cura); harness **336/336**, sem erros de console |
+| Limpeza | `smoke-tb-ficha.jsx` e bundles temporários de smoke removidos |
+
 ---
 
 ## 4. Sugestão
@@ -887,3 +959,7 @@ expõem, validam ou persistem o que já estava aprovado.
     genérico não oficial (+10% de dano/resistência e 20% de chance por 2 turnos)
     já existe; a forja já seleciona, valida e persiste as runas. Faltam as
     identidades e a aplicação por elemento no combate.
+16. **Unificar a defesa e persistir os golpes (D-44/D-46):** decidir entre o
+    `defense` do motor (dano pela metade) e a redução percentual da mesa, e criar
+    colunas/validação no Registro do Mundo para `status`, `afetaAliados`,
+    `buffTipo` e `duracao`, hoje restritos a `character.skills`.

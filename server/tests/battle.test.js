@@ -1521,4 +1521,27 @@ describe('BattleManager — cura, buffs de grupo e itens', () => {
     expect(curaMassa.todos).toBe(true);
     expect(curaMassa.afetaAliados).toBe(false);
   });
+
+  it('cura de magia em aliado respeita a redução de cura recebida', () => {
+    const { manager } = makeManager();
+    const clerigo = participante({ uid: 'p1', charName: 'Clérigo' });
+    const ferido = participante({
+      uid: 'p2',
+      charName: 'Ferido',
+      hp: 100,
+      statuses: [{ id: 'contaminacaoPandemonica', turnos: 3, reducaoCuraPct: 25 }],
+    });
+    const battle = { mode: 'mestre', participants: [clerigo, ferido], log: [] };
+
+    manager._resolveSkill(battle, clerigo, ferido, {
+      id: 'cura_simples',
+      nome: 'Cura Simples',
+      tipo: 'cura',
+      poder: 100,
+      custo: 0,
+    });
+
+    // 10 (INT) × 100% × 1,4 × 10 = 140; com −25% de cura recebida = 105.
+    expect(ferido.hp).toBe(205);
+  });
 });
