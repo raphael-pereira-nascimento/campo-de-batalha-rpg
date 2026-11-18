@@ -82,6 +82,7 @@ Legenda:
 | D-50 | `attackUtility` respeita `action.weaponId`; categoria dos canhões tem fonte única | Implementado |
 | D-51 | Congelamento consome o turno depois de aplicar o pulo | Implementado |
 | D-52 | Gemas com comportamento idêntico offline/online; regen respeita redução de cura | Implementado |
+| D-53 | Gestão de fichas (editar/excluir) e árvore técnica de golpes por nível/elemento/desbloqueio | Implementado; regras oficiais (P-15/P-01) pendentes |
 
 ---
 
@@ -964,6 +965,19 @@ golpes.
 | Motor — API/paridade | `attackUtility` aceita `weaponId`; congelamento não sofre mais off-by-one; gemas com o mesmo efeito nos dois motores e regen de gema com redução de cura |
 | Verificado, sem alteração | `condicao`/`modo` são campos de especial/ultimate e já passam por `normalizeMegaSkill`; golpes comuns não os usam no motor. Não existe limite oficial de golpes por ficha — criar um seria inventar regra; aguarda decisão do criador. Canhões de artilharia permanecem como distância (`categoriaDeArma`), os utilitários seguem em `attackUtility` |
 | Testes | `customSkills.test.js`, `offlineSkills.test.js` e `battle.test.js` estendidos; harness **347/347**, sem erros de console; bundle do cliente sem avisos |
+
+### 3.12 Gestão de fichas e árvore técnica de golpes (D-53)
+
+| Área | Resultado |
+| --- | --- |
+| Gestão de fichas | Nova aba `🗂️ Gerenciar fichas e golpes` em Personagens (`CharacterManager.jsx`), integrada em `App.jsx` como `view === 'characterManager'`; edita nome/gênero/passiva e exclui fichas com confirmação |
+| API online/offline | `PUT`/`DELETE /api/characters/:id`; `api.updateCharacter`/`api.deleteCharacter` com branches offline e `deleteOfflineCharacter`; edição preserva nível, XP, HP/MP atuais, inventário e Corrupção, recalculando os máximos |
+| Árvore de golpes | Metadados `elemento`, `nivel` (1–30) e `desbloqueado` em `skills`, espelhados em validação servidor/cliente; golpes disponíveis se `desbloqueado !== false && nivel <= character.level`; `spells` derivado apenas dos disponíveis |
+| Compatibilidade | Golpes antigos passam a ser físicos, nível 1 e desbloqueados; migração `0013_custom_skill_tree.sql` leva os mesmos campos ao Registro do Mundo; `FichaForm.jsx` e `Registry.jsx` expõem elemento/MP/nível/desbloqueio; todos os `SKILL_TYPES` disponíveis |
+| Combate | Filtro de golpes indisponíveis em `skillsOf` dos motores cliente/servidor e em `makeFighter` da Mesa, para golpes bloqueados ou acima do nível não serem usados |
+| Não inventado | Árvore é estrutura técnica/provisória: sem custo de XP, sem pré-requisitos entre nós e sem regra oficial de desbloqueio (P-15/P-01 seguem pendentes) |
+| Verificado | Smoke offline: desbloqueio persistiu e `spells` ficou `['golpe_a', 'golpe_b']` com ids válidos; golpe de nível 10 permaneceu fora da ficha nível 5. Os 404 de `/api/health` no servidor estático são esperados no modo offline |
+| Testes | `customSkills.test.js` e `offlineSkills.test.js` estendidos; harness **350/350**, sem erros de console; bundle do cliente compilado com `--jsx=automatic` |
 
 ---
 

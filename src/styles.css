@@ -4253,6 +4253,76 @@ button.danger {
   background: rgba(124, 92, 255, 0.18);
   border-color: rgba(124, 92, 255, 0.55);
 }
+
+/* ── Gerenciador de fichas e árvore de golpes ─────────────────────────── */
+.manager-top { align-items: flex-end; }
+.manager-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 14px 0;
+}
+button.danger {
+  background: rgba(220, 60, 80, 0.18);
+  border-color: rgba(220, 60, 80, 0.6);
+  color: #ffd9de;
+}
+.notice {
+  background: rgba(60, 200, 120, 0.12);
+  border: 1px solid rgba(60, 200, 120, 0.45);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+.skill-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 12px;
+}
+.skill-tree-level {
+  border-left: 2px solid rgba(124, 92, 255, 0.7);
+  padding-left: 16px;
+}
+.skill-tree-level h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--accent, #7c5cff);
+}
+.skill-tree-branch {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.skill-node {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  min-width: 210px;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.skill-node.locked {
+  opacity: 0.62;
+  border-style: dashed;
+}
+.skill-node.unlocked {
+  border-color: rgba(124, 92, 255, 0.5);
+}
+.skill-node strong { font-size: 14px; }
+.skill-node .tag { align-self: flex-start; }
+.skill-node-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+.skill-node-actions button { font-size: 11px; padding: 5px 8px; }
+
 .account-banner {
   display: flex;
   align-items: center;
@@ -4459,7 +4529,7 @@ textarea:focus-visible,
 }
 
 
-/* -- Superaquecimento, fuma�a e faixas do d20 ----------------------------- */
+/* -- Superaquecimento, fuma�a e faixas do d20 ----------------------------- */
 .heat-meter {
   margin-top: 8px;
   padding: 8px 10px;

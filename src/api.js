@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client';
 import { gameData } from './offline/gameData.js';
-import { isOffline, setServerStatus, saveOfflinePlayer, getOfflinePlayer, getOfflineCharacters, saveOfflineCharacter, getOfflineWallet, addOfflineCoins, getOfflineGems, addOfflineGem, removeOfflineGem, setOfflineGemEstado, listOfflineCustom, saveOfflineCustom, removeOfflineCustom } from './offline/storage.js';
+import { isOffline, setServerStatus, saveOfflinePlayer, getOfflinePlayer, getOfflineCharacters, saveOfflineCharacter, deleteOfflineCharacter, getOfflineWallet, addOfflineCoins, getOfflineGems, addOfflineGem, removeOfflineGem, setOfflineGemEstado, listOfflineCustom, saveOfflineCustom, removeOfflineCustom } from './offline/storage.js';
 import { offlineBattle } from './offline/battle.js';
 import { MONSTERS } from './game/monsters.js';
 import { gemIsRaw, getGemaById, GEM_LIST, GEMS, gemPrice, MINERA_VEIOS, polirPedra, verificarFusao } from './game/gems.js';
@@ -16,6 +16,7 @@ import {
   calcularEstadoCorrupcao,
 } from './game/corrupcao.js';
 import { DUNGEONS } from './game/dungeons.js';
+import { golpesDisponiveis } from './game/skillValidation.js';
 import {
   estadoMundo,
   avancarDia as avancarDiaLocal,
@@ -405,6 +406,62 @@ export const api = {
       return Promise.resolve({ ok: true, character });
     }
     return auth('/api/characters', { method: 'POST', body: JSON.stringify(payload) });
+  },
+  // Editar ficha preserva progresso (nível, XP, HP/MP atuais e inventário) e
+  // recalcula os máximos. Golpes bloqueados/pendentes de nível ficam fora de
+  // `spells`, mas continuam na árvore em `skills`.
+  updateCharacter: (id, payload) => {
+    if (isOffline()) {
+      const chars = getOfflineCharacters();
+      const atual = chars.find((c) => c.id === id);
+      if (!atual) return Promise.reject(new Error('Personagem não encontrado.'));
+      const level = Math.max(1, Math.min(30, Math.floor(Number(atual.level) || 1)));
+      const attributes = { ...(payload.attributes || atual.attributes) };
+      const classes = Array.isArray(payload.classes) ? payload.classes : atual.classes || [];
+      const races = Array.isArray(payload.races) ? payload.races : atual.races || [];
+      const equipment = payload.equipment || atual.equipment || {};
+      const habilidades = Array.isArray(payload.habilidades) ? payload.habilidades : atual.habilidades || [];
+      const skills = Array.isArray(payload.skills) ? payload.skills.map((s) => ({ ...s })) : atual.skills || [];
+      const stats = applyMaxMults(
+        deriveStats(classes, level, attributes, equipment, races),
+        efeitosDaFicha({ races, habilidades }),
+      );
+      const atualOuMaximo = (valor, max) => {
+        const n = Number(valor);
+        return Number.isFinite(n) ? Math.max(0, Math.min(n, max)) : max;
+      };
+      const character = {
+        ...atual,
+        ...payload,
+        id: atual.id,
+        playerId: atual.playerId,
+        level,
+        xp: atual.xp || 0,
+        attributes,
+        classes,
+        races,
+        equipment,
+        habilidades,
+        skills,
+        spells: golpesDisponiveis(skills, level).map((s) => s.id),
+        hp_max: stats.hpMax,
+        mp_max: stats.mpMax,
+        hp_current: atualOuMaximo(atual.hp_current, stats.hpMax),
+        mp_current: atualOuMaximo(atual.mp_current, stats.mpMax),
+      };
+      saveOfflineCharacter(character);
+      return Promise.resolve({ ok: true, character });
+    }
+    return auth(`/api/characters/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+  },
+  deleteCharacter: (id) => {
+    if (isOffline()) {
+      if (!deleteOfflineCharacter(id)) {
+        return Promise.reject(new Error('Personagem não encontrado.'));
+      }
+      return Promise.resolve({ ok: true, id });
+    }
+    return auth(`/api/characters/${id}`, { method: 'DELETE' });
   },
   getCharacter: (id) => {
     if (isOffline()) {

@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { validateCustomSkill, decorateCustomSkill, dedupeSkillIds } from '../src/services/skillValidation.js';
+import {
+  validateCustomSkill,
+  decorateCustomSkill,
+  dedupeSkillIds,
+  normalizarMetadadosGolpe,
+  golpesDisponiveis,
+} from '../src/services/skillValidation.js';
 
 describe('Registro do Mundo — validação de golpes', () => {
   it('usa poder 100 e permite splash 0 quando omitidos/inválidos', () => {
@@ -74,8 +80,35 @@ describe('Registro do Mundo — validação de golpes', () => {
       afetaAliados: true,
       buffTipo: 'magico',
       duracao: 4,
+      elemento: 'fisico',
+      nivel: 1,
+      desbloqueado: true,
     });
     expect(decorateCustomSkill(null)).toBe(null);
+  });
+
+  it('normaliza elemento, nível e desbloqueio da árvore (compatível com golpes antigos)', () => {
+    expect(validateCustomSkill({
+      nome: 'Bola de Fogo', elemento: 'fogo', nivel: 12, desbloqueado: false, custo: 8,
+    })).toMatchObject({ elemento: 'fogo', nivel: 12, desbloqueado: false, custo: 8 });
+    // Golpes salvos antes da árvore: físicos, nível 1 e já desbloqueados.
+    expect(validateCustomSkill({ nome: 'Antigo' })).toMatchObject({
+      elemento: 'fisico', nivel: 1, desbloqueado: true,
+    });
+    expect(normalizarMetadadosGolpe({ elemento: 'gelo', nivel: 99, desbloqueado: 0 })).toMatchObject({
+      elemento: 'fisico', nivel: 30, desbloqueado: false,
+    });
+  });
+
+  it('só disponibiliza golpes desbloqueados e do nível já alcançado', () => {
+    const golpes = [
+      { nome: 'Livre', nivel: 1 },
+      { nome: 'Futuro', nivel: 10 },
+      { nome: 'Bloqueado', nivel: 1, desbloqueado: false },
+      { nome: 'Legado' },
+    ];
+    expect(golpesDisponiveis(golpes, 1).map((s) => s.nome)).toEqual(['Livre', 'Legado']);
+    expect(golpesDisponiveis(golpes, 10).map((s) => s.nome)).toEqual(['Livre', 'Futuro', 'Legado']);
   });
 
   it('evita ids repetidos entre golpes de classe e golpes personalizados', () => {

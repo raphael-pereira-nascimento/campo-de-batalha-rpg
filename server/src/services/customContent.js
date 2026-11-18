@@ -430,8 +430,8 @@ export async function createCustomSkill(creatorId, input) {
   const { rows } = await query(
     `INSERT INTO custom_skills
       (creator_id, nome, tipo, poder, custo, cooldown, todos, descricao, alvo, alvos, splash,
-       is_public, status, afeta_aliados, buff_tipo, duracao)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+       is_public, status, afeta_aliados, buff_tipo, duracao, elemento, nivel, desbloqueado)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
     [
       creatorId,
       data.nome,
@@ -449,6 +449,9 @@ export async function createCustomSkill(creatorId, input) {
       data.afeta_aliados,
       data.buff_tipo,
       data.duracao,
+      data.elemento,
+      data.nivel,
+      data.desbloqueado,
     ],
   );
   return decorateCustomSkill(rows[0]);
@@ -481,8 +484,9 @@ export async function updateCustomSkill(id, creatorId, input) {
     `UPDATE custom_skills
      SET nome = $1, tipo = $2, poder = $3, custo = $4, cooldown = $5, todos = $6, descricao = $7,
          alvo = $8, alvos = $9, splash = $10, is_public = $11,
-         status = $12, afeta_aliados = $13, buff_tipo = $14, duracao = $15
-     WHERE id = $16 RETURNING *`,
+         status = $12, afeta_aliados = $13, buff_tipo = $14, duracao = $15,
+         elemento = $16, nivel = $17, desbloqueado = $18
+     WHERE id = $19 RETURNING *`,
     [
       data.nome,
       data.tipo,
@@ -499,6 +503,9 @@ export async function updateCustomSkill(id, creatorId, input) {
       data.afeta_aliados,
       data.buff_tipo,
       data.duracao,
+      data.elemento,
+      data.nivel,
+      data.desbloqueado,
       id,
     ],
   );

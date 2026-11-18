@@ -12,6 +12,8 @@ import { query } from './db/index.js';
 import {
   createPlayer,
   createCharacter,
+  updateCharacter,
+  deleteCharacter,
   listCharacters,
   getCharacter,
   levelUpCharacter,
@@ -416,6 +418,26 @@ app.get('/api/characters/:id', requireAuth, async (req, res) => {
     const character = await getCharacter(req.params.id);
     if (!character) return res.status(404).json({ ok: false, error: 'Não encontrado' });
     res.json({ ok: true, character });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+// Editar e excluir fichas. O corpo da edição passa pela mesma normalização da
+// criação; `playerId` sempre vem da sessão, nunca do cliente.
+app.put('/api/characters/:id', requireAuth, async (req, res) => {
+  try {
+    const character = await updateCharacter(req.params.id, req.player.id, req.body || {});
+    res.json({ ok: true, character });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.delete('/api/characters/:id', requireAuth, async (req, res) => {
+  try {
+    const result = await deleteCharacter(req.params.id, req.player.id);
+    res.json({ ok: true, ...result });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }

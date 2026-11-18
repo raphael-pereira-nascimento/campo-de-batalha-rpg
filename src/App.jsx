@@ -19,6 +19,7 @@ const ToolShop = lazy(() => import('./pages/ToolShop.jsx'));
 const Tavern = lazy(() => import('./pages/Tavern.jsx'));
 const Dungeons = lazy(() => import('./pages/Dungeons.jsx'));
 const ShareView = lazy(() => import('./pages/ShareView.jsx'));
+const CharacterManager = lazy(() => import('./pages/CharacterManager.jsx'));
 
 // Detecta a rota /share/:id levando em conta a base do deploy. No GitHub Pages
 // o app fica em /campo-de-batalha-rpg/, então o caminho é /campo-de-batalha-rpg/share/:id.
@@ -234,6 +235,7 @@ export default function App({ initialView } = {}) {
         onRefresh={refreshCharacters}
         onEnterLobby={() => setView('lobby')}
         onOpenRegistry={() => setView('registry')}
+        onOpenCharacterManager={() => setView('characterManager')}
         onOpenCompendium={() => setView('compendium')}
         onOpenRules={() => setView('rules')}
         onOpenGemForge={abrirForja}
@@ -249,6 +251,19 @@ export default function App({ initialView } = {}) {
         onOpenDungeons={() => setView('dungeons')}
         onLogout={handleLogout}
       />
+    );
+  }
+
+  if (view === 'characterManager') {
+    return (
+      <Suspense fallback={<div className="loading">Carregando o gerenciador de fichas...</div>}>
+        <CharacterManager
+          player={player}
+          characters={characters}
+          onRefresh={refreshCharacters}
+          onBack={() => setView('characters')}
+        />
+      </Suspense>
     );
   }
 

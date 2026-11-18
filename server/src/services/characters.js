@@ -23,7 +23,11 @@ import { ALVO_TIPOS } from '../game/sistema.js';
 import { gemIsRaw, getGemById, GEMS, pickGemByWeight, mineGem, rollGemDrop, getInitialGem, MINERA_VEIOS } from '../game/gems.js';
 import { getCustomEquipment } from './customContent.js';
 import { clampInt, clampFloat } from '../utils.js';
-import { dedupeSkillIds } from './skillValidation.js';
+import {
+  dedupeSkillIds,
+  golpesDisponiveis,
+  normalizarMetadadosGolpe,
+} from './skillValidation.js';
 import {
   CORRUPCAO_MIN,
   CORRUPCAO_MAX,
@@ -124,6 +128,7 @@ export function normalizeClassDef(def = {}) {
 
 export function normalizeSkill(s = {}) {
   return {
+    ...normalizarMetadadosGolpe(s),
     id: String(s.id || s.nome || 'golpe').slice(0, 40),
     nome: String(s.nome || 'Golpe').slice(0, 40),
     tipo: SKILL_TYPES.includes(s.tipo) ? s.tipo : 'magia',
@@ -347,7 +352,9 @@ export function buildCharacterData(playerId, { name, gender, attributes, races, 
       potionItem('pocao_cura'),
       potionItem('elixir_mana'),
     ],
-    spells: skillsList.map((s) => s.id),
+    // `spells` é a lista de golpes efetivamente usáveis no combate. Golpes
+    // da árvore com nível acima do atual ou bloqueados ficam só em `skills`.
+    spells: golpesDisponiveis(skillsList, 1).map((s) => s.id),
   };
 }
 
@@ -392,6 +399,91 @@ export async function createCharacter(input) {
     ],
   );
   return decorateCharacter(rows[0]);
+}
+
+// ── Editar ficha ────────────────────────────────────────────────────────────
+// Reaproveita `buildCharacterData` para validar/normalizar os dados enviados,
+// mas preserva o progresso da ficha (nível, XP, Corrupção e inventário). Os
+// máximos de HP/MP são recalculados para o nível atual. Golpes da árvore que
+// ainda não podem ser usados ficam em `skills`, fora de `spells`.
+export function buildCharacterUpdate(existing, input) {
+  const dados = buildCharacterData(existing.player_id || existing.playerId, input);
+  const level = Math.max(1, Math.min(30, Math.floor(Number(existing.level) || 1)));
+  const stats = applyMaxMults(
+    deriveStats(dados.classes, level, dados.attributes, dados.equipment, dados.races),
+    efeitosDaFicha(dados.races, dados.habilidades),
+  );
+  const atualOuMaximo = (valor, max) => {
+    const n = Number(valor);
+    return Number.isFinite(n) ? Math.max(0, Math.min(n, max)) : max;
+  };
+  return {
+    ...existing,
+    name: dados.name,
+    gender: dados.gender,
+    class: dados.class,
+    race: dados.race,
+    custom_class_name: dados.custom_class_name,
+    races: dados.races,
+    classes: dados.classes,
+    passiva: dados.passiva,
+    skills: dados.skills,
+    ultimate: dados.ultimate,
+    especial: dados.especial,
+    habilidades: dados.habilidades,
+    attributes: dados.attributes,
+    equipment: dados.equipment,
+    spells: golpesDisponiveis(dados.skills, level).map((s) => s.id),
+    level,
+    xp: Number(existing.xp) || 0,
+    hp_max: stats.hpMax,
+    mp_max: stats.mpMax,
+    hp_current: atualOuMaximo(existing.hp_current, stats.hpMax),
+    mp_current: atualOuMaximo(existing.mp_current, stats.mpMax),
+  };
+}
+
+export async function updateCharacter(characterId, playerId, input) {
+  const existing = await getCharacter(characterId);
+  if (!existing) throw new Error('Personagem não encontrado.');
+  if (playerId && existing.player_id && existing.player_id !== playerId) {
+    throw new Error('Este personagem não é seu.');
+  }
+  const c = buildCharacterUpdate(existing, input);
+  const { rowCount } = await query(
+    `UPDATE characters
+        SET name = $1, gender = $2, class = $3, race = $4, custom_class_name = $5,
+            races = $6, classes = $7, passiva = $8, skills = $9, ultimate = $10,
+            especial = $11, habilidades = $12, attributes = $13, equipment = $14,
+            spells = $15, hp_max = $16, mp_max = $17, hp_current = $18, mp_current = $19
+      WHERE id = $20 AND player_id = $21`,
+    [
+      c.name, c.gender, c.class, c.race, c.custom_class_name,
+      JSON.stringify(c.races), JSON.stringify(c.classes), c.passiva,
+      JSON.stringify(c.skills), JSON.stringify(c.ultimate), JSON.stringify(c.especial),
+      JSON.stringify(c.habilidades), JSON.stringify(c.attributes), JSON.stringify(c.equipment),
+      JSON.stringify(c.spells), c.hp_max, c.mp_max, c.hp_current, c.mp_current,
+      characterId, playerId,
+    ],
+  );
+  if (!rowCount) throw new Error('Não foi possível editar este personagem.');
+  return getCharacter(characterId);
+}
+
+// ── Excluir ficha ───────────────────────────────────────────────────────────
+// O banco apaga em cascata gemas, cooldowns e histórico de Corrupção; aqui só
+// garantimos que o dono da ficha é quem está excluindo.
+export async function deleteCharacter(characterId, playerId) {
+  const char = await getCharacter(characterId);
+  if (!char) throw new Error('Personagem não encontrado.');
+  if (playerId && char.player_id && char.player_id !== playerId) {
+    throw new Error('Este personagem não é seu.');
+  }
+  const result = playerId
+    ? await query('DELETE FROM characters WHERE id = $1 AND player_id = $2', [characterId, playerId])
+    : await query('DELETE FROM characters WHERE id = $1', [characterId]);
+  if (!result.rowCount) throw new Error('Não foi possível excluir este personagem.');
+  return { ok: true, id: characterId };
 }
 
 export async function listCharacters(playerId) {

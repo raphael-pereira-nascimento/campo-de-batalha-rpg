@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { api, isOffline } from '../api.js';
 import { ATTRIBUTES, ATTRIBUTE_NAMES, SKILL_TYPES } from '../config.js';
 import { ALVO_LABEL } from '../game/sistema.js';
-import { STATUS_DEFS, STATUS_KEYS } from '../game/data.js';
+import { STATUS_DEFS, STATUS_KEYS, ELEMENTOS } from '../game/data.js';
+import { NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX } from '../game/skillValidation.js';
 import AlvoSelect from '../components/AlvoSelect.jsx';
 
 // Registro do Mundo: cada jogador cria classes, raças, equipamentos, golpes e
@@ -27,6 +28,7 @@ const EMPTY = {
     todos: false, afetaAliados: false, buffTipo: '', duracao: 3,
     alvo: 'unico', alvos: 3, splash: 0.5,
     statusTipo: '', statusTurnos: 2, statusDano: 50, descricao: '', is_public: false,
+    elemento: 'fisico', nivel: NIVEL_GOLPE_MIN, desbloqueado: true,
   },
 };
 
@@ -362,7 +364,6 @@ function ClassRegistry({ player, items, scope, searchTerm, gameData, onChanged, 
 function MonsterRegistry({ player, items, scope, searchTerm, gameData, onChanged, setError, onCopy }) {
   const [form, setForm] = useState(EMPTY.monsters);
   const [editingId, setEditingId] = useState(null);
-  const ELEMENTOS = ['fisico', 'fogo', 'agua', 'terra', 'ar', 'luz', 'trevas'];
   const readOnly = scope === 'world';
   const toggleList = (key, val) => setForm((f) => ({ ...f, [key]: f[key].includes(val) ? f[key].filter((v) => v !== val) : [...f[key], val] }));
   const setAttr = (k) => (e) => setForm((f) => ({ ...f, attributes: { ...f.attributes, [k]: Number(e.target.value) } }));
@@ -752,6 +753,17 @@ function SkillRegistry({ player, items, scope, searchTerm, onChanged, setError, 
               <label>Custo de MP<input type="number" min={0} max={99} value={form.custo} onChange={(e) => setForm((f) => ({ ...f, custo: Number(e.target.value) }))} /></label>
               <label>Recarga (turnos)<input type="number" min={0} max={20} value={form.cooldown} onChange={(e) => setForm((f) => ({ ...f, cooldown: Number(e.target.value) }))} /></label>
             </div>
+            <div className="form-row">
+              <label>Elemento mágico
+                <select value={form.elemento} onChange={(e) => setForm((f) => ({ ...f, elemento: e.target.value }))}>
+                  {ELEMENTOS.map((el) => (<option key={el} value={el}>{el}</option>))}
+                </select>
+              </label>
+              <label>Nível para adquirir
+                <input type="number" min={NIVEL_GOLPE_MIN} max={NIVEL_GOLPE_MAX} value={form.nivel} onChange={(e) => setForm((f) => ({ ...f, nivel: Number(e.target.value) }))} />
+              </label>
+              <label className="check-label"><input type="checkbox" checked={form.desbloqueado} onChange={(e) => setForm((f) => ({ ...f, desbloqueado: e.target.checked }))} /> Desbloqueado</label>
+            </div>
             {isDano && (
               <AlvoSelect alvo={form.alvo} alvos={form.alvos} splash={form.splash} onChange={(patch) => setForm((f) => ({ ...f, ...patch }))} />
             )}
@@ -811,6 +823,9 @@ function SkillRegistry({ player, items, scope, searchTerm, onChanged, setError, 
                 <span className="tag">{SKILL_TYPES[s.tipo]}</span>
                 <span className="tag">{s.poder}%</span>
                 <span className="tag">MP {s.custo}</span>
+                <span className="tag">✦ {s.elemento || 'fisico'}</span>
+                <span className="tag">Nv {s.nivel || 1}</span>
+                {s.desbloqueado === false && <span className="tag">🔒 bloqueado</span>}
                 {s.cooldown > 0 && <span className="tag">⏳ {s.cooldown}t</span>}
                 {s.alvo && s.alvo !== 'unico' && (<span className="tag">◎ {ALVO_LABEL[s.alvo] || s.alvo}</span>)}
                 {s.todos && <span className="tag">✦ Todos</span>}

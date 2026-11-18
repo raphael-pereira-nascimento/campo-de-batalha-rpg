@@ -58,6 +58,14 @@ export function saveOfflineCharacter(character) {
   return character;
 }
 
+export function deleteOfflineCharacter(id) {
+  const chars = getOfflineCharacters();
+  const restantes = chars.filter((c) => c.id !== id);
+  if (restantes.length === chars.length) return false;
+  localStorage.setItem(CHAR_KEY, JSON.stringify(restantes));
+  return true;
+}
+
 export function getOfflineWallet() {
   return Number(localStorage.getItem(WALLET_KEY) || '1000');
 }

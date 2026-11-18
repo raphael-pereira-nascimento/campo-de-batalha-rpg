@@ -27,6 +27,7 @@ import {
 import { MONSTERS } from '../game/monsters.js';
 import { SPELLS, STATUS_DEFS, EQUIPMENT, armasDeEquipamento, skillFromSpell } from '../game/data.js';
 import { danoDeStatus, normalizarChance } from '../game/combatEffects.js';
+import { golpesDisponiveis } from '../game/skillValidation.js';
 
 // Catálogo de armas para o painel de Arsenais: armas gerais + peças de artilharia.
 const CATALOGO_ARMAS = { ...EQUIPMENT.armas, ...EQUIPMENT.canoes };
@@ -346,7 +347,7 @@ function makeFighter(name, team, attrs = {}, extra = {}) {
     protection: extra.protection || null,
     equipment: extra.equipment || {},
     spells: extra.spells || [],
-    skills: extra.skills || [],
+    skills: golpesDisponiveis(extra.skills || [], extra.level || 1),
     inventory: extra.inventory || [],
     level: extra.level || 1,
     defense: false,

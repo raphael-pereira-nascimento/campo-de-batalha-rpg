@@ -3,10 +3,12 @@
 // aplicar os mesmos clamps/normalizações do servidor, senão um golpe salvo
 // offline muda de comportamento quando o servidor volta.
 
-import { STATUS_KEYS } from './data.js';
+import { STATUS_KEYS, ELEMENTOS } from './data.js';
 import { ALVO_TIPOS } from './sistema.js';
 
 const SKILL_TYPES = ['fisico', 'magia', 'cura', 'buff', 'defesa'];
+export const NIVEL_GOLPE_MIN = 1;
+export const NIVEL_GOLPE_MAX = 30;
 const ALVOS = Object.keys(ALVO_TIPOS);
 const ALVOS_LEGADOS = { proximo: 'unico', aleatorio: 'unico', multi: 'cone', todos: 'area' };
 const SKILL_KINDS = ['dano', 'cura', 'buff', 'defesa'];
@@ -15,6 +17,26 @@ function numero(valor, padrao, min, max) {
   const n = Number(valor);
   const v = Number.isFinite(n) ? n : padrao;
   return Math.max(min, Math.min(max, Math.round(v)));
+}
+
+// Espelho de `server/src/services/skillValidation.js`. Golpes sem estes
+// campos continuam nível 1, físicos e desbloqueados.
+export function normalizarMetadadosGolpe(input = {}) {
+  const elemento = ELEMENTOS.includes(input.elemento) ? input.elemento : 'fisico';
+  const nivel = numero(input.nivel, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX);
+  return {
+    elemento,
+    nivel,
+    desbloqueado: input.desbloqueado === undefined ? true : !!input.desbloqueado,
+  };
+}
+
+export function golpesDisponiveis(skills = [], level = 1) {
+  const nivel = numero(level, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX);
+  return (Array.isArray(skills) ? skills : []).filter((skill) => {
+    if (!skill || skill.desbloqueado === false) return false;
+    return numero(skill.nivel, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX) <= nivel;
+  });
 }
 
 function normalizarStatus(status) {
@@ -41,6 +63,7 @@ export function validateOfflineSkill(input = {}) {
   const status = normalizarStatus(input.status);
   return {
     ...input,
+    ...normalizarMetadadosGolpe(input),
     nome: nome.slice(0, 40),
     tipo,
     poder: numero(input.poder, 100, 10, 1000),

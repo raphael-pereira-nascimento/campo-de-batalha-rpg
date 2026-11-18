@@ -30,7 +30,8 @@ import {
   ARMA_CATEGORIA_INFO,
   ALVO_LABEL,
 } from '../game/sistema.js';
-import { CLASSES, STATUS_DEFS, STATUS_KEYS } from '../game/data.js';
+import { CLASSES, STATUS_DEFS, STATUS_KEYS, ELEMENTOS } from '../game/data.js';
+import { NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX } from '../game/skillValidation.js';
 
 const STEP_NAMES = [
   'Identidade',
@@ -737,6 +738,9 @@ const SKILL_FORM_VAZIO = {
   statusTurnos: 2,
   statusDano: 50,
   desc: '',
+  elemento: 'fisico',
+  nivel: NIVEL_GOLPE_MIN,
+  desbloqueado: true,
 };
 
 let skillSeq = 0;
@@ -759,6 +763,10 @@ function montarGolpe(form, id) {
     cooldown: clampNum(form.cooldown, 0, 20, 0),
     todos: tipo === 'cura' ? !!form.todos : false,
     desc: String(form.desc || '').trim().slice(0, 200),
+    // Elemento e nível alimentam a árvore; o custo de MP é `custo` (acima).
+    elemento: ELEMENTOS.includes(form.elemento) ? form.elemento : 'fisico',
+    nivel: clampNum(form.nivel, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX, NIVEL_GOLPE_MIN),
+    desbloqueado: form.desbloqueado !== false,
   };
   if (tipo === 'buff' || tipo === 'defesa') {
     golpe.afetaAliados = !!form.afetaAliados;
@@ -817,6 +825,9 @@ function golpeParaForm(golpe = {}) {
     statusTurnos: Number(status?.turnos) || 2,
     statusDano: Number(status?.dano) || 0,
     desc: golpe.desc ?? golpe.descricao ?? '',
+    elemento: ELEMENTOS.includes(golpe.elemento) ? golpe.elemento : 'fisico',
+    nivel: clampNum(golpe.nivel, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX, NIVEL_GOLPE_MIN),
+    desbloqueado: golpe.desbloqueado !== false,
   };
 }
 
@@ -855,6 +866,9 @@ function SkillsStep({ skills, setSkills, customSkills, player }) {
           alvos: skill.alvos,
           splash: skill.splash,
           descricao: skill.desc,
+          elemento: skill.elemento,
+          nivel: skill.nivel,
+          desbloqueado: skill.desbloqueado,
         });
       } catch (e) {
         setPublishError(`Golpe salvo na ficha, mas não publicado: ${e?.message || 'falha na API'}.`);
@@ -918,6 +932,22 @@ function SkillsStep({ skills, setSkills, customSkills, player }) {
             <input type="number" min={0} max={20} value={form.cooldown} onChange={(e) => setForm((f) => ({ ...f, cooldown: Number(e.target.value) }))} />
           </label>
         </div>
+        <div className="form-row">
+          <label>
+            Elemento mágico
+            <select value={form.elemento} onChange={(e) => setForm((f) => ({ ...f, elemento: e.target.value }))}>
+              {ELEMENTOS.map((el) => (<option key={el} value={el}>{el}</option>))}
+            </select>
+          </label>
+          <label>
+            Nível para adquirir
+            <input type="number" min={NIVEL_GOLPE_MIN} max={NIVEL_GOLPE_MAX} value={form.nivel} onChange={(e) => setForm((f) => ({ ...f, nivel: Number(e.target.value) }))} />
+          </label>
+        </div>
+        <label className="check-label">
+          <input type="checkbox" checked={form.desbloqueado} onChange={(e) => setForm((f) => ({ ...f, desbloqueado: e.target.checked }))} />
+          Golpe desbloqueado (desmarque para guardar na árvore e desbloquear depois)
+        </label>
         {isDano && (
           <AlvoSelect
             alvo={form.alvo}
@@ -1002,6 +1032,9 @@ function SkillsStep({ skills, setSkills, customSkills, player }) {
             <span className="tag">{SKILL_TYPES[s.tipo]}</span>
             <span className="tag">{s.poder}%</span>
             <span className="tag">MP {s.custo}</span>
+            {s.elemento && <span className="tag">✦ {s.elemento}</span>}
+            <span className="tag">Nv {s.nivel || 1}</span>
+            {s.desbloqueado === false && <span className="tag">🔒 Bloqueado</span>}
             {s.cooldown > 0 && <span className="tag">⏳ {s.cooldown}t</span>}
             {s.todos && <span className="tag">✦ Todos</span>}
             {s.afetaAliados && <span className="tag">✦ Aliados</span>}

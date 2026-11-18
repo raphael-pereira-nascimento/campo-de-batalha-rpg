@@ -69,6 +69,7 @@ import {
   registrarTrinca,
   TRINCAS_DESTRUICAO,
 } from './vibranium.js';
+import { golpesDisponiveis } from '../services/skillValidation.js';
 
 let logCounter = 0;
 
@@ -94,7 +95,10 @@ function attrLabel(name) {
 }
 
 function skillsOf(p) {
-  if (Array.isArray(p.skills) && p.skills.length) return p.skills;
+  // Golpes da árvore bloqueados ou acima do nível atual não podem ser usados.
+  if (Array.isArray(p.skills) && p.skills.length) {
+    return golpesDisponiveis(p.skills, p.level);
+  }
   return (p.spells || [])
     .map((id) => SPELLS[id])
     .filter(Boolean)

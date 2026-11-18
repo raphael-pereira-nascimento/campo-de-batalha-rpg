@@ -2,10 +2,15 @@
 // Fica em módulo separado do `customContent.js` para poder ser testada sem
 // abrir o banco e para ser usada pelo cliente/offline quando necessário.
 
-import { STATUS_KEYS } from '../game/data.js';
+import { STATUS_KEYS, ELEMENTOS } from '../game/data.js';
 import { clamp } from '../utils.js';
 
 export const SKILL_TYPES = ['fisico', 'magia', 'cura', 'buff', 'defesa'];
+// Estrutura técnica da árvore (P-15/P-01 ainda pendentes): nível manual 1–30,
+// o mesmo intervalo usado pelo ajuste de nível das fichas. Nenhum custo oficial
+// de desbloqueio foi criado — a flag é apenas um controle do jogador/mestre.
+export const NIVEL_GOLPE_MIN = 1;
+export const NIVEL_GOLPE_MAX = 30;
 // Vocabulário usado pelo motor e por `AlvoSelect`.
 export const ALVOS_OFICIAIS = ['unico', 'area', 'cone', 'explosao'];
 // Vocabulário antigo aceito por golpes já salvos no Registro.
@@ -15,6 +20,32 @@ const SKILL_KINDS = ['dano', 'cura', 'buff', 'defesa'];
 function numero(valor, padrao, min, max) {
   const n = Number(valor);
   return clamp(Number.isFinite(n) ? n : padrao, min, max);
+}
+
+// Metadados da árvore de habilidades. Golpes antigos (sem estes campos) são
+// tratados como nível 1, elemento físico e já desbloqueados — compatibilidade
+// com todas as fichas salvas antes da árvore existir.
+export function normalizarMetadadosGolpe(input = {}) {
+  const elemento = ELEMENTOS.includes(input.elemento) ? input.elemento : 'fisico';
+  const nivel = Math.round(numero(input.nivel, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX));
+  return {
+    elemento,
+    nivel,
+    desbloqueado: input.desbloqueado === undefined ? true : !!input.desbloqueado,
+  };
+}
+
+// Um golpe só entra no combate quando foi desbloqueado e o personagem já
+// alcançou o nível em que ele é adquirido. A árvore continua salva na ficha.
+export function golpesDisponiveis(skills = [], level = 1) {
+  const nivel = Math.round(numero(level, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX));
+  return (Array.isArray(skills) ? skills : []).filter((skill) => {
+    if (!skill || skill.desbloqueado === false) return false;
+    const requerido = Math.round(
+      numero(skill.nivel, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX),
+    );
+    return requerido <= nivel;
+  });
 }
 
 function normalizarStatus(status) {
@@ -42,6 +73,7 @@ export function validateCustomSkill(input = {}) {
   const suporte = tipo === 'buff' || tipo === 'defesa';
 
   return {
+    ...normalizarMetadadosGolpe(input),
     nome: nome.slice(0, 40),
     tipo,
     // `poder` ausente/inválido deve valer 100%, como no resto do sistema.
@@ -102,5 +134,6 @@ export function decorateCustomSkill(row) {
     afetaAliados: !!(row.afetaAliados ?? row.afeta_aliados),
     buffTipo: row.buffTipo ?? row.buff_tipo ?? null,
     duracao: row.duracao == null ? null : Number(row.duracao),
+    ...normalizarMetadadosGolpe(row),
   };
 }
