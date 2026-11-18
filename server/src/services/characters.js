@@ -23,6 +23,7 @@ import { ALVO_TIPOS } from '../game/sistema.js';
 import { gemIsRaw, getGemById, GEMS, pickGemByWeight, mineGem, rollGemDrop, getInitialGem, MINERA_VEIOS } from '../game/gems.js';
 import { getCustomEquipment } from './customContent.js';
 import { clampInt, clampFloat } from '../utils.js';
+import { dedupeSkillIds } from './skillValidation.js';
 import {
   CORRUPCAO_MIN,
   CORRUPCAO_MAX,
@@ -313,7 +314,10 @@ export function buildCharacterData(playerId, { name, gender, attributes, races, 
   const hpMax = stats.hpMax;
   const mpMax = stats.mpMax;
 
-  const skillsList = [...presetSkillsFrom(normClasses), ...(Array.isArray(skills) ? skills.map(normalizeSkill) : [])];
+  const skillsList = dedupeSkillIds([
+    ...presetSkillsFrom(normClasses),
+    ...(Array.isArray(skills) ? skills.map(normalizeSkill) : []),
+  ]);
   const primary = normClasses.find((c) => c.primary) || normClasses[0];
 
   return {

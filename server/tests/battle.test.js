@@ -234,6 +234,51 @@ describe('BattleManager — efeitos de status', () => {
     expect(battle.currentTurnIndex).not.toBe(beforeTurn);
   });
 
+  it('congelamento de 2 turnos faz o alvo perder exatamente 2 ações', () => {
+    const { manager } = makeManager();
+    const battle = manager.createBattle({
+      name: 'T',
+      mode: 'todos',
+      host: 'p1',
+      hostName: 'H',
+      character: makeCharacter({ id: 'c1', name: 'Alfa' }),
+    });
+    manager.joinBattle({
+      battleId: battle.id,
+      playerId: 'p2',
+      playerName: 'Beta',
+      character: makeCharacter({ id: 'c2', name: 'Beta' }),
+      team: null,
+    });
+    manager.startBattle({ battleId: battle.id, playerId: 'p1' });
+    const current = battle.participants[battle.turnOrder[battle.currentTurnIndex]];
+    const other = battle.participants.find((q) => q !== current);
+    manager._applyStatus(battle, current, { tipo: 'congelamento', turnos: 2 }, other);
+
+    const acao = (quem, payload) => manager.handleAction({
+      battleId: battle.id,
+      characterId: quem.characterId,
+      playerId: quem.playerId,
+      action: payload,
+    });
+
+    acao(current, { type: 'attack', targetId: other.characterId });
+    acao(other, { type: 'defend' });
+    acao(current, { type: 'attack', targetId: other.characterId });
+    expect(current.statuses.some((s) => s.id === 'congelamento')).toBe(false);
+
+    const pulos = battle.log.filter((l) => l.text.includes('está congelado e pula o turno'));
+    expect(pulos).toHaveLength(2);
+
+    acao(other, { type: 'defend' });
+    const antes = battle.log.length;
+    manager._rollToHit = () => ({ hit: true, crit: false, roll: 5, chance: 90, dificuldade: 0 });
+    acao(current, { type: 'attack', targetId: other.characterId });
+    const novos = battle.log.slice(antes).map((l) => l.text).join('\n');
+    expect(novos).toContain('ataca');
+    expect(novos).not.toContain('pula o turno');
+  });
+
   it('fraqueza reduz o multiplicador de dano físico', () => {
     const { manager } = makeManager();
     const p = { isMonster: false, races: [], statuses: [{ id: 'fraqueza', turnos: 2 }], alive: true, hp: 100, hpMax: 100, ultimateMode: false };
@@ -642,7 +687,7 @@ describe('BattleManager — arma utilitária', () => {
       battleId: battle.id,
       characterId: hero.characterId,
       playerId: hero.playerId,
-      action: { type: 'attackUtility', targetId: boss.uid },
+      action: { type: 'attackUtility', weaponId: util.id, targetId: boss.uid },
     });
     expect(hero.wpnUsos[util.id]).toBe(1);
     expect(boss.statuses.map((s) => s.id)).toContain('lentidao');

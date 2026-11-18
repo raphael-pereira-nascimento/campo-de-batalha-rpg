@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ATTRIBUTE_NAMES } from '../config.js';
 import {
   danoFisicoAtaque,
@@ -26,6 +26,7 @@ import {
 } from '../game/sistema.js';
 import { MONSTERS } from '../game/monsters.js';
 import { SPELLS, STATUS_DEFS, EQUIPMENT, armasDeEquipamento, skillFromSpell } from '../game/data.js';
+import { danoDeStatus, normalizarChance } from '../game/combatEffects.js';
 
 // Catálogo de armas para o painel de Arsenais: armas gerais + peças de artilharia.
 const CATALOGO_ARMAS = { ...EQUIPMENT.armas, ...EQUIPMENT.canoes };
@@ -128,22 +129,26 @@ function processProtectionTick(fighters) {
   const next = fighters.map((f) => {
     const prot = f.protection;
     if (!prot) return f;
+    let novo = prot;
     if (prot.state === 'vulnerable') {
-      prot.vulnerableTurnsLeft -= 1;
       changed = true;
-      if (prot.vulnerableTurnsLeft <= 0) {
-        prot.state = 'recharging';
-        prot.rechargeTurnsLeft = PROTECTION_CHEFS[f._bossId]?.rechargeTurns ?? 2;
-      }
+      const restante = prot.vulnerableTurnsLeft - 1;
+      novo = restante <= 0
+        ? {
+          ...prot,
+          state: 'recharging',
+          vulnerableTurnsLeft: 0,
+          rechargeTurnsLeft: PROTECTION_CHEFS[f._bossId]?.rechargeTurns ?? 2,
+        }
+        : { ...prot, vulnerableTurnsLeft: restante };
     } else if (prot.state === 'recharging') {
-      prot.rechargeTurnsLeft -= 1;
       changed = true;
-      if (prot.rechargeTurnsLeft <= 0) {
-        prot.state = 'active';
-        prot.hp = prot.maxHp;
-      }
+      const restante = prot.rechargeTurnsLeft - 1;
+      novo = restante <= 0
+        ? { ...prot, state: 'active', rechargeTurnsLeft: 0, hp: prot.maxHp }
+        : { ...prot, rechargeTurnsLeft: restante };
     }
-    return f;
+    return novo === prot ? f : { ...f, protection: novo };
   });
   return changed ? next : fighters;
 }
@@ -186,32 +191,90 @@ function normalizarGolpeDeFicha(s = {}) {
 }
 
 // Converte um status de golpe/arma (STATUS_DEFS) num efeito de mesa com
-// dano/cura por rodada. `stat: 'custom'` evita contar o valor duas vezes.
-function statusParaEfeito(status) {
-  if (!status || !status.tipo) return null;
-  const def = STATUS_DEFS[status.tipo] || {};
-  const valor = Math.max(0, Number(status.dano ?? def.danoPadrao ?? 0) || 0);
-  const dot = def.tipo === 'dot' ? valor : 0;
-  const hot = def.tipo === 'hot' ? valor : 0;
+// dano/cura por rodada. Usa `danoDeStatus` do combate principal para honrar
+// `danoPctVidaMaxima` (Podridão/Ferida Pandemônica) e não inventa dano padrão.
+function statusParaEfeito(status, alvo = {}) {
+  if (!status || !status.tipo || !STATUS_DEFS[status.tipo]) return null;
+  const def = STATUS_DEFS[status.tipo];
+  const valor = Math.max(0, Math.round(danoDeStatus(status, {
+    hpMaxOriginal: alvo.hpMaxOriginal ?? alvo.hpMax,
+    hpMax: alvo.hpMax,
+  }) || 0));
+  const reducaoCuraPct = status.reducaoCuraPct
+    ?? status.reducaoPotenciaCuraProtecao
+    ?? def.reducaoCuraPct
+    ?? def.reducaoPotenciaCuraProtecao
+    ?? null;
   return {
     uid: uid(),
     name: def.nome || status.tipo,
     icon: def.icon || '✦',
     stat: 'custom',
     statusId: status.tipo,
-    dot,
-    hot,
+    dot: def.tipo === 'dot' ? valor : 0,
+    hot: def.tipo === 'hot' ? valor : 0,
     value: valor,
+    danoPctVidaMaxima: status.danoPctVidaMaxima
+      ?? status.percentualDanoVidaMaxima
+      ?? def.danoPctVidaMaxima
+      ?? null,
     // Contaminação/Ferida Pandemônica reduzem a cura recebida (igual ao motor).
-    reducaoCuraPct: Math.max(0, Number(
-      status.reducaoCuraPct ?? def.reducaoCuraPct ?? def.reducaoPotenciaCuraProtecao ?? 0,
-    ) || 0),
-    duration: Math.max(1, Number(status.turnos) || def.duracaoPadrao || 2),
+    reducaoCuraPct: reducaoCuraPct == null ? null : Math.max(0, Number(reducaoCuraPct) || 0),
+    duration: Math.max(1, Math.trunc(
+      Number(status.turnos) || Number(def.duracaoPadrao) || 1,
+    )),
     type: def.tipo === 'hot' ? 'buff' : 'debuff',
   };
 }
 
+// Aplicação central de status: mesma chance, critério "somente crítico" e
+// regra "efeito idêntico renova, não acumula" do `_applyStatus` do motor.
+function aplicarStatusMesa(f, status, opcoes = {}) {
+  const efeitos = f?.statusEffects || [];
+  if (!f || !status || !STATUS_DEFS[status.tipo]) return { statusEffects: efeitos, efeito: null };
+  if (status.somenteCritico === true && opcoes.crit !== true) {
+    return { statusEffects: efeitos, efeito: null };
+  }
+  const chance = normalizarChance(status.chance, 1);
+  if (chance < 1 && Math.random() > chance) return { statusEffects: efeitos, efeito: null };
+  const efeito = statusParaEfeito(status, f);
+  if (!efeito) return { statusEffects: efeitos, efeito: null };
+  const idx = efeitos.findIndex((e) => e.statusId === efeito.statusId);
+  if (idx < 0) return { statusEffects: [...efeitos, efeito], efeito };
+  const atual = efeitos[idx];
+  const renovado = {
+    ...atual,
+    duration: Math.max(Number(atual.duration) || 0, efeito.duration),
+    dot: Math.max(Number(atual.dot) || 0, efeito.dot),
+    hot: Math.max(Number(atual.hot) || 0, efeito.hot),
+    value: Math.max(Number(atual.value) || 0, efeito.value),
+    reducaoCuraPct: efeito.reducaoCuraPct == null
+      ? atual.reducaoCuraPct : Math.max(Number(atual.reducaoCuraPct) || 0, efeito.reducaoCuraPct),
+  };
+  const statusEffects = efeitos.map((e, i) => (i === idx ? renovado : e));
+  return { statusEffects, efeito: renovado };
+}
+
 // Bônus percentual de dano (buffs) por eixo. Compatível com efeitos manuais.
+function temStatus(f, id) {
+  return (f?.statusEffects || []).some((e) => e.statusId === id);
+}
+
+// Debuffs de controle do motor: cegueira/lentidão reduzem acerto (e lentidão
+// também esquiva); fraqueza reduz o dano em 20%.
+function penalidadesDeStatus(f) {
+  const out = { acc: 0, dodge: 0, danoMult: 1 };
+  for (const e of f?.statusEffects || []) {
+    if (e.statusId === 'cegueira') out.acc += 0.25;
+    if (e.statusId === 'lentidao') {
+      out.acc += 0.1;
+      out.dodge += 0.1;
+    }
+    if (e.statusId === 'fraqueza') out.danoMult *= 0.8;
+  }
+  return out;
+}
+
 function multiplicadorDano(f, tipo) {
   let pct = 0;
   for (const e of f?.statusEffects || []) {
@@ -220,16 +283,27 @@ function multiplicadorDano(f, tipo) {
     else if (tipo === 'fisico' && e.stat === 'danoFisico') pct += v;
     else if (tipo === 'magia' && e.stat === 'danoMagico') pct += v;
   }
-  return 1 + pct / 100;
+  return (1 + pct / 100) * penalidadesDeStatus(f).danoMult;
 }
 
-// Redução percentual do dano recebido (magias de defesa), com teto de 75%.
-function reducaoDanoRecebido(f) {
+// Camadas de defesa do combate principal: defesa total reduce pela metade,
+// reduções percentuais por efeito e, por fim, a defesa numérica da armadura.
+// `stat: 'defesa'` é mantido como legado percentual de efeitos antigos da mesa.
+function danoComDefesa(alvo, danoBruto, tipo) {
+  const bruto = Math.max(0, Math.round(danoBruto));
+  let valor = bruto;
+  const defesaTotal = !!alvo?.defense || (alvo?.statusEffects || []).some((e) => e.stat === 'defense');
+  if (defesaTotal) valor = Math.round(valor / 2);
   let pct = 0;
-  for (const e of f?.statusEffects || []) {
+  for (const e of alvo?.statusEffects || []) {
     if (e.stat === 'defesa') pct += Math.abs(Number(e.value) || 0);
+    if (tipo === 'fisico' && e.stat === 'reducaoDanoFisico') pct += Math.abs(Number(e.value) || 0);
+    if (tipo === 'magia' && e.stat === 'reducaoDanoMagico') pct += Math.abs(Number(e.value) || 0);
   }
-  return Math.min(75, pct);
+  if (pct > 0) valor = Math.round(valor * (1 - Math.min(100, pct) / 100));
+  valor = Math.max(0, valor - (Number(alvo?.defesa) || 0));
+  if (valor === 0 && bruto > 0) valor = Math.max(1, Math.round(bruto * 0.1));
+  return valor;
 }
 
 // Redução percentual de cura recebida (Contaminação Pandemônica etc.), com o
@@ -250,15 +324,10 @@ function curaRecebida(f, quantidade) {
   return Math.max(0, Math.round(bruto * (1 - reducao / 100)));
 }
 
-// Remove efeitos nocivos por id/nome (itens com `removeStatus`).
+// Remove efeitos por id (itens com `removeStatus`), igual ao motor.
 function removerStatus(f, ids) {
   const alvos = Array.isArray(ids) ? ids : [ids];
-  const nomes = alvos.map((id) => (STATUS_DEFS[id]?.nome || id).toLowerCase());
-  return (f.statusEffects || []).filter((e) => {
-    const id = e.statusId || '';
-    const nome = String(e.name || '').toLowerCase();
-    return !alvos.includes(id) && !nomes.includes(nome);
-  });
+  return (f.statusEffects || []).filter((e) => !alvos.includes(e.statusId));
 }
 
 function makeFighter(name, team, attrs = {}, extra = {}) {
@@ -280,8 +349,13 @@ function makeFighter(name, team, attrs = {}, extra = {}) {
     skills: extra.skills || [],
     inventory: extra.inventory || [],
     level: extra.level || 1,
+    defense: false,
+    defesa: Number(extra.defesa) || 0,
+    drunk: false,
+    drunkTurns: 0,
     _charId: extra._charId || null,
     ...extra,
+    hpMaxOriginal: extra.hpMaxOriginal ?? hpMax,
   };
 }
 
@@ -299,6 +373,12 @@ function fighterFromCharacter(c, team) {
 
 function effectiveStat(fighter, stat) {
   let base = fighter[stat] || 0;
+  // Bêbado: +1 FOR, -1 DES, -1 REF (mesmo ajuste das rolagens do motor).
+  if (fighter?.drunk) {
+    if (stat === 'forca') base += 1;
+    if (stat === 'destreza') base -= 1;
+    if (stat === 'reflexos') base -= 1;
+  }
   for (const e of fighter.statusEffects) {
     if (e.stat === stat) base += e.value;
   }
@@ -312,18 +392,26 @@ function computeHitChance(attacker, defender, fumacaAtacante = 0, fumacaAlvo = 0
   const delta = (atkMod - defMod) * 0.04;
   // Fumaça: atrapalha a mira de quem está dentro dela e camufla o alvo.
   const fumacaPenal = fumacaMiraPenalidade(fumacaAtacante) + fumacaCamuflagemBonus(fumacaAlvo);
-  return Math.max(0.05, Math.min(0.95, base + delta - fumacaPenal));
+  const atkPenal = penalidadesDeStatus(attacker);
+  const defPenal = penalidadesDeStatus(defender);
+  return Math.max(0.05, Math.min(0.95,
+    base + delta - fumacaPenal - atkPenal.acc - defPenal.dodge,
+  ));
 }
 
-function computeDamage(attacker, isCrit) {
-  // Mesmo sistema do combate principal: (FOR Final + danoBase da arma) × 10 — sem dados.
-  // Lutadores de mesa não têm equipamento => mãos nuas (danoBaseDaArma(null) = 2).
-  const base = danoFisicoAtaque(effectiveStat(attacker, 'forca'), danoBaseDaArma(null));
+function computeDamage(attacker, isCrit, arma = null) {
+  // Mesmo sistema do combate principal: (FOR Final + danoBase da arma) × 10.
+  const base = danoFisicoAtaque(effectiveStat(attacker, 'forca'), danoBaseDaArma(arma));
   const buff = multiplicadorDano(attacker, 'fisico');
   return Math.max(1, Math.round(base * (isCrit ? 2 : 1) * buff));
 }
 
 export default function TableBattle({ onBack, characters = [], gameData }) {
+  const rollTimers = useRef(new Set());
+  useEffect(() => () => {
+    for (const timer of rollTimers.current) clearInterval(timer);
+    rollTimers.current.clear();
+  }, []);
   const [fighters, setFighters] = useState([]);
   const [round, setRound] = useState(1);
   const [initiativeOrder, setInitiativeOrder] = useState([]);
@@ -480,8 +568,10 @@ const [lastRoll, setLastRoll] = useState(null);
   }, [fighters, actAttacker, selSpellId, magiasDoLutador]);
   const magiaSuporte = !!magiaSelecionada
     && ['cura', 'buff', 'defesa'].includes(magiaSelecionada.skill.tipo);
-  const magiaEmGrupo = !!magiaSelecionada
-    && (magiaSelecionada.skill.todos || magiaSelecionada.skill.afetaAliados);
+  const magiaEmGrupo = !!magiaSelecionada && (
+    (magiaSelecionada.skill.tipo === 'cura' && magiaSelecionada.skill.todos)
+    || (['buff', 'defesa'].includes(magiaSelecionada.skill.tipo) && magiaSelecionada.skill.afetaAliados)
+  );
   // Magias de dano em área escolhem todos os inimigos sozinhas, sem exigir alvo.
   const magiaAutoAlvo = !!magiaSelecionada
     && !magiaSuporte
@@ -520,7 +610,9 @@ const [lastRoll, setLastRoll] = useState(null);
   const alvosDeSuporte = useCallback((attacker, skill) => {
     if (!attacker) return [];
     const aliadosVivos = fighters.filter((f) => f.hp > 0 && f.team === attacker.team);
-    if (skill?.todos || skill?.afetaAliados) return aliadosVivos;
+    // O motor usa `todos` só para cura e `afetaAliados` só para buff/defesa.
+    if (skill?.tipo === 'cura' && skill?.todos) return aliadosVivos;
+    if ((skill?.tipo === 'buff' || skill?.tipo === 'defesa') && skill?.afetaAliados) return aliadosVivos;
     if (skill?.tipo === 'buff' || skill?.tipo === 'defesa') return [attacker];
     const escolhidos = actTargets
       .map((id) => fighters.find((f) => f.id === id))
@@ -570,12 +662,19 @@ const [lastRoll, setLastRoll] = useState(null);
   // Equipa uma arma/canhão no slot escolhido. Inicializa usos e recarga do
   // armamento novo (o efeito de inicialização só roda para lutadores novos).
   const equiparArma = useCallback((fighterId, slot, armaId) => {
-    const def = armaId ? CATALOGO_ARMAS[armaId] : null;
+    const dono = fighters.find((f) => f.id === fighterId);
+    const atual = (dono?.equipment?.armas || {})[slot] || null;
+    const def = armaId
+      ? (CATALOGO_ARMAS[armaId] || (atual?.id === armaId ? atual : null))
+      : null;
     // Ids fora do catálogo (armas customizadas/legado) só podem permanecer.
     if (armaId && !def) return;
     // O catálogo é indexado por id; o id entra na arma equipada porque usos e
-    // recarga são controlados por ele.
-    const nova = def ? { ...def, id: armaId, categoria: slot } : null;
+    // recarga são controlados por ele. A categoria da definição é preservada.
+    const nova = def ? {
+      ...def, id: armaId, categoria: def.categoria || slot,
+      ...(categoriaDeArma(def) ? { categoria: categoriaDeArma(def) } : {}),
+    } : null;
     setFighters((prev) => prev.map((f) => {
       if (f.id !== fighterId) return f;
       const armas = { ...(f.equipment?.armas || {}), [slot]: nova };
@@ -597,7 +696,6 @@ const [lastRoll, setLastRoll] = useState(null);
     if (fighterId === actAttacker) {
       setSelWeaponId(nova ? nova.id : '');
     }
-    const dono = fighters.find((f) => f.id === fighterId);
     addLog(nova
       ? `🧰 ${dono?.name || 'Combatente'} equipa ${nova.nome}${nova.usosMax ? ` (${nova.usosMax} uso(s))` : ''}.`
       : `🧰 ${dono?.name || 'Combatente'} fica desarmado no slot ${ARMA_CATEGORIA_INFO[slot]?.nome || slot}.`);
@@ -776,6 +874,10 @@ const [lastRoll, setLastRoll] = useState(null);
   const executarAcao = useCallback(() => {
     const attacker = fighters.find((f) => f.id === actAttacker);
     if (!attacker || attacker.hp <= 0) return;
+    if (temStatus(attacker, 'congelamento')) {
+      addLog(`🧊 ${attacker.name} está congelado e não pode agir neste turno.`);
+      return;
+    }
 
     // Respeita a ordem de turno quando a iniciativa já foi rolada.
     if (initiativeRolled && initiativeOrder.length > 0) {
@@ -948,14 +1050,12 @@ const [lastRoll, setLastRoll] = useState(null);
           return;
         }
 
-        const reducao = reducaoDanoRecebido(alvo);
-        const dmg = Math.max(1, Math.round(
-          danoBase * (isCrit ? 2 : 1) * mult * buffDano * (1 - reducao / 100),
-        ));
+        const bruto = danoBase * (isCrit ? 2 : 1) * mult * buffDano;
+        const dmg = danoComDefesa(alvo, bruto, 'fisico');
         const res = applyDamageWithProtection(alvo, dmg);
         resultados.push({ id: alvo.id, res });
         const multTxt = mult < 1 ? ` (${Math.round(mult * 100)}%)` : '';
-        const redTxt = reducao > 0 ? ` (defesa −${reducao}%)` : '';
+        const redTxt = dmg < Math.round(bruto) ? ' (defesa)' : '';
         const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${multTxt}${redTxt}` : '';
         addLog(`⚔️ ${attacker.name} ataca ${alvoTxt} com ${arma.nome || 'desarmado'} → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold}${difTxt}) ${isCrit ? 'CRÍTICO ' : ''}${suffix}`);
         if (res.protecaoQuebrou) addLog(res.msg);
@@ -963,10 +1063,10 @@ const [lastRoll, setLastRoll] = useState(null);
         // Efeito da arma (ex.: congelamento) só em quem foi atingido e sobreviveu.
         const hpDepois = Math.max(0, alvo.hp - res.danoReal);
         if (arma.efeito && hpDepois > 0) {
-          const eff = statusParaEfeito(arma.efeito);
-          if (eff) {
-            efeitosPorAlvo.set(alvo.id, eff);
-            addLog(`✨ ${alvo.name} recebe ${eff.name} por ${eff.duration} rodadas`);
+          const aplicado = aplicarStatusMesa({ ...alvo, hp: hpDepois }, arma.efeito, { crit: isCrit });
+          if (aplicado.efeito) {
+            efeitosPorAlvo.set(alvo.id, aplicado.statusEffects);
+            addLog(`✨ ${alvo.name} recebe ${aplicado.efeito.name} por ${aplicado.efeito.duration} rodadas`);
           }
         }
       });
@@ -976,8 +1076,8 @@ const [lastRoll, setLastRoll] = useState(null);
           let nf = f;
           const r = resultados.find((x) => x.id === f.id);
           if (r) nf = aplicarDanoAoCombatente(nf, r.res);
-          const eff = efeitosPorAlvo.get(f.id);
-          if (eff) nf = { ...nf, statusEffects: [...nf.statusEffects, eff] };
+          const efeitos = efeitosPorAlvo.get(f.id);
+          if (efeitos) nf = { ...nf, statusEffects: efeitos };
           return nf;
         }));
       }
@@ -1018,18 +1118,16 @@ const [lastRoll, setLastRoll] = useState(null);
             curaMagica(effectiveStat(attacker, 'inteligencia'), skill.poder),
           ));
           // Cura pode carregar status positivo (ex.: regeneração).
-          const efeitoCura = skill.status ? statusParaEfeito(skill.status) : null;
+          const efeitoCura = skill.status ? statusParaEfeito(skill.status, attacker) : null;
           setFighters((prev) => prev.map((f) => {
             const nf = pagarCusto(f);
             if (!alvos.some((a) => a.id === nf.id)) return nf;
             const cura = Math.max(0, Math.min(nf.hpMax - nf.hp, curaRecebida(nf, curaBase)));
-            return {
-              ...nf,
-              hp: nf.hp + cura,
-              statusEffects: efeitoCura
-                ? [...nf.statusEffects, { ...efeitoCura, uid: uid() }]
-                : nf.statusEffects,
-            };
+            const comCura = { ...nf, hp: nf.hp + cura };
+            const aplicado = skill.status ? aplicarStatusMesa(comCura, skill.status) : null;
+            return aplicado?.efeito
+              ? { ...comCura, statusEffects: aplicado.statusEffects }
+              : comCura;
           }));
           alvos.forEach((a) => {
             const cura = Math.max(0, Math.min(a.hpMax - a.hp, curaRecebida(a, curaBase)));
@@ -1044,24 +1142,30 @@ const [lastRoll, setLastRoll] = useState(null);
           ? 1
           : Math.max(1, Number(skill.duracao) || 3);
         const valor = skill.tipo === 'defesa'
-          ? Math.max(1, Number(skill.poder) || 25)
+          ? 1
           : Math.max(1, Number(skill.poder) || 10);
         const stat = skill.tipo === 'defesa'
-          ? 'defesa'
+          ? 'defense' // marcador: dano pela metade, igual ao `p.defense` do motor
           : skill.buffTipo === 'fisico' ? 'danoFisico'
             : skill.buffTipo === 'magico' ? 'danoMagico' : 'dano';
         const icone = skill.tipo === 'defesa'
           ? '🛡️'
           : skill.buffTipo === 'fisico' ? '💪' : skill.buffTipo === 'magico' ? '🔮' : '✨';
-        const base = { name: skill.nome, icon: icone, stat, value: valor, duration: duracao, type: 'buff' };
+        const base = {
+          name: skill.nome, icon: icone, stat, value: valor,
+          duration: duracao, type: 'buff', skillId: skill.id,
+        };
         setFighters((prev) => prev.map((f) => {
           const nf = pagarCusto(f);
           if (!alvos.some((a) => a.id === nf.id)) return nf;
-          return { ...nf, statusEffects: [...nf.statusEffects, { ...base, uid: uid() }] };
+          const efeitos = skill.tipo === 'defesa'
+            ? nf.statusEffects.filter((e) => e.skillId !== skill.id)
+            : nf.statusEffects;
+          return { ...nf, statusEffects: [...efeitos, { ...base, uid: uid() }] };
         }));
         const nomes = alvos.map((a) => a.name).join(', ');
         if (skill.tipo === 'defesa') {
-          addLog(`🛡️ ${attacker.name} usa ${skill.nome}: ${nomes} reduz o dano recebido em ${valor}% (MP ${custo}).`);
+          addLog(`🛡️ ${attacker.name} usa ${skill.nome}: ${nomes} se defendem (dano reduzido pela metade, MP ${custo}).`);
         } else {
           const eixo = skill.buffTipo === 'fisico' ? 'dano físico'
             : skill.buffTipo === 'magico' ? 'dano mágico' : 'dano';
@@ -1127,14 +1231,12 @@ const [lastRoll, setLastRoll] = useState(null);
           return;
         }
 
-        const reducao = reducaoDanoRecebido(alvo);
-        const dmg = Math.max(1, Math.round(
-          danoBase * (isCrit ? 2 : 1) * mult * (1 - reducao / 100),
-        ));
+        const bruto = danoBase * (isCrit ? 2 : 1) * mult;
+        const dmg = danoComDefesa(alvo, bruto, skill.tipo === 'fisico' ? 'fisico' : 'magia');
         const res = applyDamageWithProtection(alvo, dmg);
         resultados.push({ id: alvo.id, res });
         const multTxt = mult < 1 ? ` (${Math.round(mult * 100)}%)` : '';
-        const redTxt = reducao > 0 ? ` (defesa −${reducao}%)` : '';
+        const redTxt = dmg < Math.round(bruto) ? ' (defesa)' : '';
         const rollTxt = multi ? ` → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold}${difTxt})${isCrit ? ' CRÍTICO' : ''}` : '';
         const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${multTxt}${redTxt}` : '';
         addLog(`🔮 ${attacker.name} lança ${skill.nome} em ${alvoTxt}${rollTxt}${suffix}${i === 0 ? ` (MP ${custo})` : ''}`);
@@ -1143,10 +1245,10 @@ const [lastRoll, setLastRoll] = useState(null);
         // Efeito da magia só em quem foi atingido e sobreviveu.
         const hpDepois = Math.max(0, alvo.hp - res.danoReal);
         if (skill.status && hpDepois > 0) {
-          const eff = statusParaEfeito(skill.status);
-          if (eff) {
-            efeitosPorAlvo.set(alvo.id, eff);
-            addLog(`✨ ${alvo.name} recebe ${eff.name} por ${eff.duration} rodadas`);
+          const aplicado = aplicarStatusMesa({ ...alvo, hp: hpDepois }, skill.status, { crit: isCrit });
+          if (aplicado.efeito) {
+            efeitosPorAlvo.set(alvo.id, aplicado.statusEffects);
+            addLog(`✨ ${alvo.name} recebe ${aplicado.efeito.name} por ${aplicado.efeito.duration} rodadas`);
           }
         }
       });
@@ -1155,8 +1257,8 @@ const [lastRoll, setLastRoll] = useState(null);
         let nf = pagarCusto(f);
         const r = resultados.find((x) => x.id === nf.id);
         if (r) nf = aplicarDanoAoCombatente(nf, r.res);
-        const eff = efeitosPorAlvo.get(nf.id);
-        if (eff) nf = { ...nf, statusEffects: [...nf.statusEffects, eff] };
+        const efeitos = efeitosPorAlvo.get(nf.id);
+        if (efeitos) nf = { ...nf, statusEffects: efeitos };
         return nf;
       }));
       setActTargets([]);
@@ -1166,30 +1268,26 @@ const [lastRoll, setLastRoll] = useState(null);
     if (actionMode === 'item') {
       const it = itensDoLutador(attacker).find((x) => x.id === selItemId);
       if (!it) return;
-      const alvo = fighters.find((f) => f.id === actTargets[0] && f.hp > 0 && f.team === attacker.team) || attacker;
+      // Itens são aplicados em quem os usa, igual ao `_resolveItem` do motor.
+      const alvo = attacker;
       const detalhes = [];
-      const efeitos = [];
+      const buffs = [];
       // Cura de item obedece à redução de cura recebida (Contaminação etc.).
       const curaItem = it.cura ? curaRecebida(alvo, it.cura) : 0;
       if (it.cura) detalhes.push(`+${Math.max(0, Math.min(alvo.hpMax - alvo.hp, curaItem))} HP`);
       if (it.mana) detalhes.push(`+${Math.max(0, Math.min(alvo.mpMax - alvo.mp, it.mana))} MP`);
-      if (it.status) {
-        const eff = statusParaEfeito(it.status);
-        if (eff) {
-          efeitos.push(eff);
-          detalhes.push(`${eff.name} por ${eff.duration} rodada(s)`);
-        }
-      }
+      const efeitoStatus = it.status ? statusParaEfeito(it.status, alvo) : null;
+      if (efeitoStatus) detalhes.push(`${efeitoStatus.name} por ${efeitoStatus.duration} rodada(s)`);
       if (it.removeStatus) detalhes.push('remove efeito(s) nocivo(s)');
       if (it.buffFisico) {
-        efeitos.push({
+        buffs.push({
           uid: uid(), name: it.nome, icon: '💪', stat: 'danoFisico',
           value: Math.round(it.buffFisico * 100), duration: it.buffTurns || 3, type: 'buff',
         });
         detalhes.push(`+${Math.round(it.buffFisico * 100)}% dano físico`);
       }
       if (it.buffMagico) {
-        efeitos.push({
+        buffs.push({
           uid: uid(), name: it.nome, icon: '🔮', stat: 'danoMagico',
           value: Math.round(it.buffMagico * 100), duration: it.buffTurns || 3, type: 'buff',
         });
@@ -1198,22 +1296,27 @@ const [lastRoll, setLastRoll] = useState(null);
       if (it.drunk) detalhes.push('fica bêbado');
 
       setFighters((prev) => prev.map((f) => {
-        // O item é consumido do inventário de quem o usou.
-        let nf = f.id === attacker.id
-          ? { ...f, inventory: (f.inventory || []).filter((x) => x.id !== it.id) }
-          : f;
-        if (nf.id !== alvo.id) return nf;
+        if (f.id !== attacker.id) return f;
+        let nf = { ...f, inventory: (f.inventory || []).filter((x) => x.id !== it.id) };
         let hp = nf.hp;
         let mp = nf.mp;
         if (it.cura) hp = Math.max(0, Math.min(nf.hpMax, hp + curaItem));
         if (it.mana) mp = Math.max(0, Math.min(nf.mpMax, mp + it.mana));
-        const statusEffects = [
-          ...(it.removeStatus ? removerStatus(nf, it.removeStatus) : nf.statusEffects),
-          ...efeitos.map((e) => ({ ...e, uid: uid() })),
-        ];
-        return { ...nf, hp, mp, statusEffects };
+        let statusEffects = it.removeStatus ? removerStatus(nf, it.removeStatus) : nf.statusEffects;
+        if (it.status) {
+          const aplicado = aplicarStatusMesa({ ...nf, hp, statusEffects }, it.status);
+          if (aplicado.efeito) statusEffects = aplicado.statusEffects;
+        }
+        return {
+          ...nf, hp, mp,
+          statusEffects: [...statusEffects, ...buffs],
+          drunk: it.drunk ? true : nf.drunk,
+          drunkTurns: it.drunk
+            ? Math.max(nf.drunkTurns || 0, it.drunkTurns || 3)
+            : nf.drunkTurns,
+        };
       }));
-      addLog(`🧪 ${attacker.name} usa ${it.nome} em ${alvo.name}${detalhes.length ? `: ${detalhes.join(', ')}` : ''}.`);
+      addLog(`🧪 ${attacker.name} usa ${it.nome}${detalhes.length ? `: ${detalhes.join(', ')}` : ''}.`);
       setSelItemId('');
       setActTargets([]);
       return;
@@ -1231,29 +1334,48 @@ const [lastRoll, setLastRoll] = useState(null);
     else setCustomDebuffs((p) => p.filter((e) => e.uid !== uid_));
   }, []);
 
+  // Processa os efeitos no início da rodada espelhando `_processStatuses` do
+  // motor: cada status é aplicado por vez (DOT letal interrompe a cura), a cura
+  // passa pela redução recebida e os turnos são decrementados ao final.
   const tickEffects = useCallback(() => {
-    setFighters((prev) => prev.map((f) => {
-      let hpDelta = 0;
-      for (const e of f.statusEffects) {
-        if ((e.duration || 0) <= 0) continue;
-        if (e.stat === 'regen') hpDelta += Number(e.value) || 0;
-        if (e.stat === 'poison') hpDelta -= Number(e.value) || 0;
-        if (e.dot) hpDelta -= Number(e.dot) || 0;
-        if (e.hot) hpDelta += Number(e.hot) || 0;
+    const mensagens = new Set();
+    setFighters((prev) => prev.map((f0) => {
+      let f = { ...f0, statusEffects: [...(f0.statusEffects || [])] };
+      for (let i = f.statusEffects.length - 1; i >= 0; i--) {
+        const e = { ...f.statusEffects[i] };
+        const danoBruto = Math.max(0, Number(e.dot ?? (e.stat === 'poison' ? e.value : 0)) || 0);
+        const curaBruta = Math.max(0, Number(e.hot ?? (e.stat === 'regen' ? e.value : 0)) || 0);
+        if (f.hp > 0 && danoBruto > 0) {
+          const dano = Math.min(f.hp, Math.round(danoBruto));
+          f.hp -= dano;
+          mensagens.add(`☠️ ${f.name} sofre ${dano} de dano de ${e.name || 'efeito'}`);
+        }
+        if (f.hp > 0 && curaBruta > 0) {
+          const antes = f.hp;
+          f.hp = Math.min(f.hpMax, f.hp + curaRecebida(f, curaBruta));
+          if (f.hp > antes) mensagens.add(`💚 ${f.name} recupera ${f.hp - antes} HP de ${e.name || 'efeito'}`);
+        }
+        e.duration = (Number(e.duration) || 0) - 1;
+        if (e.duration <= 0) {
+          f.statusEffects.splice(i, 1);
+          if (e.statusId) mensagens.add(`${e.icon || '✦'} ${e.name} em ${f.name} acabou.`);
+        } else {
+          f.statusEffects[i] = e;
+        }
       }
-      const updated = f.statusEffects.map((e) => ({ ...e, duration: e.duration - 1 })).filter((e) => e.duration > 0);
       // Recargas de golpes diminuem a cada rodada.
       const cooldowns = {};
       for (const [k, v] of Object.entries(f.cooldowns || {})) {
         if (Number(v) > 1) cooldowns[k] = Number(v) - 1;
       }
-      if (hpDelta !== 0) {
-        if (hpDelta > 0) addLog(`💚 ${f.name} recupera ${hpDelta} HP`);
-        if (hpDelta < 0) addLog(`☠️ ${f.name} sofre ${Math.abs(hpDelta)} de dano de efeito`);
-        return { ...f, statusEffects: updated, cooldowns, hp: Math.max(0, Math.min(f.hpMax, f.hp + hpDelta)) };
-      }
-      return { ...f, statusEffects: updated, cooldowns };
+      const drunkTurns = Math.max(0, (f.drunkTurns || 0) - 1);
+      return {
+        ...f, cooldowns,
+        drunkTurns,
+        drunk: drunkTurns > 0 && !!f.drunk,
+      };
     }));
+    for (const msg of mensagens) addLog(msg);
   }, [addLog]);
 
   const rollDice = useCallback(() => {
@@ -1261,6 +1383,10 @@ const [lastRoll, setLastRoll] = useState(null);
     const attacker = fighters.find((f) => f.id === atkAttacker);
     const defender = fighters.find((f) => f.id === atkDefender);
     if (!attacker || !defender || defender.hp <= 0) return;
+    if (temStatus(attacker, 'congelamento')) {
+      addLog(`🧊 ${attacker.name} está congelado e não pode atacar neste turno.`);
+      return;
+    }
 
     // Respeita a ordem de turno quando a iniciativa já foi rolada.
     if (initiativeRolled && initiativeOrder.length > 0) {
@@ -1272,6 +1398,12 @@ const [lastRoll, setLastRoll] = useState(null);
       }
     }
 
+    const armas = armasDoLutador(attacker);
+    const arma = armas.find((a) => a.id === selWeaponId)
+      || armas.filter((a) => a.categoria !== 'utilitaria')
+        .sort((a, b) => (danoBaseDaArma(b) || 0) - (danoBaseDaArma(a) || 0))[0]
+      || armas[0]
+      || null;
     setRolling(true);
     setRollResult(null);
     let step = 0;
@@ -1280,6 +1412,7 @@ const [lastRoll, setLastRoll] = useState(null);
       setLastRoll(Math.floor(Math.random() * 20) + 1);
       if (step >= 15) {
         clearInterval(interval);
+        rollTimers.current.delete(interval);
         const finalRoll = Math.floor(Math.random() * 20) + 1;
         setLastRoll(finalRoll);
         setRolling(false);
@@ -1296,8 +1429,8 @@ const [lastRoll, setLastRoll] = useState(null);
         const isFail = finalRoll === 1;
         const hit = isCrit || (!isFail && finalRoll <= threshold);
         if (hit) {
-          const reducao = reducaoDanoRecebido(defender);
-          const dmg = Math.max(1, Math.round(computeDamage(attacker, isCrit) * (1 - reducao / 100)));
+          const bruto = computeDamage(attacker, isCrit, arma);
+          const dmg = danoComDefesa(defender, bruto, 'fisico');
           const res = applyDamageWithProtection(defender, dmg);
           setFighters((prev) => prev.map((f) => (
             f.id === defender.id ? aplicarDanoAoCombatente(f, res) : f
@@ -1313,16 +1446,21 @@ const [lastRoll, setLastRoll] = useState(null);
         }
       }
     }, 60);
-  }, [atkAttacker, atkDefender, fighters, addLog, initiativeRolled, initiativeOrder, currentTurnIndex, fumaca]);
+    rollTimers.current.add(interval);
+  }, [atkAttacker, atkDefender, fighters, addLog, initiativeRolled, initiativeOrder, currentTurnIndex, fumaca, armasDoLutador, selWeaponId]);
 
   // Fim de rodada: avança a recarga de cada arma e recarrega as utilitárias
   // quando o contador zera (volta ao `usosMax`).
-  const processarRecargas = useCallback(() => {
+  const processarRecargas = useCallback((somenteId = null) => {
     const recNovo = {};
     const finalizadas = [];
     let mudou = false;
     for (const fid of Object.keys(wpnRecarga)) {
       const mapa = wpnRecarga[fid];
+      if (somenteId && fid !== somenteId) {
+        recNovo[fid] = mapa;
+        continue;
+      }
       if (!mapa || typeof mapa !== 'object') {
         recNovo[fid] = mapa;
         continue;
@@ -1357,11 +1495,16 @@ const [lastRoll, setLastRoll] = useState(null);
   // Fim de rodada: esfria armas que não dispararam, desconta o travamento do
   // superaquecimento e dissipa a fumaça de quem não atirou. Espelha o
   // `_resfriarArmas` do combate principal, mas em escala de rodada da mesa.
-  const processarCalorEFumaca = useCallback(() => {
+  const processarCalorEFumaca = useCallback((somenteId = null) => {
     const novoCalor = {};
     const novoSuper = {};
     const novaFumaca = { ...fumaca };
     for (const f of fighters) {
+      if (somenteId && f.id !== somenteId) {
+        novoCalor[f.id] = wpnCalor[f.id] || {};
+        novoSuper[f.id] = wpnSuperaquecido[f.id] || {};
+        continue;
+      }
       const calorMap = { ...(wpnCalor[f.id] || {}) };
       const superMap = { ...(wpnSuperaquecido[f.id] || {}) };
       const disparouMap = wpnDisparou[f.id] || {};
@@ -1407,7 +1550,10 @@ const [lastRoll, setLastRoll] = useState(null);
     setWpnSuperaquecido(novoSuper);
     setFumaca(novaFumaca);
     const novoDisparou = {};
-    for (const f of fighters) novoDisparou[f.id] = {};
+    for (const f of fighters) {
+      novoDisparou[f.id] = somenteId && f.id !== somenteId
+        ? (wpnDisparou[f.id] || {}) : {};
+    }
     setWpnDisparou(novoDisparou);
   }, [fighters, wpnCalor, wpnSuperaquecido, wpnDisparou, fumaca, armasDoLutador, addLog]);
 
@@ -1424,13 +1570,18 @@ const [lastRoll, setLastRoll] = useState(null);
       return;
     }
     const advance = (idx) => {
+      // Recarga/calor/fumaça avançam no fim do turno de quem agiu (como no
+      // motor), não no fim da rodada inteira.
+      const atualId = initiativeOrder[idx];
+      if (atualId) {
+        processarRecargas(atualId);
+        processarCalorEFumaca(atualId);
+      }
       const nextIdx = idx + 1;
       if (nextIdx >= initiativeOrder.length) {
-        // Fim da rodada: processa efeitos, proteção e decrementa recarga de armas
+        // Fim da rodada: processa efeitos e proteção.
         setFighters((prev) => processProtectionTick(prev));
         tickEffects();
-        processarRecargas();
-        processarCalorEFumaca();
         setRound((r) => r + 1);
         setCurrentTurnIndex(0);
         addLog(`═══ Fim da rodada ${round}. Iniciando rodada ${round + 1} ═══`);
@@ -1463,6 +1614,7 @@ const [lastRoll, setLastRoll] = useState(null);
       setDiceTotal(rolls.reduce((s, n) => s + n, 0) + bonus);
       if (steps >= 12) {
         clearInterval(interval);
+        rollTimers.current.delete(interval);
         setRolling(false);
         const finalRolls = Array.from({ length: qty }, () => Math.floor(Math.random() * faces) + 1);
         const total = finalRolls.reduce((s, n) => s + n, 0) + bonus;
@@ -1471,6 +1623,7 @@ const [lastRoll, setLastRoll] = useState(null);
         addLog(`🎲 Rola ${qty}d${faces}${bonus >= 0 ? '+' + bonus : bonus} → [${finalRolls.join(', ')}] = ${total}`);
       }
     }, 60);
+    rollTimers.current.add(interval);
   }, [diceFaces, diceQty, diceBonus, addLog]);
 
   const renderFighterCard = (f) => {

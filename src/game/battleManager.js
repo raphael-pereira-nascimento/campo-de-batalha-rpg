@@ -27,7 +27,9 @@ import {
   melhorArma,
   armaParaAtaque,
   skillFromSpell,
+  itensComGemas,
 } from './data.js';
+import { GEMS, getGemaById } from './gems.js';
 import {
   manaRecuperada,
   pesoAtributo,
@@ -81,6 +83,11 @@ let logCounter = 0;
 function makeLog(text, kind = 'info') {
   logCounter += 1;
   return { id: logCounter, time: Date.now(), text, kind };
+}
+
+// Mesma resolução de gema do servidor: Forja primeiro, catálogo depois.
+function defDeGema(gemId) {
+  return getGemaById(gemId) || GEMS[gemId] || null;
 }
 
 function clamp(v, min, max) {
@@ -615,6 +622,22 @@ export class BattleManager {
       p.mp = clamp(p.mp + extra, 0, p.mpMax);
       if (p.mp > before) battle.log.push(makeLog(`✨ ${p.charName} recupera mais ${p.mp - before} de MP (passiva).`, 'heal'));
     }
+    // Efeitos de gemas socketadas — espelho exato do motor online.
+    if (!p.isMonster && p.equipment) {
+      for (const { categoria, item } of itensComGemas(p.equipment)) {
+        for (const gemId of item.socketedGems || []) {
+          const g = defDeGema(gemId);
+          if (!g) continue;
+          const fx = g.efeitos?.[categoria];
+          if (fx?.regen && p.alive) {
+            const h = this._curaRecebida(p, Math.max(1, fx.regen));
+            const b = p.hp;
+            p.hp = clamp(p.hp + h, 0, p.hpMax);
+            if (p.hp > b) battle.log.push(makeLog(`💎 ${g.nome} regenera ${p.hp - b} HP em ${p.charName}.`, 'heal'));
+          }
+        }
+      }
+    }
     this._processFlight(battle, p);
     if (efeito.regenHpPct && p.alive) {
       const heal = this._curaRecebida(p, Math.max(1, Math.round(p.hpMax * efeito.regenHpPct)));
@@ -850,12 +873,30 @@ export class BattleManager {
     let mult = efeito.danoFisicoMult || 1;
     if (efeito.furia && p.alive && p.hp < p.hpMax * 0.5) mult *= 1.2;
     if (p.ultimateMode) mult *= 1 + (p.ultimateModeMult || 0);
+    if (!p.isMonster && p.equipment) {
+      for (const { categoria, item } of itensComGemas(p.equipment)) {
+        for (const gemId of item.socketedGems || []) {
+          const g = defDeGema(gemId);
+          if (!g) continue;
+          if (g.efeitos?.[categoria]?.bonus?.forca) mult *= 1.05;
+        }
+      }
+    }
     return mult * statusEffects(p).danoMult;
   }
 
   _magMult(p) {
     let mult = efeitosDe(p).danoMagicoMult || 1;
     if (p.ultimateMode) mult *= 1 + (p.ultimateModeMult || 0);
+    if (!p.isMonster && p.equipment) {
+      for (const { categoria, item } of itensComGemas(p.equipment)) {
+        for (const gemId of item.socketedGems || []) {
+          const g = defDeGema(gemId);
+          if (!g) continue;
+          if (g.efeitos?.[categoria]?.bonus?.inteligencia) mult *= 1.05;
+        }
+      }
+    }
     return mult * statusEffects(p).danoMult;
   }
 
@@ -1169,11 +1210,8 @@ export class BattleManager {
       const s = p.statuses[i];
       const def = STATUS_DEFS[s.id];
       if (s.id === 'congelamento') {
-        s.turnos -= 1;
-        if (s.turnos <= 0) {
-          p.statuses.splice(i, 1);
-          battle.log.push(makeLog(`🧊 ${p.charName} se libertou do gelo.`));
-        }
+        // O congelamento é consumido em `handleAction`, DEPOIS de aplicar o
+        // pulo de turno. Decrementar aqui faria um status de 2 turnos durar 1.
         continue;
       }
       if (!def) {
@@ -1407,6 +1445,19 @@ export class BattleManager {
       if (ataqueStatus && t.alive) this._applyStatus(battle, t, ataqueStatus, p);
       // Efeito próprio da arma (canhões utilitários): só em quem foi atingido.
       if (weapon?.efeito && t.alive) this._applyStatus(battle, t, weapon.efeito, p, { crit: res.crit });
+      // Efeito de gema na arma (chance documentada na própria gema).
+      if (p.equipment && !p.isMonster) {
+        for (const { arma } of armasDeEquipamento(p.equipment)) {
+          for (const gemId of arma?.socketedGems || []) {
+            const g = defDeGema(gemId);
+            if (!g) continue;
+            const fx = g.efeitos?.arma;
+            if (fx?.status && t.alive && Math.random() < (fx.status.chance || 0.1)) {
+              this._applyStatus(battle, t, fx.status, p);
+            }
+          }
+        }
+      }
     });
   }
 
@@ -1490,6 +1541,18 @@ export class BattleManager {
       if (dealt > 0) this._lifesteal(battle, p, dealt);
       if (!t.alive && !t.horda) p.kills += 1;
       if (skill.status && t.alive) this._applyStatus(battle, t, skill.status, p, { crit: res.crit });
+      if (p.equipment && !p.isMonster) {
+        for (const { arma } of armasDeEquipamento(p.equipment)) {
+          for (const gemId of arma?.socketedGems || []) {
+            const g = defDeGema(gemId);
+            if (!g) continue;
+            const fx = g.efeitos?.arma;
+            if (fx?.status && t.alive && Math.random() < (fx.status.chance || 0.1)) {
+              this._applyStatus(battle, t, fx.status, p);
+            }
+          }
+        }
+      }
     });
     if (!mega) this._setCooldown(p, skill);
   }
@@ -1809,6 +1872,16 @@ export class BattleManager {
 
     if (hasStatus(p, 'congelamento')) {
       battle.log.push(makeLog(`🧊 ${p.charName} está congelado e pula o turno.`));
+      // Consome um turno da duração SÓ depois de aplicar o pulo. Assim um
+      // congelamento de 2 turnos faz o alvo perder 2 ações.
+      const gelo = p.statuses.find((s) => s.id === 'congelamento');
+      if (gelo) {
+        gelo.turnos = Math.max(0, (Number(gelo.turnos) || 0) - 1);
+        if (gelo.turnos === 0) {
+          p.statuses = p.statuses.filter((s) => s !== gelo);
+          battle.log.push(makeLog(`🧊 ${p.charName} se libertou do gelo.`));
+        }
+      }
       this._advanceTurn(battle);
       this._aiLoop(battle);
       this.emit(battle);
@@ -1849,7 +1922,8 @@ export class BattleManager {
         // Arma utilitária: causa dano + aplica debuff, consumindo 1 uso por
         // disparo (inclusive no erro). Ao esvaziar a carga, entra em recarga.
         if (!target || !target.alive) throw new Error('Escolha um alvo vivo.');
-        const util = (armasDeEquipamento(p.equipment) || []).find((e) => e.slot === 'utilitaria');
+        const uteis = (armasDeEquipamento(p.equipment) || []).filter((e) => e.slot === 'utilitaria');
+        const util = (action.weaponId && uteis.find((e) => e.arma?.id === action.weaponId)) || uteis[0];
         if (!util || !util.arma) throw new Error('Nenhuma arma utilitária equipada.');
         const arma = util.arma;
         const recargaAtual = (p.wpnRecarga && p.wpnRecarga[arma.id]) || 0;

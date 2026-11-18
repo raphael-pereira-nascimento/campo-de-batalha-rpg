@@ -283,7 +283,7 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
   };
   const doUtility = () => {
     const ids = idsDeAlvo(alvoNormalizado(armaUtil || {}));
-    act({ type: 'attackUtility', targetId: ids[0] || null, targetIds: ids });
+    act({ type: 'attackUtility', weaponId: armaUtil?.id || null, targetId: ids[0] || null, targetIds: ids });
   };
   const doDefend = () => act({ type: 'defend' });
   const doDodge = () => act({ type: 'dodge' });

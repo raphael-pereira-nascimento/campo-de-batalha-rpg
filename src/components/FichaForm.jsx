@@ -791,10 +791,40 @@ function montarGolpe(form, id) {
   return golpe;
 }
 
+// Converte um golpe persistido (ficha ou Registro do Mundo) para o formulário.
+// Sem isso, status/buff/defesa importados voltam como "nenhum" e são perdidos
+// ao salvar a ficha novamente.
+function golpeParaForm(golpe = {}) {
+  const status = golpe.status && typeof golpe.status === 'object' ? golpe.status : null;
+  // Golpes legados com `todos` em dano equivalem a área no motor.
+  const alvo = ALVO_LABEL[golpe.alvo] ? golpe.alvo
+    : (golpe.todos && (golpe.tipo === 'fisico' || golpe.tipo === 'magia') ? 'area' : 'unico');
+  return {
+    ...SKILL_FORM_VAZIO,
+    nome: golpe.nome || '',
+    tipo: SKILL_TYPES[golpe.tipo] ? golpe.tipo : 'magia',
+    poder: Number(golpe.poder) || 100,
+    custo: Number(golpe.custo) || 0,
+    cooldown: Number(golpe.cooldown) || 0,
+    todos: !!golpe.todos,
+    afetaAliados: !!golpe.afetaAliados,
+    buffTipo: golpe.buffTipo || '',
+    duracao: Number(golpe.duracao) || 3,
+    alvo,
+    alvos: Number(golpe.alvos) || 3,
+    splash: Number(golpe.splash) || 0.5,
+    statusTipo: status?.tipo || '',
+    statusTurnos: Number(status?.turnos) || 2,
+    statusDano: Number(status?.dano) || 0,
+    desc: golpe.desc ?? golpe.descricao ?? '',
+  };
+}
+
 function SkillsStep({ skills, setSkills, customSkills, player }) {
   const [form, setForm] = useState(SKILL_FORM_VAZIO);
   const [pickCustom, setPickCustom] = useState('');
   const [publish, setPublish] = useState(false);
+  const [publishError, setPublishError] = useState('');
   const isDano = form.tipo === 'fisico' || form.tipo === 'magia';
   const aceitaStatus = isDano || form.tipo === 'cura';
   const statusDef = STATUS_DEFS[form.statusTipo] || null;
@@ -803,8 +833,11 @@ function SkillsStep({ skills, setSkills, customSkills, player }) {
     if (!form.nome.trim()) return;
     const skill = montarGolpe(form, novoSkillId());
     setSkills((prev) => [...prev, skill]);
+    setPublishError('');
     if (publish) {
       try {
+        // Publica o golpe completo: status/buff/defesa também precisam sobreviver
+        // ao vai-e-vem entre a ficha e o Registro do Mundo.
         await api.createCustomSkill({
           creatorId: player.id,
           is_public: true,
@@ -814,12 +847,18 @@ function SkillsStep({ skills, setSkills, customSkills, player }) {
           custo: skill.custo,
           cooldown: skill.cooldown,
           todos: skill.todos,
+          afetaAliados: skill.afetaAliados,
+          buffTipo: skill.buffTipo,
+          duracao: skill.duracao,
+          status: skill.status,
           alvo: skill.alvo,
           alvos: skill.alvos,
           splash: skill.splash,
           descricao: skill.desc,
         });
-      } catch (_e) { /* opcional */ }
+      } catch (e) {
+        setPublishError(`Golpe salvo na ficha, mas não publicado: ${e?.message || 'falha na API'}.`);
+      }
     }
     setForm(SKILL_FORM_VAZIO);
   };
@@ -827,19 +866,7 @@ function SkillsStep({ skills, setSkills, customSkills, player }) {
   const addCustom = () => {
     const c = customSkills.find((s) => s.id === pickCustom);
     if (!c) return;
-    const golpe = montarGolpe({
-      ...SKILL_FORM_VAZIO,
-      nome: c.nome,
-      tipo: c.tipo,
-      poder: Number(c.poder),
-      custo: Number(c.custo),
-      cooldown: Number(c.cooldown),
-      todos: !!c.todos,
-      alvo: c.alvo || 'unico',
-      alvos: c.alvos || 3,
-      splash: c.splash || 0.5,
-      desc: c.descricao || '',
-    }, novoSkillId());
+    const golpe = montarGolpe(golpeParaForm(c), novoSkillId());
     setSkills((prev) => [...prev, golpe]);
     setPickCustom('');
   };
@@ -965,6 +992,7 @@ function SkillsStep({ skills, setSkills, customSkills, player }) {
           Publicar no Registro do Mundo
         </label>
         <button onClick={add} disabled={!form.nome.trim()}>+ Adicionar golpe</button>
+        {publishError && <div className="error">{publishError}</div>}
       </div>
 
       <div className="chosen-list">
@@ -1016,7 +1044,9 @@ function megaFormInicial(allowModo) {
 function MegaSkillStep({ title, value, onChange, allowModo }) {
   const [form, setForm] = useState(() => ({
     ...megaFormInicial(allowModo),
-    ...(value || {}),
+    // O golpe salvo guarda `status` como objeto; o formulário usa
+    // statusTipo/statusTurnos/statusDano. `golpeParaForm` faz a conversão.
+    ...golpeParaForm(value || {}),
     // `modo` antigo podia vir nulo mesmo em ultimate: o editor sempre tem um.
     modo: allowModo ? { ...MODO_PADRAO, ...(value?.modo || {}) } : null,
   }));

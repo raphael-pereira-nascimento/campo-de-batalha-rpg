@@ -12,6 +12,8 @@ import './runas.test.js';
 import './combatEffects.test.js';
 import './battle.test.js';
 import './forgeMaterials.test.js';
+import './customSkills.test.js';
+import './offlineSkills.test.js';
 
 executarTestes().then((resumo) => {
   window.__TESTES__ = resumo;

@@ -1,6 +1,9 @@
 import { query } from '../db/index.js';
 import { CLASSES, ATTRIBUTE_KEYS } from '../game/data.js';
 import { clamp } from '../utils.js';
+import { validateCustomSkill, decorateCustomSkill } from './skillValidation.js';
+
+export { validateCustomSkill } from './skillValidation.js';
 
 // ---------------------------------------------------------------------------
 // Regra de visibilidade do Registro do Mundo:
@@ -420,38 +423,15 @@ export function decorateEquipment(row) {
 }
 
 // ---------- Golpes customizados ----------
-
-const SKILL_TYPES = ['fisico', 'magia', 'cura', 'buff', 'defesa'];
-const ALVOS = ['unico', 'proximo', 'aleatorio', 'todos', 'multi'];
-const SKILL_KINDS = ['dano', 'cura', 'buff', 'defesa'];
-
-export function validateCustomSkill(input) {
-  const nome = String(input.nome || '').trim();
-  if (!nome) throw new Error('Informe o nome do golpe.');
-  const tipo = SKILL_TYPES.includes(input.tipo) ? input.tipo : 'magia';
-  const tipoCategoria = SKILL_KINDS.includes(input.tipo_categoria) ? input.tipo_categoria : (tipo === 'fisico' || tipo === 'magia' ? 'dano' : tipo);
-  const alvo = ALVOS.includes(input.alvo) ? input.alvo : 'unico';
-  return {
-    nome: nome.slice(0, 40),
-    tipo,
-    poder: clamp(Number(input.poder), 10, 1000),
-    custo: clamp(Number(input.custo), 0, 99),
-    cooldown: clamp(Number(input.cooldown), 0, 20),
-    todos: !!input.todos,
-    descricao: String(input.descricao || '').trim().slice(0, 200),
-    alvo: tipoCategoria === 'dano' || tipoCategoria === 'cura' ? alvo : 'unico',
-    alvos: clamp(Number(input.alvos) || 3, 2, 10),
-    splash: clamp(Number(input.splash) || 0.5, 0, 1),
-    is_public: !!input.is_public,
-  };
-}
+// A validação vive em `skillValidation.js` (módulo puro, testável sem banco).
 
 export async function createCustomSkill(creatorId, input) {
   const data = validateCustomSkill(input);
   const { rows } = await query(
     `INSERT INTO custom_skills
-      (creator_id, nome, tipo, poder, custo, cooldown, todos, descricao, alvo, alvos, splash, is_public)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      (creator_id, nome, tipo, poder, custo, cooldown, todos, descricao, alvo, alvos, splash,
+       is_public, status, afeta_aliados, buff_tipo, duracao)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
     [
       creatorId,
       data.nome,
@@ -465,9 +445,13 @@ export async function createCustomSkill(creatorId, input) {
       data.alvos,
       data.splash,
       data.is_public,
+      data.status ? JSON.stringify(data.status) : null,
+      data.afeta_aliados,
+      data.buff_tipo,
+      data.duracao,
     ],
   );
-  return rows[0];
+  return decorateCustomSkill(rows[0]);
 }
 
 export async function listCustomSkills(viewerId) {
@@ -480,12 +464,12 @@ export async function listCustomSkills(viewerId) {
      ORDER BY cs.created_at DESC`,
     params,
   );
-  return rows;
+  return rows.map(decorateCustomSkill);
 }
 
 export async function getCustomSkill(id) {
   const { rows } = await query('SELECT * FROM custom_skills WHERE id = $1', [id]);
-  return rows[0] || null;
+  return decorateCustomSkill(rows[0] || null);
 }
 
 export async function updateCustomSkill(id, creatorId, input) {
@@ -496,8 +480,9 @@ export async function updateCustomSkill(id, creatorId, input) {
   const { rows } = await query(
     `UPDATE custom_skills
      SET nome = $1, tipo = $2, poder = $3, custo = $4, cooldown = $5, todos = $6, descricao = $7,
-         alvo = $8, alvos = $9, splash = $10, is_public = $11
-     WHERE id = $12 RETURNING *`,
+         alvo = $8, alvos = $9, splash = $10, is_public = $11,
+         status = $12, afeta_aliados = $13, buff_tipo = $14, duracao = $15
+     WHERE id = $16 RETURNING *`,
     [
       data.nome,
       data.tipo,
@@ -510,10 +495,14 @@ export async function updateCustomSkill(id, creatorId, input) {
       data.alvos,
       data.splash,
       data.is_public,
+      data.status ? JSON.stringify(data.status) : null,
+      data.afeta_aliados,
+      data.buff_tipo,
+      data.duracao,
       id,
     ],
   );
-  return rows[0];
+  return decorateCustomSkill(rows[0]);
 }
 
 export async function deleteCustomSkill(id, creatorId) {

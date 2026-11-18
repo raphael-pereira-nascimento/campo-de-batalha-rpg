@@ -1,7 +1,8 @@
 # Pendências — Materiais, Metais e Podridão
 
-Atualizado em 15/11/2026 — Etapa 9 (runas na forja, Corrupção com API/UI,
-imunidade do Tenebrium e preparação de Contaminação Profana/Núcleo Pandemônico).
+Atualizado em 17/11/2026 — Etapa 9 (runas na forja, Corrupção com API/UI,
+imunidade do Tenebrium e preparação de Contaminação Profana/Núcleo Pandemônico)
+e rodada de buffs, cura, Ações Rápidas e canhões (D-44 a D-47).
 
 Este arquivo separa o que já foi **aprovado**, o que foi implementado como
 **provisório**, o que continua **pendente** e o que é apenas **sugestão**.
@@ -76,6 +77,11 @@ Legenda:
 | D-45 | Cura reformada: redução de cura recebida e status positivo no alvo | Implementado |
 | D-46 | Ações Rápidas utilizáveis na Batalha de Mesa | Implementado |
 | D-47 | Arsenal de 3 slots e canhões na Batalha de Mesa | Implementado |
+| D-48 | Metadados de golpes personalizados sobrevivem a ficha → Registro → ficha | Implementado |
+| D-49 | Batalha de Mesa usa as mesmas regras do motor (HoT/DOT, defesa, itens, controle, recarga, armas) | Implementado |
+| D-50 | `attackUtility` respeita `action.weaponId`; categoria dos canhões tem fonte única | Implementado |
+| D-51 | Congelamento consome o turno depois de aplicar o pulo | Implementado |
+| D-52 | Gemas com comportamento idêntico offline/online; regen respeita redução de cura | Implementado |
 
 ---
 
@@ -403,7 +409,46 @@ Campo de Batalha.
   calor (superaquecimento) e fumaça, e armas fora do catálogo entram como opção
   “(atual)”.
 - **Testes:** `battle.test.js` ganhou cinco casos de magia/buff/cura e um de
-  redução de cura recebida; o harness de navegador passou **336/336**.
+  redução de cura recebida; nessa rodada o harness passou **336/336**. O total
+  atual está em 1.8.
+
+### 1.8 Consolidação da criação de golpes e paridade motor/mesa (D-48 a D-52)
+
+Nenhuma regra, valor ou fórmula oficial foi criada. Estas são decisões técnicas
+para não perder dados e para que Campo de Batalha, Batalha de Mesa, Registro do
+Mundo e modo offline concordem.
+
+- **D-48 — Metadados de golpes:** `status`, `afetaAliados`, `buffTipo`,
+  `duracao` e `descricao` agora sobrevivem ao ciclo ficha → Registro do Mundo →
+  ficha. A validação pura fica em `skillValidation.js` (servidor e cliente) e a
+  migração `0012_custom_skill_metadata.sql` grava as colunas. Ids repetidos
+  entre golpes de classe e personalizados são renomeados (`id_2`, `id_3`).
+- **D-49 — Mesa alinhada ao motor:** HoT/regen passam pela redução de cura
+  recebida; DOT e HoT são processados sequencialmente com clamp e log por
+  efeito; `danoDeStatus` substitui o dano padrão inventado e honra
+  `danoPctVidaMaxima` (Podridão); cegueira, lentidão, fraqueza e congelamento
+  voltaram a ter efeito; defesa usa as três camadas do motor; itens curam quem
+  os usa (como `_resolveItem`), com `drunk`/`drunkTurns`; cura em grupo usa
+  `todos` e buff/defesa em grupo usa `afetaAliados`; recarga, calor e fumaça
+  avançam no fim do turno do dono; a arma selecionada é usada no Ataque com
+  Dado.
+- **D-50 — Utilitárias e canhões:** `attackUtility` passou a aceitar
+  `action.weaponId` nos dois motores e a UI envia o id da arma Utilitária
+  selecionada. A categoria vem de `categoriaDeArma`: os canhões de
+  `EQUIPMENT.canoes` continuam sendo armas de distância (sem usos por batalha),
+  enquanto os canhões de `EQUIPMENT.armas` com `categoria: 'utilitaria'` usam
+  `attackUtility`, usos e `recargaTurnos`.
+- **D-51 — Congelamento:** a duração é consumida depois de aplicar o pulo de
+  turno, não antes. Um status de 2 turnos agora faz o alvo perder 2 ações, e a
+  mesa bloqueia ações enquanto ele está ativo.
+- **D-52 — Gemas:** os efeitos de gema que existiam só no servidor (regen,
+  bônus de dano físico/mágico e status de arma) foram espelhados no cliente. A
+  regen de gema também passou a respeitar a redução de cura recebida, como as
+  demais fontes.
+- **Testes:** novos `customSkills.test.js` (7 casos) e `offlineSkills.test.js`
+  (3 casos), `battle.test.js` estendido com duração do congelamento e
+  `weaponId` utilitário. Harness de navegador: **347/347**, sem erros de
+  console.
 
 ---
 
@@ -740,9 +785,10 @@ O que falta preencher com o criador/documentação:
   forja, imunidade do Tenebrium, Contaminação Profana/Núcleo Pandemônico e
   Ruptura Profana em crítico.
 - Resultado do harness nesta rodada (buff/cura/Ações Rápidas/canhões):
-  **336/336 testes passam**, sem falhas e sem erros no console, incluindo os
-  novos casos de Cura em Massa, Grito de Guerra, Benção, item com redução de cura
-  e cura de magia em aliado com Contaminação Pandemônica.
+  **347/347 testes passam**, sem falhas e sem erros no console, incluindo os
+  casos de Cura em Massa, Grito de Guerra, Benção, item com redução de cura,
+  cura de magia em aliado com Contaminação Pandemônica, persistência de
+  metadados de golpes, duração do congelamento e `weaponId` utilitário.
 - Nesta rodada, `npm run test:unit`, `npm run test:e2e` e `npm run build` não
   puderam ser executados porque `node`/`npm` continuam fora do `PATH`; a
   validação foi feita pelo bundle do esbuild e pelo harness de navegador.
@@ -902,10 +948,22 @@ golpes.
 | Ficha — especiais/ultimate | `MegaSkillStep` reescrito com a mesma normalização e validação dos golpes |
 | Mesa — Arsenal | Três slots por lutador com canhões; recarga, usos, calor, fumaça e superaquecimento; arma fora do catálogo aparece como “(atual)” |
 | Mesa — Ações Rápidas | Ataque, magia e item com cooldown, MP, alvos, cura/buff/defesa; alvo vazio deixou de bloquear ações em si; área automática dispensa alvo |
-| Mesa — cura | `statusParaEfeito` carrega `reducaoCuraPct`; `reducaoDeCuraRecebida`/`curaRecebida` aplicam a redução com o arredondamento do motor; item só cura aliado |
+| Mesa — cura | `statusParaEfeito` carrega `reducaoCuraPct`; `reducaoDeCuraRecebida`/`curaRecebida` aplicam a redução com o arredondamento do motor; item cura a si mesmo, como `_resolveItem` |
 | Mesa — equipar | Equipar arma grava `id`; arsenal aceita arma fora do catálogo |
-| Testes | `battle.test.js` com 70 casos (6 novos de magia/buff/cura); harness **336/336**, sem erros de console |
+| Testes | `battle.test.js` com 70 casos (6 novos de magia/buff/cura); harness **347/347**, sem erros de console |
 | Limpeza | `smoke-tb-ficha.jsx` e bundles temporários de smoke removidos |
+
+### 3.11 Auditorias e correções finais de golpes e paridade
+
+| Área | Resultado |
+| --- | --- |
+| Persistência de golpes | `status`, `afetaAliados`, `buffTipo`, `duracao` e `descricao` sobrevivem ao ciclo ficha → Registro → ficha; validação pura em `skillValidation.js` (servidor/cliente); colunas novas na migração 0012 |
+| Criação de ficha | Publicação e importação em `FichaForm.jsx` preservam os metadados; erro de publicação aparece na UI; edição de especial/ultimate com `status` corrigida; `Registry.jsx` edita status/buff/duração e mostra tags |
+| Ids | `dedupeSkillIds` evita ids repetidos entre golpes de classe e personalizados, preservando os ids de classe |
+| Mesa — efeitos | HoT/DOT sequenciais, `danoDeStatus` (Podridão incluída), chances/somente-crítico/renovação por `statusId`, controle ativo, defesa em três camadas, itens no próprio usuário com `drunk`, suporte com critérios do motor, recarga por turno do dono, arma da UI no Ataque com Dado, proteção sem mutação e cleanup dos timers |
+| Motor — API/paridade | `attackUtility` aceita `weaponId`; congelamento não sofre mais off-by-one; gemas com o mesmo efeito nos dois motores e regen de gema com redução de cura |
+| Verificado, sem alteração | `condicao`/`modo` são campos de especial/ultimate e já passam por `normalizeMegaSkill`; golpes comuns não os usam no motor. Não existe limite oficial de golpes por ficha — criar um seria inventar regra; aguarda decisão do criador. Canhões de artilharia permanecem como distância (`categoriaDeArma`), os utilitários seguem em `attackUtility` |
+| Testes | `customSkills.test.js`, `offlineSkills.test.js` e `battle.test.js` estendidos; harness **347/347**, sem erros de console; bundle do cliente sem avisos |
 
 ---
 

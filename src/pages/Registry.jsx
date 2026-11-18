@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, isOffline } from '../api.js';
 import { ATTRIBUTES, ATTRIBUTE_NAMES, SKILL_TYPES } from '../config.js';
 import { ALVO_LABEL } from '../game/sistema.js';
+import { STATUS_DEFS, STATUS_KEYS } from '../game/data.js';
 import AlvoSelect from '../components/AlvoSelect.jsx';
 
 // Registro do Mundo: cada jogador cria classes, raças, equipamentos, golpes e
@@ -21,8 +22,26 @@ const EMPTY = {
   },
   races: { nome: '', bonus: {}, passiva: '', is_public: false },
   equipment: { tipo: 'arma', nome: '', dano_base: 6, defesa: 4, bonus: {}, penalidade: {}, maleficio: '', is_public: false },
-  skills: { nome: '', tipo: 'magia', poder: 150, custo: 5, cooldown: 0, todos: false, alvo: 'unico', alvos: 3, splash: 0.5, is_public: false },
+  skills: {
+    nome: '', tipo: 'magia', poder: 150, custo: 5, cooldown: 0,
+    todos: false, afetaAliados: false, buffTipo: '', duracao: 3,
+    alvo: 'unico', alvos: 3, splash: 0.5,
+    statusTipo: '', statusTurnos: 2, statusDano: 50, descricao: '', is_public: false,
+  },
 };
+
+// O banco guarda `status` como objeto; o formulário usa campos separados.
+function skillParaForm(s = {}) {
+  const { status, ...rest } = s;
+  const st = status && typeof status === 'object' ? status : null;
+  return {
+    ...EMPTY.skills,
+    ...rest,
+    statusTipo: st?.tipo || '',
+    statusTurnos: st?.turnos ?? 2,
+    statusDano: st?.dano ?? 50,
+  };
+}
 
 export default function Registry({ player, gameData, onBack }) {
   const [tab, setTab] = useState('classes');
@@ -680,20 +699,28 @@ function EquipmentRegistry({ player, items, scope, searchTerm, onChanged, setErr
 }
 
 function SkillRegistry({ player, items, scope, searchTerm, onChanged, setError, onCopy }) {
-  const [form, setForm] = useState(EMPTY.skills);
+  const [form, setForm] = useState({ ...EMPTY.skills });
   const [editingId, setEditingId] = useState(null);
   const readOnly = scope === 'world';
   const isDano = form.tipo === 'fisico' || form.tipo === 'magia';
+  const aceitaStatus = isDano || form.tipo === 'cura';
+  const statusDef = STATUS_DEFS[form.statusTipo] || null;
 
   const save = async (e) => {
     e.preventDefault();
     if (!form.nome.trim()) return setError('Informe o nome do golpe.');
     setError('');
     try {
-      const payload = { creatorId: player.id, ...form };
+      const payload = {
+        creatorId: player.id,
+        ...form,
+        status: form.statusTipo
+          ? { tipo: form.statusTipo, turnos: Number(form.statusTurnos), dano: Number(form.statusDano) }
+          : null,
+      };
       if (editingId) await api.updateCustomSkill(editingId, payload);
       else await api.createCustomSkill(payload);
-      setForm(EMPTY.skills);
+      setForm({ ...EMPTY.skills });
       setEditingId(null);
       onChanged();
     } catch (err) {
@@ -731,6 +758,40 @@ function SkillRegistry({ player, items, scope, searchTerm, onChanged, setError, 
             {form.tipo === 'cura' && (
               <label className="check-label"><input type="checkbox" checked={form.todos} onChange={(e) => setForm((f) => ({ ...f, todos: e.target.checked }))} /> Cura em massa (todos os aliados)</label>
             )}
+            {(form.tipo === 'buff' || form.tipo === 'defesa') && (
+              <>
+                <label className="check-label"><input type="checkbox" checked={form.afetaAliados} onChange={(e) => setForm((f) => ({ ...f, afetaAliados: e.target.checked }))} /> Afeta todos os aliados (inclui você)</label>
+                <label>Duração (turnos)<input type="number" min={1} max={8} value={form.duracao} onChange={(e) => setForm((f) => ({ ...f, duracao: Number(e.target.value) }))} /></label>
+              </>
+            )}
+            {form.tipo === 'buff' && (
+              <label>Tipo de bônus
+                <select value={form.buffTipo} onChange={(e) => setForm((f) => ({ ...f, buffTipo: e.target.value }))}>
+                  <option value="">Físico e mágico</option>
+                  <option value="fisico">Somente físico</option>
+                  <option value="magico">Somente mágico</option>
+                </select>
+              </label>
+            )}
+            {aceitaStatus && (
+              <>
+                <label>Status aplicado
+                  <select value={form.statusTipo} onChange={(e) => setForm((f) => ({ ...f, statusTipo: e.target.value }))}>
+                    <option value="">Nenhum</option>
+                    {STATUS_KEYS.filter((k) => (form.tipo === 'cura' ? STATUS_DEFS[k].tipo === 'hot' : STATUS_DEFS[k].tipo !== 'hot')).map((k) => (
+                      <option key={k} value={k}>{STATUS_DEFS[k].nome}</option>
+                    ))}
+                  </select>
+                </label>
+                {statusDef && (
+                  <div className="form-row">
+                    <label>Turnos<input type="number" min={1} max={8} value={form.statusTurnos} onChange={(e) => setForm((f) => ({ ...f, statusTurnos: Number(e.target.value) }))} /></label>
+                    <label>Dano/cura por turno<input type="number" min={0} max={999} value={form.statusDano} onChange={(e) => setForm((f) => ({ ...f, statusDano: Number(e.target.value) }))} /></label>
+                  </div>
+                )}
+              </>
+            )}
+            <label>Descrição<input value={form.descricao} onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))} maxLength={200} placeholder="O que acontece ao usar?" /></label>
             <PublicToggle form={form} setForm={setForm} />
             <button type="submit">{editingId ? 'Salvar Alterações' : 'Registrar Golpe'}</button>
             {editingId && (
@@ -753,12 +814,17 @@ function SkillRegistry({ player, items, scope, searchTerm, onChanged, setError, 
                 {s.cooldown > 0 && <span className="tag">⏳ {s.cooldown}t</span>}
                 {s.alvo && s.alvo !== 'unico' && (<span className="tag">◎ {ALVO_LABEL[s.alvo] || s.alvo}</span>)}
                 {s.todos && <span className="tag">✦ Todos</span>}
+                {s.afetaAliados && <span className="tag">✦ Aliados</span>}
+                {s.buffTipo && <span className="tag">{s.buffTipo === 'fisico' ? '💪 Físico' : '🔮 Mágico'}</span>}
+                {s.duracao && (s.tipo === 'buff' || s.tipo === 'defesa') && <span className="tag">{s.duracao}t</span>}
+                {s.status && <span className="tag">{STATUS_DEFS[s.status.tipo]?.nome || s.status.tipo}</span>}
+                {s.descricao && <span className="tag">📝 {s.descricao}</span>}
                 {s.is_public && <span className="tag">🌍 público</span>}
                 <span className="tag">por {s.creator_name}</span>
               </div>
               {s.creator_id === player.id && !readOnly && (
                 <div className="registry-actions">
-                  <button className="ghost" onClick={() => { setEditingId(s.id); setForm({ ...EMPTY.skills, ...s }); }}>Editar</button>
+                  <button className="ghost" onClick={() => { setEditingId(s.id); setError(''); setForm(skillParaForm(s)); }}>Editar</button>
                   <button className="ghost danger" onClick={() => remove(s.id)}>Excluir</button>
                 </div>
               )}

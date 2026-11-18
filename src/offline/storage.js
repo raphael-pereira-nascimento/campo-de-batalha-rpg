@@ -1,3 +1,5 @@
+import { validateOfflineSkill } from '../game/skillValidation.js';
+
 const PLAYER_KEY = 'cbr_offline_player';
 const CHAR_KEY = 'cbr_offline_chars';
 const WALLET_KEY = 'cbr_offline_wallet';
@@ -152,8 +154,9 @@ export function listOfflineCustom(kind) {
 export function saveOfflineCustom(kind, item, player) {
   const all = _getAllCustom();
   const list = all[kind] || [];
+  const dados = kind === 'skills' ? validateOfflineSkill(item) : item;
   const stamped = {
-    ...item,
+    ...dados,
     id: item.id || `${kind}-${nextId()}`,
     creator_id: item.creator_id || player?.id || 'offline',
     creator_name: item.creator_name || player?.name || 'Jogador',
