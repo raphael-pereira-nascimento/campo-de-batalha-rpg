@@ -318,7 +318,7 @@ export const EQUIPMENT = {
     // sem ajudante vivo, −20% de acerto e +1 turno de recarga. Os números
     // de ignora-defesa, peso, tripé e fumaça são provisórios.
     canhao_leve: { preco: 4200, nome: 'Canhão Leve', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 10, bonus: { forca: 1 }, socketSlots: 2, alcance: 'medio', recarga: 3, alvo: 'explosao', alvos: 3, splash: 0.5, tripulacaoMinima: 2, descricao: 'Peça de artilharia portátil: alvo principal 100%, vizinhos 50%.' },
-    canhao_cerco: { preco: 6100, nome: 'Canhão de Cerco', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 12, bonus: { forca: 2, resistencia: 1 }, socketSlots: 3, alcance: 'medio', recarga: 5, alvo: 'explosao', alvos: 4, splash: 0.6, tripulacaoMinima: 2, descricao: 'Canhão pesado de sítio: vizinhos sofrem 60%. Precisa de tripé para recarregar (+1 turno).' },
+    canhao_cerco: { preco: 6100, nome: 'Canhão de Cerco', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 12, bonus: { forca: 2, resistencia: 1 }, socketSlots: 3, alcance: 'medio', recarga: 5, alvo: 'explosao', alvos: 4, splash: 0.6, tripulacaoMinima: 2, descricao: 'Canhão pesado de sítio: vizinhos sofrem 60%. Tripé embutido: recarga de 5 turnos (+1 sem ajudante).' },
     canhao_ferro: { preco: 8500, nome: 'Canhão de Ferro', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 14, bonus: { forca: 3, resistencia: 2 }, socketSlots: 3, alcance: 'medio', recarga: 4, alvo: 'explosao', alvos: 4, splash: 0.7, fumacaExtra: 1, tripulacaoMinima: 2, descricao: 'Ferro maciço e pólvora negra: +1 fumaça por disparo. Splash 70% — devastador contra grupos.' },
     canhao_de_salto: { preco: 9800, nome: 'Canhão de Salto', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 13, bonus: { destreza: 2, inteligencia: 1 }, socketSlots: 3, alcance: 'longo', recarga: 4, alvo: 'explosao', alvos: 5, splash: 0.6, tripulacaoMinima: 2, descricao: 'Precisão com ajuste de elevação: alcance longo e splash 60%.' },
     canhao_morteiro: { preco: 11000, nome: 'Canhão Morteiro', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 15, bonus: { inteligencia: 2 }, socketSlots: 3, alcance: 'longo', recarga: 5, alvo: 'explosao', alvos: 5, splash: 0.7, tripulacaoMinima: 2, descricao: 'Trajetória curva arcana: explode atrás das linhas inimigas, splash 70%.' },
@@ -908,6 +908,25 @@ export function gemsAttrs(equipment = {}, gems = GEMS) {
         if (k.startsWith('_')) continue;
         acc[k] = (acc[k] || 0) + v;
       }
+    }
+  }
+  return acc;
+}
+
+// Penalidades de equipamento que também incidem nas rolagens de acerto.
+// `effectiveAttributes` já aplica `penalidade` aos Atributos Finais (usados em
+// dano/vida/mana), mas a mira usa os atributos-base; sem isto um malefício
+// declarado no catálogo — como o −1 DEX/REF do Canhão Bombasta (D-66) — não
+// teria efeito nenhum em combate. Bônus não entram aqui: apenas malefícios.
+export function penalidadesEquipamento(equipment = {}) {
+  const acc = {};
+  const itens = armasDeEquipamento(equipment).map((e) => e.arma)
+    .concat([equipment.armadura, equipment.acessorio]).filter(Boolean);
+  for (const item of itens) {
+    if (!item.penalidade) continue;
+    for (const [k, v] of Object.entries(item.penalidade)) {
+      if (k.startsWith('_')) continue;
+      acc[k] = (acc[k] || 0) + Math.abs(Number(v) || 0);
     }
   }
   return acc;

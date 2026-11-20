@@ -1,7 +1,7 @@
-// v7: invalida o cache da v6 para distribuir as regras provisórias dos canhões
-// (tripulação mínima, ignora-defesa, peso/tripé e pólvora negra) espelhadas nos
-// motores cliente/servidor e no catálogo da loja.
-const CACHE = 'cbrpg-v7';
+// v8: invalida o cache da v7 para distribuir a revisão das regras provisórias
+// dos canhões (paridade da mesa, penalidade de mira do Bombasta, seção 14.1 e
+// redação do tripé) espelhada nos motores cliente/servidor e no catálogo.
+const CACHE = 'cbrpg-v8';
 const PRECACHE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {

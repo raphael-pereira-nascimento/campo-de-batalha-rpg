@@ -25,7 +25,7 @@ import {
   dificuldadeDoGolpe,
 } from '../game/sistema.js';
 import { MONSTERS } from '../game/monsters.js';
-import { SPELLS, STATUS_DEFS, EQUIPMENT, armasDeEquipamento, skillFromSpell } from '../game/data.js';
+import { SPELLS, STATUS_DEFS, EQUIPMENT, armasDeEquipamento, skillFromSpell, penalidadesEquipamento } from '../game/data.js';
 import { danoDeStatus, normalizarChance } from '../game/combatEffects.js';
 import { golpesDisponiveis } from '../game/skillValidation.js';
 
@@ -290,7 +290,7 @@ function multiplicadorDano(f, tipo) {
 // Camadas de defesa do combate principal: defesa total reduce pela metade,
 // reduções percentuais por efeito e, por fim, a defesa numérica da armadura.
 // `stat: 'defesa'` é mantido como legado percentual de efeitos antigos da mesa.
-function danoComDefesa(alvo, danoBruto, tipo) {
+function danoComDefesa(alvo, danoBruto, tipo, ignoraDefesaPct = 0) {
   const bruto = Math.max(0, Math.round(danoBruto));
   let valor = bruto;
   const defesaTotal = !!alvo?.defense || (alvo?.statusEffects || []).some((e) => e.stat === 'defense');
@@ -302,7 +302,11 @@ function danoComDefesa(alvo, danoBruto, tipo) {
     if (tipo === 'magia' && e.stat === 'reducaoDanoMagico') pct += Math.abs(Number(e.value) || 0);
   }
   if (pct > 0) valor = Math.round(valor * (1 - Math.min(100, pct) / 100));
-  valor = Math.max(0, valor - (Number(alvo?.defesa) || 0));
+  // D-65: canhões que ignoram parte da defesa reduzem a armadura numérica antes
+  // de descontá-la, igual ao `_applyDamage` do motor.
+  const ignora = Math.min(100, Math.max(0, Number(ignoraDefesaPct) || 0));
+  const defesa = Math.max(0, Math.round((Number(alvo?.defesa) || 0) * (1 - ignora / 100)));
+  valor = Math.max(0, valor - defesa);
   if (valor === 0 && bruto > 0) valor = Math.max(1, Math.round(bruto * 0.1));
   return valor;
 }
@@ -380,13 +384,16 @@ function effectiveStat(fighter, stat) {
     if (stat === 'destreza') base -= 1;
     if (stat === 'reflexos') base -= 1;
   }
+  // D-66: malefícios de equipamento (ex.: −1 DEX/REF do Canhão Bombasta)
+  // também valem na mira da mesa, como no motor principal.
+  base -= penalidadesEquipamento(fighter?.equipment || {})[stat] || 0;
   for (const e of fighter.statusEffects) {
     if (e.stat === stat) base += e.value;
   }
   return Math.max(0, base);
 }
 
-function computeHitChance(attacker, defender, fumacaAtacante = 0, fumacaAlvo = 0) {
+function computeHitChance(attacker, defender, fumacaAtacante = 0, fumacaAlvo = 0, acertoPenalidade = 0) {
   const atkMod = effectiveStat(attacker, 'destreza') + effectiveStat(attacker, 'forca') * 0.3;
   const defMod = effectiveStat(defender, 'reflexos') + effectiveStat(defender, 'resistencia') * 0.2;
   const base = 0.5;
@@ -396,7 +403,7 @@ function computeHitChance(attacker, defender, fumacaAtacante = 0, fumacaAlvo = 0
   const atkPenal = penalidadesDeStatus(attacker);
   const defPenal = penalidadesDeStatus(defender);
   return Math.max(0.05, Math.min(0.95,
-    base + delta - fumacaPenal - atkPenal.acc - defPenal.dodge,
+    base + delta - fumacaPenal - atkPenal.acc - defPenal.dodge - acertoPenalidade,
   ));
 }
 
@@ -495,6 +502,16 @@ const [lastRoll, setLastRoll] = useState(null);
     }
     return lista;
   }, []);
+
+  // D-64: artilharia exige atirador + 1 aliado vivo. A mesa não tem papéis de
+  // tripulação persistentes: qualquer combatente vivo do mesmo time serve.
+  const tripulacaoIncompleta = useCallback((atirador, arma) => {
+    const minimo = Number(arma?.tripulacaoMinima) || 0;
+    if (minimo <= 1 || !atirador) return false;
+    const ajudantes = fighters.filter((f) =>
+      f.id !== atirador.id && f.hp > 0 && f.team === atirador.team);
+    return ajudantes.length < minimo - 1;
+  }, [fighters]);
 
   // Arma escolhida no painel de ações e se ela está travada por superaquecimento.
   const armaSelecionada = useMemo(() => {
@@ -858,6 +875,11 @@ const [lastRoll, setLastRoll] = useState(null);
   // e pelo "Ataque com Dado": os dois caminhos precisam pagar o mesmo preço.
   const prepararDisparo = useCallback((attacker, arma) => {
     const usaRecarga = armaUsaRecarga(arma);
+    // D-64: sem ajudante o tiro sai, mas custa mais um turno de recarga e -20% de mira.
+    const tripIncompleta = tripulacaoIncompleta(attacker, arma);
+    if (tripIncompleta && usaRecarga) {
+      addLog(`⚙️ ${arma.nome} sem tripulação mínima: −20% de acerto e +1 turno de recarga.`);
+    }
     const recargaAtual = ((wpnRecarga[attacker.id] || {})[arma.id]) || 0;
     const usosAtuais = ((wpnUsos[attacker.id] || {})[arma.id]) ?? arma.usosMax ?? 1;
     if (usaRecarga && recargaAtual > 0) {
@@ -875,7 +897,7 @@ const [lastRoll, setLastRoll] = useState(null);
     }
 
     if (usaRecarga) {
-      const recargaTurnos = recargaDeArma(arma);
+      const recargaTurnos = recargaDeArma(arma) + (tripIncompleta ? 1 : 0);
       if (arma.usosMax) {
         const restante = usosAtuais - 1;
         setWpnUsos((prev) => ({
@@ -936,7 +958,7 @@ const [lastRoll, setLastRoll] = useState(null);
       const fumacaAntes = Number(fumaca[attacker.id]) || 0;
       const fumacaDepois = Math.min(
         FUMACA.max,
-        fumacaAntes + fumacaDoDisparo(arma, rajadaDaArma(arma)),
+        fumacaAntes + fumacaDoDisparo(arma, rajadaDaArma(arma)) + (Number(arma.fumacaExtra) || 0),
       );
       setFumaca((prev) => ({ ...prev, [attacker.id]: fumacaDepois }));
       if (fumacaAntes < FUMACA.limiarDenso && fumacaDepois >= FUMACA.limiarDenso) {
@@ -946,7 +968,7 @@ const [lastRoll, setLastRoll] = useState(null);
       }
     }
     return true;
-  }, [wpnRecarga, wpnUsos, wpnSuperaquecido, wpnCalor, fumaca, addLog]);
+  }, [wpnRecarga, wpnUsos, wpnSuperaquecido, wpnCalor, fumaca, addLog, tripulacaoIncompleta]);
 
   // Executa uma ação rápida: ataque físico, magia (consome MP) ou item (cura).
   const executarAcao = useCallback(() => {
@@ -981,6 +1003,7 @@ const [lastRoll, setLastRoll] = useState(null);
         setActTargets([]);
         return;
       }
+      const tripIncompleta = tripulacaoIncompleta(attacker, arma);
 
       // Recarga/usos/superaquecimento e consumo do disparo (compartilhados com
       // o Ataque com Dado).
@@ -1009,6 +1032,7 @@ const [lastRoll, setLastRoll] = useState(null);
           alvo,
           Number(fumaca[attacker.id]) || 0,
           Number(fumaca[alvo.id]) || 0,
+          tripIncompleta ? 0.2 : 0,
         );
         const threshold = Math.max(1, Math.min(19, Math.ceil(chance * 20) - dificuldade));
         const nivel = nivelDificuldadeD20(roll);
@@ -1026,7 +1050,7 @@ const [lastRoll, setLastRoll] = useState(null);
         }
 
         const bruto = danoBase * (isCrit ? 2 : 1) * mult * buffDano;
-        const dmg = danoComDefesa(alvo, bruto, 'fisico');
+        const dmg = danoComDefesa(alvo, bruto, 'fisico', arma?.ignoraDefesaPct || 0);
         const res = applyDamageWithProtection(alvo, dmg);
         resultados.push({ id: alvo.id, res });
         const multTxt = mult < 1 ? ` (${Math.round(mult * 100)}%)` : '';
@@ -1387,6 +1411,7 @@ const [lastRoll, setLastRoll] = useState(null);
       || null;
     // Mesmo caminho das Ações Rápidas: arma travada/sem munição não dispara,
     // e o tiro consome munição, recarga, calor e fumaça.
+    const tripIncompleta = tripulacaoIncompleta(attacker, arma);
     if (arma && !prepararDisparo(attacker, arma)) return;
     setRolling(true);
     setRollResult(null);
@@ -1405,6 +1430,7 @@ const [lastRoll, setLastRoll] = useState(null);
           defender,
           Number(fumaca[attacker.id]) || 0,
           Number(fumaca[defender.id]) || 0,
+          tripIncompleta ? 0.2 : 0,
         );
         const threshold = Math.ceil(hitChance * 20);
         const nivel = nivelDificuldadeD20(finalRoll);
@@ -1414,7 +1440,7 @@ const [lastRoll, setLastRoll] = useState(null);
         const hit = isCrit || (!isFail && finalRoll <= threshold);
         if (hit) {
           const bruto = computeDamage(attacker, isCrit, arma);
-          const dmg = danoComDefesa(defender, bruto, 'fisico');
+          const dmg = danoComDefesa(defender, bruto, 'fisico', arma?.ignoraDefesaPct || 0);
           const res = applyDamageWithProtection(defender, dmg);
           setFighters((prev) => prev.map((f) => (
             f.id === defender.id ? aplicarDanoAoCombatente(f, res) : f
@@ -1431,7 +1457,7 @@ const [lastRoll, setLastRoll] = useState(null);
       }
     }, 60);
     rollTimers.current.add(interval);
-  }, [atkAttacker, atkDefender, fighters, addLog, initiativeRolled, initiativeOrder, currentTurnIndex, fumaca, armasDoLutador, selWeaponId, prepararDisparo]);
+  }, [atkAttacker, atkDefender, fighters, addLog, initiativeRolled, initiativeOrder, currentTurnIndex, fumaca, armasDoLutador, selWeaponId, prepararDisparo, tripulacaoIncompleta]);
 
   // Fim de rodada: avança a recarga de cada arma e recarrega as utilitárias
   // quando o contador zera (volta ao `usosMax`).

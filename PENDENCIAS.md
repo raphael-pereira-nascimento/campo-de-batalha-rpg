@@ -648,6 +648,25 @@ provisórios porque o texto oficial das armas não foi fornecido.
 | Compatibilidade | Os campos novos (`tripulacaoMinima`, `ignoraDefesaPct`, `fumacaExtra` e `penalidade`) são opcionais e foram espelhados em `src/game/data.js`, `server/src/game/data.js` e nos dois `battleManager.js`. Armas sem esses campos mantêm o comportamento anterior |
 | Não inventado | Os números 25%, −1 DEX/REF, +1 turno de tripé, +1 fumaça e a penalidade de −20%/+1 recarga são provisórios e não foram apresentados como regra oficial. "Munição" não virou recurso persistente; P-14 fica em aberto apenas para escudos e itens mágicos |
 
+#### Correções da revisão (D-62 a D-67)
+
+- **`Rules.jsx`:** criada a seção 14.1 com D-62 a D-67 e corrigidas as passagens antigas que
+  contradiziam a implementação (slot utilitário, `usosMax` para toda artilharia, "munição
+  relevante", fumaça e `ignoraDefesaPct` omitidos).
+- **Batalha de Mesa:** `TableBattle.jsx` passou a aplicar tripulação mínima (−20% de acerto e
+  +1 recarga), `ignoraDefesaPct`, `fumacaExtra` e penalidades de equipamento na mira, antes
+  isso só acontecia nos dois `battleManager.js`. A mesa não usa `BattleManager`.
+- **Penalidade do Bombasta (D-66):** `penalidade` era contabilizada em `effectiveAttributes`,
+  mas a mira usava os atributos-base, então −1 DEX/REF não tinha efeito em combate. Novo helper
+  `penalidadesEquipamento` (nos dois `data.js`) aplica apenas malefícios a atirador e alvo em
+  `_rollToHit` e em `effectiveStat` da mesa; bônus de equipamento continuam fora da rolagem.
+- **Redação do tripé (D-66):** a descrição do Canhão de Cerco dizia "Precisa de tripé
+  (+1 turno)", sugerindo um custo extra que não existe. Agora diz "Tripé embutido: recarga de
+  5 turnos (+1 sem ajudante)", espelhada nos dois catálogos.
+- **Modo livre (D-64):** `_aliadosDe` continua vazio em `'todos'` para fogo amigo, mas a
+  tripulação usa verificação própria (`isMonster`) e humanos contam como ajudantes entre si —
+  comportamento intencional, não bug.
+
 ---
 
 ## 3. Pendente

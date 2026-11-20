@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { BattleManager } from '../src/game/battleManager.js';
-import { EQUIPMENT } from '../src/game/data.js';
+import { EQUIPMENT, penalidadesEquipamento } from '../src/game/data.js';
 import { fumacaDoDisparo, rajadaDaArma } from '../src/game/sistema.js';
 
 const canhao = (id) => ({ ...EQUIPMENT.canoes[id], id });
@@ -158,13 +158,28 @@ describe('canhões — descrições mecânicas (D-65 a D-67)', () => {
     expect(danos.every((args) => args[6]?.ignoraDefesaPct === 25)).toBe(true);
   });
 
-  it('o canhão de cerco leva 1 turno extra de recarga pelo tripé', () => {
+  it('o canhão de cerco usa 5 turnos de recarga (+1 do contador interno)', () => {
     const { manager, battle, atirador, alvos } = ctx({ ajudante: true });
     capturarRolagens(manager);
     manager._resolveAttack(battle, atirador, alvos[0], CANHAO_CERCO);
 
     expect(CANHAO_CERCO.recarga).toBe(5);
     expect(atirador.wpnRecarga.canhao_cerco).toBe(6);
+  });
+
+  it('o peso do Bombasta reduz a mira (−1 DEX/−1 REF)', () => {
+    const { manager, atirador, alvos } = ctx({ ajudante: true });
+    const bombasta = { ...EQUIPMENT.canoes.canhao_bombasta, id: 'canhao_bombasta' };
+    const equipamento = { armas: { distancia: bombasta } };
+    const semPeso = manager._rollToHit(atirador, alvos[0], 'physical').chance;
+    const comPeso = manager._rollToHit(
+      { ...atirador, equipment: equipamento },
+      alvos[0],
+      'physical',
+    ).chance;
+
+    expect(penalidadesEquipamento(equipamento)).toMatchObject({ destreza: 1, reflexos: 1 });
+    expect(comPeso).toBeLessThan(semPeso);
   });
 
   it('a pólvora negra acrescenta 1 de fumaça ao disparo', () => {

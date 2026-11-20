@@ -19,6 +19,7 @@ import {
   skillFromSpell,
   gemsAttrs,
   itensComGemas,
+  penalidadesEquipamento,
 } from './data.js';
 import { GEMS } from './gems.js';
 import { getGemDef } from './forgeGems.js';
@@ -1092,13 +1093,25 @@ export class BattleManager {
     return mesmoLado.length < minimo - 1;
   }
 
+  // Atributos da mira: base/ébrio/arena + malefícios de equipamento (D-66).
+  // Bônus de equipamento continuam fora da rolagem, como antes.
+  _attrsMira(p, battle) {
+    const attrs = this._rollAttrs(p, battle);
+    const penal = penalidadesEquipamento(p?.equipment || {});
+    const out = { ...attrs };
+    for (const k of ['forca', 'inteligencia', 'resistencia', 'destreza', 'reflexos']) {
+      if (penal[k]) out[k] = (out[k] || 0) - penal[k];
+    }
+    return out;
+  }
+
   _rollToHit(attacker, defender, kind, { poder = 100, status = null, acertoPenalidade = 0 } = {}, battle = null) {
     const dodgeBonus = this._dodgeBonus(defender);
     const stAtk = statusEffects(attacker);
     const stDef = statusEffects(defender);
     const critThresh = 21 - Math.round(this._critBonus(attacker) * 20);
-    const atkA = this._rollAttrs(attacker, battle);
-    const defA = this._rollAttrs(defender, battle);
+    const atkA = this._attrsMira(attacker, battle);
+    const defA = this._attrsMira(defender, battle);
     // Fumaça: atrapalha a mira de quem está dentro dela e camufla o alvo.
     const fumacaMira = fumacaMiraPenalidade(attacker.fumaca);
     const fumacaCamuflagem = fumacaCamuflagemBonus(defender.fumaca);
