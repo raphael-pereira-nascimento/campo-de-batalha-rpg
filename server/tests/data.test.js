@@ -454,12 +454,12 @@ describe('armas de fogo novas + escolha da arma no ataque', () => {
 });
 
 describe('STATUS_DEFS — catálogo central de status', () => {
-  it('os 10 status têm os campos do catálogo', () => {
-    // 8 status básicos + 2 condições próprias de material acrescentadas depois:
-    // Podridão (Tenebrium) e Contaminação Pandemônica (Prata Pandemônica).
+  it('os 13 status têm os campos do catálogo', () => {
+    // 8 status básicos + 2 condições próprias de material acrescentadas depois
+    // (Podridão e Contaminação Pandemônica) + 3 condições do Kraken (D-57).
     const ids = [
       'queimadura', 'sangramento', 'veneno', 'regeneracao', 'lentidao', 'cegueira', 'fraqueza', 'congelamento',
-      'podridao', 'contaminacaoPandemonica',
+      'podridao', 'contaminacaoPandemonica', 'confusao', 'medo', 'respiracao_aquatica',
     ];
     expect(Object.keys(STATUS_DEFS).sort()).toEqual(ids.sort());
     for (const id of ids) {

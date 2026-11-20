@@ -513,7 +513,7 @@ provisórios em D-54–D-59.
 | Horda | HP é um pool por unidade (`HP individual × corpos`), Moral começa em 100 e cai com abates/dano; o dano escala com corpos e Moral, com barra própria na Batalha |
 | Status | `cegueira`, `veneno`, `confusao` (−20% acerto, provisório), `medo` (−10% acerto/esquiva, provisório) e `respiracao_aquatica` passaram a existir no catálogo e na UI |
 | Interface | Banner mostra a arena e quantos heróis estão penalizados; o combatente do Kraken mostra passiva, habilidades e arena; a horda mostra Moral; heróis sem respiração exibem o aviso |
-| Paridade | `kraken.test.js` com 13 casos cobre ativação, CDs, passiva, aliases de Luz, status, invocação, Moral e arena. Harness local: **369/369**, 0 falhas e 0 erros de console |
+| Paridade | `kraken.test.js` com 13 casos cobre ativação, CDs, passiva, aliases de Luz, status, invocação, Moral e arena. Harness local: **426/426**, 0 falhas e 0 erros de console, após incluir `data.test.js` no harness para cobrir também o catálogo de status |
 
 ---
 
@@ -1065,7 +1065,7 @@ golpes.
 | Motores | Passiva, bloqueio por Luz/Sagrado, arena, testes de Reflexo CD 16/18, três habilidades, IA do Kraken, dano escalável e queda de Moral espelhados nos dois `battleManager.js` |
 | Compatibilidade | `_rollToHit` ganhou um 5º argumento opcional `battle` e repassa o contexto nas chamadas internas; testes antigos continuam válidos. Diferenças prévias entre cliente e servidor (`randomUUID`, `clamp`, gemas, imports) foram preservadas |
 | Interface | Banner da arena, selos de Kraken/habilidades/penalidade e barra de Moral adicionados à Batalha |
-| Testes | `server/tests/kraken.test.js` com 13 casos importado pelo harness; recompilação com aliases de `vitest`, `node:*`, `pg` e `@electric-sql/pglite`; **369/369**, 0 falhas e 0 erros de console |
+| Testes | `server/tests/kraken.test.js` com 13 casos importado pelo harness; `data.test.js` atualizado para os 13 status e também importado pelo harness, evitando que o Vitest do CI veja uma regressão que o navegador não via; recompilação com aliases de `vitest`, `node:*`, `pg` e `@electric-sql/pglite`; **426/426**, 0 falhas e 0 erros de console |
 | Publicação | Service worker bumpado para `cbrpg-v5`, invalidando `cbrpg-v4`; build/publish via Actions e Pages, com verificação no site público |
 | Não inventado | Durações de 2/3 turnos, CDs 16/18, cura de 5% e invocação 1d4+2 vêm da especificação do chefe; penalidades numéricas da arena, Confusão/Medo, dano escalável e recarga do Chamado seguem provisórias (D-54 a D-59) |
 
