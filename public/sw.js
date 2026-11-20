@@ -1,6 +1,8 @@
-// v2: só cacheia respostas válidas (ok). Versão anterior (v1) podia guardar
-// 404/HTML em URL de asset durante rebuilds → tela branca no acesso seguinte.
-const CACHE = 'cbrpg-v2';
+// v3: invalida o cache das versões anteriores para distribuir a aba de gestão
+// de fichas/árvore de golpes. v2 só cacheava respostas válidas (ok), mas o
+// fallback ao cache podia servir bundles antigos quando a rede falhava,
+// escondendo novos botões/abas mesmo após um deploy bem-sucedido.
+const CACHE = 'cbrpg-v3';
 const PRECACHE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
