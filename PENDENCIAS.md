@@ -6,8 +6,10 @@ rodada de buffs, cura, Ações Rápidas e canhões (D-44 a D-47), auditoria de
 correções de comportamento em fichas, motores e Batalha de Mesa (1.9) e
 implementação do Kraken do Abismo Eclipse com passiva, habilidades, horda e
 arena espelhadas nos motores cliente/servidor (D-54 a D-61, seções 1.10, 3.14 e
-3.15) e regras provisórias de canhões com tripulação mínima e descrições
-mecânicas (D-62 a D-67, seções 1.11 e 3.16).
+3.15), regras provisórias de canhões com tripulação mínima e descrições
+mecânicas (D-62 a D-67, seções 1.11 e 3.16) e a revisão D-68: painel 🧰 de
+artilharia na Batalha de Mesa e D20 “rolar-maior” com números de
+exigência em mesa, Campo e servidor (seções 1.11 e 3.18).
 
 Este arquivo separa o que já foi **aprovado**, o que foi implementado como
 **provisório**, o que continua **pendente** e o que é apenas **sugestão**.
@@ -31,7 +33,7 @@ Legenda:
 
 ---
 
-## Índice das decisões D-01 a D-67
+## Índice das decisões D-01 a D-68
 
 | Código | Assunto | Status |
 | --- | --- | --- |
@@ -102,6 +104,7 @@ Legenda:
 | D-65 | "Ignora parte da defesa" vira `ignoraDefesaPct: 25` | Provisório; também em `besta_pesada` |
 | D-66 | "Peso quase proibitivo" e "precisa de tripé" viram mecânica | Provisório; bombasta −1 DEX/REF, canhão de cerco `recarga: 5` |
 | D-67 | "Pólvora negra" vira `fumacaExtra: 1` | Provisório; +1 fumaça por disparo do Canhão de Ferro |
+| D-68 | Painel 🧰 de artilharia na mesa e D20 “rolar-maior” | Provisório; acerto se `d20 ≥ exigência`, 20 crítico e 1 falha; faixas 1–4/5–10/11–16/17–20 agora classificam a exigência |
 
 ---
 
@@ -629,7 +632,7 @@ criador antes de virarem regra definitiva.
 - **Interface:** catálogo único com abas “Catálogo” e “Composição”; não foram
   criadas telas separadas por categoria.
 
-### 1.11 Canhões — tripulação e descrições mecânicas (D-62 a D-67)
+### 1.11 Canhões — tripulação, descrições mecânicas e D20 (D-62 a D-68)
 
 Decisões do criador sobre os canhões, aplicadas nos dois motores e nos dois
 catálogos. As regras D-01 a D-61 continuam válidas; os números abaixo são
@@ -644,6 +647,9 @@ provisórios porque o texto oficial das armas não foi fornecido.
 | D-65 | "Ignora parte da defesa" virou `ignoraDefesaPct: 25` no Canhão de Dragões e na Besta Pesada. `_applyDamage` reduz a defesa em 25% antes de descontá-la do dano |
 | D-66 | "Peso quase proibitivo" virou `penalidade: { destreza: -1, reflexos: -1 }` no Canhão Bombasta, aplicada por `effectiveAttributes`. "Precisa de tripé" virou `recarga: 5` no Canhão de Cerco (4 + 1 turno) |
 | D-67 | "Pólvora negra" virou `fumacaExtra: 1` no Canhão de Ferro, somado à fumaça padrão do disparo por `_emitirFumaca` |
+| D-68 | Batalha de Mesa com painel **💣 Artilharia — Canhões (🧰)**: atirador, peça, alvos, recarga/carga e tripulação. Acerto “rolar-maior” em mesa, Campo e servidor: `d20 ≥ exigência`, com `exigência = 21 − alvo + dificuldade`; 1 = falha natural e 20 = crítico natural |
+| D-68 | `exigenciaD20(chance, dificuldade)` espelha a probabilidade antiga (0,35 → 14, 0,5 → 11, 0,95 → 2; limites 0 → 20 e 1 → 2) e limita a exigência a `2..20`. `_rollToHit` devolve `chance`, `exigencia`, `dificuldade` e `nivel`; o `nivel` vem da exigência, nunca da rolagem |
+| D-68 | As faixas 🟢 Fácil 1–4 / 🟡 Médio 5–10 / 🟠 Difícil 11–16 / 🔴 Muito Difícil 17–20 mantêm os números, mas agora descrevem a **exigência da ação**; um d20 alto é mais fácil de conseguir. A direção “rolar-menor” anterior fica superada |
 | Catálogo | Os dois conjuntos oficiais convivem com papéis distintos: 8 peças em `EQUIPMENT.canoes` (artilharia/distância) e 5 canhões em `EQUIPMENT.armas` com `categoria: 'utilitaria'`, `usosMax` e `recargaTurnos` |
 | Compatibilidade | Os campos novos (`tripulacaoMinima`, `ignoraDefesaPct`, `fumacaExtra` e `penalidade`) são opcionais e foram espelhados em `src/game/data.js`, `server/src/game/data.js` e nos dois `battleManager.js`. Armas sem esses campos mantêm o comportamento anterior |
 | Não inventado | Os números 25%, −1 DEX/REF, +1 turno de tripé, +1 fumaça e a penalidade de −20%/+1 recarga são provisórios e não foram apresentados como regra oficial. "Munição" não virou recurso persistente; P-14 fica em aberto apenas para escudos e itens mágicos |
@@ -666,6 +672,18 @@ provisórios porque o texto oficial das armas não foi fornecido.
 - **Modo livre (D-64):** `_aliadosDe` continua vazio em `'todos'` para fogo amigo, mas a
   tripulação usa verificação própria (`isMonster`) e humanos contam como ajudantes entre si —
   comportamento intencional, não bug.
+
+#### Revisão D-68 — painel 🧰 e exigência do D20
+
+- **Batalha de Mesa:** novo painel **💣 Artilharia — Canhões (🧰)**, com atirador, peça,
+  alvos, recarga/carga, tripulação e fumaça; `artilharia` continua apenas filtro/grupo.
+- **D20:** `exigenciaD20` em `src/game/sistema.js` e `server/src/game/sistema.js` converte a
+  chance antiga na exigência mínima (`d20 ≥ exigência`) sem mudar probabilidades. 20 é crítico e
+  1 é falha natural; golpes mais fortes/pesados aumentam a exigência e as faixas classificam a
+  exigência, não a rolagem.
+- **Paridade:** a conversão e o log (`exigia N no d20` / `Médio (≥N)`) estão espelhados nos dois
+  `battleManager.js`; ataque rápido, magias multi-alvo e rolagem manual da mesa usam a mesma
+  regra. `Battle.jsx` e `Rules.jsx` trocaram a descrição “rolar-menor” pela de D-68.
 
 ---
 
@@ -1148,6 +1166,18 @@ golpes.
 | Testes | Novo caso para a penalidade de mira do Bombasta em `server/tests/canhoes.test.js`; harness **440/440**, 0 falhas. Bundle do cliente compilado com esbuild; única compilação oficial permanece a do Actions |
 | Publicação | Commit `05dd717` em `origin/main`, Actions **#125** verde (build + deploy), deployment `7950273127` com status `success`. Site público servindo `cbrpg-v8` (`caches.keys()` confirmou o cache ativo). Verificado no navegador: seção 14.1 completa publicada; Bombasta com VEL/REF 7 e recarga 6t; Canhão de Ferro sem ajudante com aviso, recarga 6t e +1 fumaça; Canhão de Dragões com crítico e 520 dano contra defesa 100 (D-65) |
 | Follow-up | Divergência preexistente fora desta revisão: `_physMult` do cliente lê `g.efeitos?.[categoria]?.bonus?.forca`, enquanto o servidor lê `fx?.bonus?.forca`. Avaliar em separado antes de mexer, para não alterar equilíbrio sem decisão |
+
+### 3.18 Revisão D-68 — painel 🧰 e D20 rolar-maior (1.13)
+
+| Área | Resultado |
+| --- | --- |
+| Decisão | D-68 é **provisória**: acerto se `d20 ≥ exigência`; 20 = crítico natural e 1 = falha natural. A direção “rolar-menor” anterior fica superada; D-01 a D-67 continuam válidos |
+| Regras documentadas | `Rules.jsx`: combate, faixas do D20, seção 7 e título 14.1 atualizados para D-62 a D-68; painel da mesa e a equivalência `exigência = 21 − alvo + dificuldade` explicados. Nenhuma regra oficial foi inventada |
+| Motores | `exigenciaD20` nos dois `sistema.js`; `_rollToHit` nos dois `battleManager.js` devolve `chance`/`exigencia` e classifica o `nivel` pela exigência. Log de combate passa a mostrar `exigia N no d20` e `Faixa (≥N)` |
+| Interface | `TableBattle.jsx`: painel 💣 Artilharia (🧰), conversão no ataque rápido, magias multi-alvo e rolagem manual; `Battle.jsx`: título das faixas com D-68 |
+| Testes | `server/tests/sistema.test.js` com conversões 0,35 → 14, 0,5 → 11, 0,95 → 2, 0 → 20 e 1 → 2 e classificação pela exigência; `server/tests/battle.test.js` com rolagens altas equivalentes e exigência > para golpes fortes. Suíte completa: **623/623**, 0 falhas |
+| Validação local | `npm run build` OK (Vite 5.4.21; apenas aviso de tamanho de chunk). Smoke em `http://127.0.0.1:5173/mesa-de-batalha.html`: painel 🧰 com atirador/peça/alvos exibindo `exige 10 no D20`, tiro registrado `⚔️ Atirador erra Alvo com Canhão Leve → D20:7 · Médio (≥10)`, recarga `⏳ 4t` e ataque rápido `Chance: 53% (exige 10 ou mais no D20; 20 é crítico, 1 é falha)` com `Ajudante ataca Alvo → D20: 14 · Médio (≥10) → ACERTA → 100 dano` |
+| Publicação | Service worker bumpado para `cbrpg-v9`. Commit, Actions/Pages e verificação no site público: **a registrar após a publicação** |
 
 ---
 

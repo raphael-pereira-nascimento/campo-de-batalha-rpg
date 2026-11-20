@@ -23,6 +23,7 @@ import {
   NIVEIS_DIFICULDADE_D20,
   nivelDificuldadeD20,
   dificuldadeDoGolpe,
+  exigenciaD20,
 } from '../game/sistema.js';
 import { MONSTERS } from '../game/monsters.js';
 import { SPELLS, STATUS_DEFS, EQUIPMENT, armasDeEquipamento, skillFromSpell, penalidadesEquipamento } from '../game/data.js';
@@ -31,6 +32,15 @@ import { golpesDisponiveis } from '../game/skillValidation.js';
 
 // Catálogo de armas para o painel de Arsenais: armas gerais + peças de artilharia.
 const CATALOGO_ARMAS = { ...EQUIPMENT.armas, ...EQUIPMENT.canoes };
+
+// 💣 Canhões = 8 peças de artilharia + 5 modelos utilitários. O grupo
+// "artilharia" continua sendo apenas filtro (D-62), nunca um slot.
+const CANHOES_IDS = new Set(Object.keys(EQUIPMENT.canoes || {}));
+const ehCanhao = (arma) => !!arma && (
+  CANHOES_IDS.has(arma.id)
+  || (arma.categoria === 'utilitaria' && arma.tipo === 'arma_fogo')
+  || /canhão/i.test(arma.nome || '')
+);
 
 
 // Recarga efetiva de uma arma (canhões usam `recargaTurnos`; dados antigos usam `recarga`).
@@ -462,6 +472,11 @@ const [lastRoll, setLastRoll] = useState(null);
   const [selSpellId, setSelSpellId] = useState('');
   const [selItemId, setSelItemId] = useState('');
 
+  // Painel dedicado de artilharia (🧰), espelhando o Campo de Batalha.
+  const [canhaoAtirador, setCanhaoAtirador] = useState('');
+  const [canhaoId, setCanhaoId] = useState('');
+  const [canhaoAlvos, setCanhaoAlvos] = useState([]);
+
   // Controle de recarga e usos de armas utilitárias (canhões etc.)
   // wpnRecarga[armaId] = turnos restantes até poder usar novamente
   // wpnUsos[armaId] = usos restantes antes de precisar recarregar
@@ -512,6 +527,52 @@ const [lastRoll, setLastRoll] = useState(null);
       f.id !== atirador.id && f.hp > 0 && f.team === atirador.team);
     return ajudantes.length < minimo - 1;
   }, [fighters]);
+
+  // Canhões equipados pelo atirador (8 de artilharia + 5 utilitários).
+  const canhoesDoLutador = useCallback(
+    (f) => armasDoLutador(f).filter(ehCanhao),
+    [armasDoLutador],
+  );
+  const atiradorCanhao = useMemo(
+    () => fighters.find((f) => f.id === canhaoAtirador) || null,
+    [fighters, canhaoAtirador],
+  );
+  const canhaoSelecionado = useMemo(() => (
+    atiradorCanhao
+      ? canhoesDoLutador(atiradorCanhao).find((a) => a.id === canhaoId) || null
+      : null
+  ), [atiradorCanhao, canhaoId, canhoesDoLutador]);
+  useEffect(() => {
+    if (!canhaoAtirador) {
+      setCanhaoId('');
+      setCanhaoAlvos([]);
+      return;
+    }
+    const atk = fighters.find((f) => f.id === canhaoAtirador);
+    const opcoes = canhoesDoLutador(atk);
+    if (opcoes.some((a) => a.id === canhaoId)) return;
+    const preferida = opcoes.find((a) => CANHOES_IDS.has(a.id)) || opcoes[0];
+    setCanhaoId(preferida ? preferida.id : '');
+    setCanhaoAlvos([]);
+  }, [canhaoAtirador, fighters, canhaoId, canhoesDoLutador]);
+
+  // Estado do painel de artilharia: tripulação, carga, recarga e calor.
+  const canhaoTripIncompleta = !!canhaoSelecionado
+    && tripulacaoIncompleta(atiradorCanhao, canhaoSelecionado);
+  const canhaoRecarga = canhaoAtirador && canhaoSelecionado
+    ? Number((wpnRecarga[canhaoAtirador] || {})[canhaoSelecionado.id]) || 0
+    : 0;
+  const canhaoUsos = canhaoAtirador && canhaoSelecionado
+    ? ((wpnUsos[canhaoAtirador] || {})[canhaoSelecionado.id]) ?? canhaoSelecionado.usosMax
+    : 0;
+  const canhaoTravado = canhaoAtirador && canhaoSelecionado
+    ? Number((wpnSuperaquecido[canhaoAtirador] || {})[canhaoSelecionado.id]) || 0
+    : 0;
+  const canhaoAutoAlvo = !!canhaoSelecionado
+    && alvoNormalizado(canhaoSelecionado).tipo === 'area';
+  const canhaoBloqueado = !canhaoAtirador || !canhaoSelecionado || canhaoRecarga > 0
+    || canhaoTravado > 0 || (!!canhaoSelecionado?.usosMax && canhaoUsos <= 0)
+    || (!canhaoAutoAlvo && canhaoAlvos.length === 0);
 
   // Arma escolhida no painel de ações e se ela está travada por superaquecimento.
   const armaSelecionada = useMemo(() => {
@@ -598,11 +659,11 @@ const [lastRoll, setLastRoll] = useState(null);
   // Resolve o modo de alvo de um golpe (unico/area/cone/explosao) e devolve os
   // alvos válidos: somente inimigos vivos, com o alvo principal escolhido
   // primeiro. Em área, todos os inimigos vivos entram automaticamente.
-  const alvosDoGolpe = useCallback((attacker, golpe) => {
+  const alvosDoGolpe = useCallback((attacker, golpe, selecionados = actTargets) => {
     const spec = alvoNormalizado(golpe || {});
     if (!attacker) return { spec, alvos: [] };
     const inimigos = fighters.filter((f) => f.hp > 0 && f.team !== attacker.team);
-    const escolhidos = actTargets
+    const escolhidos = selecionados
       .map((id) => fighters.find((f) => f.id === id))
       .filter((f) => f && f.hp > 0 && f.team !== attacker.team);
 
@@ -970,62 +1031,60 @@ const [lastRoll, setLastRoll] = useState(null);
     return true;
   }, [wpnRecarga, wpnUsos, wpnSuperaquecido, wpnCalor, fumaca, addLog, tripulacaoIncompleta]);
 
-  // Executa uma ação rápida: ataque físico, magia (consome MP) ou item (cura).
-  const executarAcao = useCallback(() => {
-    const attacker = fighters.find((f) => f.id === actAttacker);
-    if (!attacker || attacker.hp <= 0) return;
+  // Validações compartilhadas pelas Ações Rápidas e pelo painel de artilharia.
+  const podeAgir = useCallback((attacker, atiradorId) => {
+    if (!attacker || attacker.hp <= 0) return false;
     if (temStatus(attacker, 'congelamento')) {
       addLog(`🧊 ${attacker.name} está congelado e não pode agir neste turno.`);
-      return;
+      return false;
     }
-
     // Respeita a ordem de turno quando a iniciativa já foi rolada.
     if (initiativeRolled && initiativeOrder.length > 0) {
       const currentId = initiativeOrder[currentTurnIndex];
-      if (actAttacker !== currentId) {
+      if (atiradorId !== currentId) {
         const current = fighters.find((f) => f.id === currentId);
         addLog(`⛔ Não é a vez de ${attacker.name}. Aguarde a vez de ${current ? current.name : '—'}.`);
-        return;
+        return false;
       }
     }
+    return true;
+  }, [addLog, fighters, initiativeRolled, initiativeOrder, currentTurnIndex]);
 
-    if (actionMode === 'attack') {
-      const armas = armasDoLutador(attacker);
-      const arma =
-        armas.find((a) => a.id === selWeaponId) ||
-        armas
-          .filter((a) => a.categoria !== 'utilitaria')
-          .sort((a, b) => (danoBaseDaArma(b) || 0) - (danoBaseDaArma(a) || 0))[0] ||
-        armas[0];
-      const { spec, alvos } = alvosDoGolpe(attacker, arma);
-      if (alvos.length === 0) {
-        addLog(`🎯 ${attacker.name} não encontrou inimigos vivos para atacar.`);
-        setActTargets([]);
-        return;
-      }
-      const tripIncompleta = tripulacaoIncompleta(attacker, arma);
+  // Disparo de arma da mesa: usado pelas Ações Rápidas e pelo botão 🧰 de
+  // artilharia. Um único caminho consome recarga/usos/calor/fumaça uma vez,
+  // inclusive quando o tiro erra ou atinge vários alvos.
+  const dispararArmaMesa = useCallback((attacker, arma, alvosForcados = null) => {
+    const { spec, alvos } = alvosForcados
+      ? { spec: alvoNormalizado(arma), alvos: alvosForcados }
+      : alvosDoGolpe(attacker, arma);
+    if (alvos.length === 0) {
+      addLog(`🎯 ${attacker.name} não encontrou inimigos vivos para atacar.`);
+      setActTargets([]);
+      return;
+    }
+    const tripIncompleta = tripulacaoIncompleta(attacker, arma);
 
-      // Recarga/usos/superaquecimento e consumo do disparo (compartilhados com
-      // o Ataque com Dado).
-      if (!prepararDisparo(attacker, arma)) {
-        setActTargets([]);
-        return;
-      }
+    // Recarga/usos/superaquecimento e consumo do disparo (compartilhados com
+    // o Ataque com Dado).
+    if (!prepararDisparo(attacker, arma)) {
+      setActTargets([]);
+      return;
+    }
 
-      const danoBase = danoFisicoAtaque(effectiveStat(attacker, 'forca'), danoBaseDaArma(arma));
-      const buffDano = multiplicadorDano(attacker, 'fisico');
-      // Dificuldade do golpe (rolar-menor): ataque comum = 100% (dif. 0);
-      // armas com efeito pesado (ex.: congelamento) reduzem o alvo de acerto.
-      const dificuldade = dificuldadeDoGolpe({
-        poder: 100,
-        status: arma.efeito ? { turnos: arma.efeito.turnos, dano: arma.efeito.dano } : null,
-      });
-      const resultados = [];
-      const efeitosPorAlvo = new Map();
+    const danoBase = danoFisicoAtaque(effectiveStat(attacker, 'forca'), danoBaseDaArma(arma));
+    const buffDano = multiplicadorDano(attacker, 'fisico');
+    // D-68: ataque comum = 100% (dif. 0); armas com efeito pesado (ex.:
+    // congelamento) aumentam a exigência do d20 no sistema rolar-maior.
+    const dificuldade = dificuldadeDoGolpe({
+      poder: 100,
+      status: arma.efeito ? { turnos: arma.efeito.turnos, dano: arma.efeito.dano } : null,
+    });
+    const resultados = [];
+    const efeitosPorAlvo = new Map();
 
-      // Cada alvo tem sua própria rolagem de acerto, crítico e multiplicador
-      // de dano (principal usa `danoMult`; secundários usam `splash`).
-      alvos.forEach((alvo, i) => {
+    // Cada alvo tem sua própria rolagem de acerto, crítico e multiplicador
+    // de dano (principal usa `danoMult`; secundários usam `splash`).
+    alvos.forEach((alvo, i) => {
         const roll = Math.floor(Math.random() * 20) + 1;
         const chance = computeHitChance(
           attacker,
@@ -1034,18 +1093,18 @@ const [lastRoll, setLastRoll] = useState(null);
           Number(fumaca[alvo.id]) || 0,
           tripIncompleta ? 0.2 : 0,
         );
-        const threshold = Math.max(1, Math.min(19, Math.ceil(chance * 20) - dificuldade));
-        const nivel = nivelDificuldadeD20(roll);
-        // Acerto "rolar-menor" (igual ao Campo): 20 é crítico, 1 é falha.
+        const exigencia = exigenciaD20(chance, dificuldade);
+        const nivel = nivelDificuldadeD20(exigencia);
+        // D-68: 20 é crítico natural, 1 é falha natural.
         const isCrit = roll === 20;
         const isFail = roll === 1;
-        const hit = isCrit || (!isFail && roll <= threshold);
+        const hit = isCrit || (!isFail && roll >= exigencia);
         const mult = i > 0 ? spec.splash : spec.danoMult;
         const alvoTxt = alvos.length > 1 ? `${alvo.name}${i === 0 ? ' (principal)' : ''}` : alvo.name;
         const difTxt = dificuldade > 0 ? ` · dif. +${dificuldade}` : '';
 
         if (!hit) {
-          addLog(`⚔️ ${attacker.name} erra ${alvoTxt} com ${arma.nome || 'desarmado'} → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold}${difTxt})`);
+          addLog(`⚔️ ${attacker.name} erra ${alvoTxt} com ${arma.nome || 'desarmado'} → D20:${roll} · ${nivel?.nome || '—'} (≥${exigencia}${difTxt})`);
           return;
         }
 
@@ -1056,7 +1115,7 @@ const [lastRoll, setLastRoll] = useState(null);
         const multTxt = mult < 1 ? ` (${Math.round(mult * 100)}%)` : '';
         const redTxt = dmg < Math.round(bruto) ? ' (defesa)' : '';
         const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${multTxt}${redTxt}` : '';
-        addLog(`⚔️ ${attacker.name} ataca ${alvoTxt} com ${arma.nome || 'desarmado'} → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold}${difTxt}) ${isCrit ? 'CRÍTICO ' : ''}${suffix}`);
+        addLog(`⚔️ ${attacker.name} ataca ${alvoTxt} com ${arma.nome || 'desarmado'} → D20:${roll} · ${nivel?.nome || '—'} (≥${exigencia}${difTxt}) ${isCrit ? 'CRÍTICO ' : ''}${suffix}`);
         if (res.protecaoQuebrou) addLog(res.msg);
 
         // Efeito da arma (ex.: congelamento) só em quem foi atingido e sobreviveu.
@@ -1070,17 +1129,52 @@ const [lastRoll, setLastRoll] = useState(null);
         }
       });
 
-      if (resultados.length > 0 || efeitosPorAlvo.size > 0) {
-        setFighters((prev) => prev.map((f) => {
-          let nf = f;
-          const r = resultados.find((x) => x.id === f.id);
-          if (r) nf = aplicarDanoAoCombatente(nf, r.res);
-          const efeitos = efeitosPorAlvo.get(f.id);
-          if (efeitos) nf = { ...nf, statusEffects: efeitos };
-          return nf;
-        }));
-      }
-      setActTargets([]);
+    if (resultados.length > 0 || efeitosPorAlvo.size > 0) {
+      setFighters((prev) => prev.map((f) => {
+        let nf = f;
+        const r = resultados.find((x) => x.id === f.id);
+        if (r) nf = aplicarDanoAoCombatente(nf, r.res);
+        const efeitos = efeitosPorAlvo.get(f.id);
+        if (efeitos) nf = { ...nf, statusEffects: efeitos };
+        return nf;
+      }));
+    }
+    setActTargets([]);
+    setCanhaoAlvos([]);
+  }, [alvosDoGolpe, fumaca, addLog, prepararDisparo, tripulacaoIncompleta]);
+
+  // Disparo do painel dedicado de artilharia (🧰).
+  const dispararCanhao = useCallback(() => {
+    if (!podeAgir(atiradorCanhao, canhaoAtirador) || !canhaoSelecionado) return;
+    if (canhaoBloqueado) {
+      if (canhaoRecarga > 0) addLog(`⏳ ${canhaoSelecionado.nome} ainda está recarregando (${canhaoRecarga} turno(s)).`);
+      else if (canhaoTravado > 0) addLog(`🔥 ${canhaoSelecionado.nome} precisa esfriar (${canhaoTravado} rodada(s)).`);
+      else if (!!canhaoSelecionado.usosMax && canhaoUsos <= 0) addLog(`🔫 ${canhaoSelecionado.nome} está sem carga.`);
+      else addLog(`🎯 Escolha pelo menos um alvo para ${canhaoSelecionado.nome}.`);
+      return;
+    }
+    const { alvos } = alvosDoGolpe(atiradorCanhao, canhaoSelecionado, canhaoAlvos);
+    dispararArmaMesa(atiradorCanhao, canhaoSelecionado, alvos);
+  }, [
+    podeAgir, atiradorCanhao, canhaoAtirador, canhaoSelecionado, canhaoBloqueado,
+    canhaoRecarga, canhaoTravado, canhaoUsos, addLog, alvosDoGolpe, canhaoAlvos,
+    dispararArmaMesa,
+  ]);
+
+  // Executa uma ação rápida: ataque físico, magia (consome MP) ou item (cura).
+  const executarAcao = useCallback(() => {
+    const attacker = fighters.find((f) => f.id === actAttacker);
+    if (!podeAgir(attacker, actAttacker)) return;
+
+    if (actionMode === 'attack') {
+      const armas = armasDoLutador(attacker);
+      const arma =
+        armas.find((a) => a.id === selWeaponId) ||
+        armas
+          .filter((a) => a.categoria !== 'utilitaria')
+          .sort((a, b) => (danoBaseDaArma(b) || 0) - (danoBaseDaArma(a) || 0))[0] ||
+        armas[0];
+      dispararArmaMesa(attacker, arma);
       return;
     }
 
@@ -1215,18 +1309,18 @@ const [lastRoll, setLastRoll] = useState(null);
             Number(fumaca[alvo.id]) || 0,
           )
           : 1;
-        const threshold = Math.max(1, Math.min(19, Math.ceil(chance * 20) - dificuldade));
-        const nivel = multi ? nivelDificuldadeD20(roll) : null;
-        // Acerto "rolar-menor" (igual ao Campo): 20 é crítico, 1 é falha.
+        const exigencia = multi ? exigenciaD20(chance, dificuldade) : 20;
+        const nivel = multi ? nivelDificuldadeD20(exigencia) : null;
+        // D-68: 20 é crítico natural, 1 é falha natural.
         const isCrit = multi && roll === 20;
         const isFail = multi && roll === 1;
-        const hit = !multi || isCrit || (!isFail && roll <= threshold);
+        const hit = !multi || isCrit || (!isFail && roll >= exigencia);
         const mult = i > 0 ? spec.splash : spec.danoMult;
         const alvoTxt = alvos.length > 1 ? `${alvo.name}${i === 0 ? ' (principal)' : ''}` : alvo.name;
         const difTxt = dificuldade > 0 ? ` · dif. +${dificuldade}` : '';
 
         if (!hit) {
-          addLog(`🔮 ${attacker.name} erra ${skill.nome} em ${alvoTxt} → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold}${difTxt})${i === 0 ? ` (MP ${custo})` : ''}`);
+          addLog(`🔮 ${attacker.name} erra ${skill.nome} em ${alvoTxt} → D20:${roll} · ${nivel?.nome || '—'} (≥${exigencia}${difTxt})${i === 0 ? ` (MP ${custo})` : ''}`);
           return;
         }
 
@@ -1236,7 +1330,7 @@ const [lastRoll, setLastRoll] = useState(null);
         resultados.push({ id: alvo.id, res });
         const multTxt = mult < 1 ? ` (${Math.round(mult * 100)}%)` : '';
         const redTxt = dmg < Math.round(bruto) ? ' (defesa)' : '';
-        const rollTxt = multi ? ` → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold}${difTxt})${isCrit ? ' CRÍTICO' : ''}` : '';
+        const rollTxt = multi ? ` → D20:${roll} · ${nivel?.nome || '—'} (≥${exigencia}${difTxt})${isCrit ? ' CRÍTICO' : ''}` : '';
         const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${multTxt}${redTxt}` : '';
         addLog(`🔮 ${attacker.name} lança ${skill.nome} em ${alvoTxt}${rollTxt}${suffix}${i === 0 ? ` (MP ${custo})` : ''}`);
         if (res.protecaoQuebrou) addLog(res.msg);
@@ -1330,8 +1424,8 @@ const [lastRoll, setLastRoll] = useState(null);
   }, [
     fighters, actAttacker, actTargets, actionMode, selWeaponId, selSpellId, selItemId,
     armasDoLutador, magiasDoLutador, itensDoLutador, alvosDoGolpe, alvosDeSuporte,
-    magiaSuporte, addLog, prepararDisparo,
-    initiativeRolled, initiativeOrder, currentTurnIndex, fumaca,
+    magiaSuporte, addLog, prepararDisparo, podeAgir, dispararArmaMesa,
+    tripulacaoIncompleta, fumaca,
   ]);
 
   const removeCustomEffect = useCallback((type, uid_) => {
@@ -1432,12 +1526,12 @@ const [lastRoll, setLastRoll] = useState(null);
           Number(fumaca[defender.id]) || 0,
           tripIncompleta ? 0.2 : 0,
         );
-        const threshold = Math.ceil(hitChance * 20);
-        const nivel = nivelDificuldadeD20(finalRoll);
-        // Acerto "rolar-menor" (igual ao Campo): 20 é crítico, 1 é falha.
+        const exigencia = exigenciaD20(hitChance);
+        const nivel = nivelDificuldadeD20(exigencia);
+        // D-68: 20 é crítico natural, 1 é falha natural.
         const isCrit = finalRoll === 20;
         const isFail = finalRoll === 1;
-        const hit = isCrit || (!isFail && finalRoll <= threshold);
+        const hit = isCrit || (!isFail && finalRoll >= exigencia);
         if (hit) {
           const bruto = computeDamage(attacker, isCrit, arma);
           const dmg = danoComDefesa(defender, bruto, 'fisico', arma?.ignoraDefesaPct || 0);
@@ -1447,12 +1541,12 @@ const [lastRoll, setLastRoll] = useState(null);
           )));
           const critText = isCrit ? ' 🎯 CRÍTICO!' : '';
           const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${isCrit ? ' x2' : ''}` : '';
-          addLog(`${attacker.name} ataca ${defender.name} → D20: ${finalRoll} · ${nivel?.nome || '—'} (≤${threshold}) → ACERTA${critText}${suffix}`);
+          addLog(`${attacker.name} ataca ${defender.name} → D20: ${finalRoll} · ${nivel?.nome || '—'} (≥${exigencia}) → ACERTA${critText}${suffix}`);
           if (res.protecaoQuebrou) addLog(res.msg);
-          setRollResult({ roll: finalRoll, threshold, hit: true, isCrit, damage: res.danoReal, nivel });
+          setRollResult({ roll: finalRoll, exigencia, threshold: exigencia, hit: true, isCrit, damage: res.danoReal, nivel });
         } else {
-          addLog(`${attacker.name} ataca ${defender.name} → D20: ${finalRoll} · ${nivel?.nome || '—'} (≤${threshold}) → ERRA`);
-          setRollResult({ roll: finalRoll, threshold, hit: false, isCrit: false, damage: 0, nivel });
+          addLog(`${attacker.name} ataca ${defender.name} → D20: ${finalRoll} · ${nivel?.nome || '—'} (≥${exigencia}) → ERRA`);
+          setRollResult({ roll: finalRoll, exigencia, threshold: exigencia, hit: false, isCrit: false, damage: 0, nivel });
         }
       }
     }, 60);
@@ -2003,11 +2097,11 @@ const [lastRoll, setLastRoll] = useState(null);
                     const fumacaA = Number(fumaca[a.id]) || 0;
                     const fumacaD = Number(fumaca[d.id]) || 0;
                     const chance = computeHitChance(a, d, fumacaA, fumacaD);
-                    const threshold = Math.ceil(chance * 20);
+                    const exigencia = exigenciaD20(chance);
                     const penalFumaca = fumacaMiraPenalidade(fumacaA) + fumacaCamuflagemBonus(fumacaD);
                     return (
                       <>
-                        <span className="chance-text">Chance: {(chance * 100).toFixed(0)}% (precisa de {threshold} ou menos no D20; 20 é crítico)</span>
+                        <span className="chance-text">Chance: {(chance * 100).toFixed(0)}% (exige {exigencia} ou mais no D20; 20 é crítico, 1 é falha)</span>
                         <span className="modifier-text">VEL: {effectiveStat(a, 'destreza')} vs REF: {effectiveStat(d, 'reflexos')}</span>
                         {penalFumaca > 0 && (
                           <span className="modifier-text smoke-warning">
@@ -2034,7 +2128,7 @@ const [lastRoll, setLastRoll] = useState(null);
                   </div>
                 )}
               </div>
-              <div className="d20-tiers" title="Faixas de dificuldade do d20 (rolar-menor: quanto maior, mais difícil)">
+              <div className="d20-tiers" title="Faixas de exigência do d20 (D-68, rolar-maior: quanto maior o número, mais difícil a exigência)">
                 <span className="d20-tiers-label">🎲 d20</span>
                 {NIVEIS_DIFICULDADE_D20.map((t) => (
                   <span key={t.id} className={`d20-tier d20-${t.id}`}>
@@ -2214,6 +2308,126 @@ const [lastRoll, setLastRoll] = useState(null);
                   }
                 >
                   ▶ Executar Ação
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="panel actions-section">
+            <h2>💣 Artilharia — Canhões (🧰)</h2>
+            <p className="muted small">
+              Painel de tiro dedicado: peças de artilharia e canhões utilitários usam
+              a mesma recarga/carga, tripulação mínima (D-64) e fumaça do Campo de Batalha.
+            </p>
+            <div className="attack-panel actions-command">
+              <div className="actions-row">
+                <div className="action-field">
+                  <label>Atirador</label>
+                  <select value={canhaoAtirador} onChange={(e) => {
+                    setCanhaoAtirador(e.target.value);
+                    setCanhaoAlvos([]);
+                  }}>
+                    <option value="">—</option>
+                    {alive.map((f) => (
+                      <option key={f.id} value={f.id}>{f.name} (HP {f.hp})</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="action-field">
+                  <label>Peça</label>
+                  <select value={canhaoId} onChange={(e) => {
+                    setCanhaoId(e.target.value);
+                    setCanhaoAlvos([]);
+                  }} disabled={!canhaoAtirador}>
+                    {!canhaoAtirador && <option value="">Escolha o atirador</option>}
+                    {canhaoAtirador && canhoesDoLutador(atiradorCanhao).length === 0 && (
+                      <option value="">Nenhum canhão equipado</option>
+                    )}
+                    {canhoesDoLutador(atiradorCanhao).map((arma) => {
+                      const r = Number((wpnRecarga[canhaoAtirador] || {})[arma.id]) || 0;
+                      const u = ((wpnUsos[canhaoAtirador] || {})[arma.id]) ?? arma.usosMax;
+                      const travada = Number((wpnSuperaquecido[canhaoAtirador] || {})[arma.id]) || 0;
+                      const status = travada > 0 ? ` — 🔥 ${travada}t`
+                        : r > 0 ? ` — ⏳ ${r}t`
+                          : arma.usosMax ? ` — ${u}/${arma.usosMax}` : '';
+                      return (
+                        <option key={arma.id} value={arma.id} disabled={r > 0 || travada > 0 || (!!arma.usosMax && u <= 0)}>
+                          💣 {arma.nome} (dano base {danoBaseDaArma(arma)}){status}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              </div>
+              {canhaoAtirador && (
+                <div className="actions-row">
+                  <div className="action-field action-field-full">
+                    <label>{canhaoAutoAlvo ? 'Alvos (área: todos automaticamente)' : 'Alvo(s)'}</label>
+                    <select
+                      multiple
+                      size={Math.min(4, Math.max(1, alive.length))}
+                      value={canhaoAlvos}
+                      onChange={(e) => setCanhaoAlvos(Array.from(e.target.selectedOptions).map((o) => o.value))}
+                      disabled={canhaoAutoAlvo}
+                    >
+                      {alive
+                        .filter((f) => f.id !== canhaoAtirador && f.team !== atiradorCanhao?.team)
+                        .map((f) => (
+                          <option key={f.id} value={f.id}>{f.name} (HP {f.hp})</option>
+                        ))}
+                      {alive.length <= 1 && <option disabled>Sem outros alvos vivos</option>}
+                    </select>
+                  </div>
+                </div>
+              )}
+              {canhaoSelecionado && (() => {
+                const fumacaAtirador = Number(fumaca[canhaoAtirador]) || 0;
+                const info = fumacaEstado(fumacaAtirador);
+                const alvo = fighters.find((f) => f.id === canhaoAlvos[0]);
+                const chance = alvo
+                  ? computeHitChance(
+                    atiradorCanhao, alvo, fumacaAtirador, Number(fumaca[alvo.id]) || 0,
+                    canhaoTripIncompleta ? 0.2 : 0,
+                  )
+                  : 0.5;
+                const dificuldade = dificuldadeDoGolpe({
+                  poder: 100,
+                  status: canhaoSelecionado.efeito
+                    ? { turnos: canhaoSelecionado.efeito.turnos, dano: canhaoSelecionado.efeito.dano }
+                    : null,
+                });
+                return (
+                  <div className="attack-info">
+                    <span className="chance-text">
+                      💣 {canhaoSelecionado.nome} · recarga {recargaDeArma(canhaoSelecionado)}t
+                      {canhaoTripIncompleta ? ' + 1t (sem ajudante)' : ''}
+                      {canhaoSelecionado.usosMax ? ` · carga ${canhaoUsos}/${canhaoSelecionado.usosMax}` : ''}
+                      {canhaoRecarga > 0 ? ` · ⏳ ${canhaoRecarga}t restantes` : ''}
+                      {canhaoTripIncompleta ? ' · sem ajudante: −20% de acerto' : ''}
+                      {alvo ? ` · exige ${exigenciaD20(chance, dificuldade)} no D20` : ''}
+                    </span>
+                    {canhaoTripIncompleta && (
+                      <span className="modifier-text smoke-warning">
+                        ⚙️ Tripulação incompleta (D-64): precisa de 2 vivos no mesmo lado.
+                      </span>
+                    )}
+                    {fumacaAtirador > 0 && (
+                      <span className="modifier-text smoke-warning">
+                        🌫️ Fumaça {Math.round(info.pct)}% — mira −{Math.round(info.mira * 100)}%
+                        {(Number(canhaoSelecionado.fumacaExtra) || 0) > 0 ? ' · +1 por disparo (D-67)' : ''}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+              <div className="actions-row actions-row-execute">
+                <button
+                  className="dice-btn dice-btn-execute"
+                  onClick={dispararCanhao}
+                  disabled={canhaoBloqueado}
+                  title={canhaoRecarga > 0 ? 'Aguardando recarga' : canhaoTravado > 0 ? 'Superaquecida' : 'Disparar com a peça escolhida'}
+                >
+                  🧰 Disparar Canhão
                 </button>
               </div>
             </div>

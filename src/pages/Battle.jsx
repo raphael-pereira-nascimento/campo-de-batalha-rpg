@@ -836,7 +836,7 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
                           ? 'Atacar (todos)'
                           : 'Atacar'}
                   </button>
-                  <div className="d20-tiers" title="Faixas de dificuldade do d20 (rolar-menor: quanto maior, mais difícil)">
+                  <div className="d20-tiers" title="Faixas de exigência do d20 (D-68, rolar-maior: quanto maior o número, mais difícil a exigência)">
                     <span className="d20-tiers-label">🎲 d20</span>
                     {NIVEIS_DIFICULDADE_D20.map((t) => (
                       <span key={t.id} className={`d20-tier d20-${t.id}`}>

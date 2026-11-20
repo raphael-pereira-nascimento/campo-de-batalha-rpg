@@ -58,6 +58,7 @@ import {
   rajadaDaArma,
   FUMACA,
   nivelDificuldadeD20,
+  exigenciaD20,
 } from './sistema.js';
 import { estadoEclipse, sortearVarianteEclipse, aplicarEclipseEmChefe, aplicarVarianteEclipseEmChefe } from './eclipse.js';
 import { RACES } from './races.js';
@@ -1152,16 +1153,16 @@ export class BattleManager {
         0.95,
       );
     }
-    // Dificuldade do golpe: golpes mais fortes/efeitos mais pesados reduzem o alvo.
+    // D-68: golpes mais fortes/efeitos mais pesados AUMENTAM a exigência do d20.
     const dificuldade = dificuldadeDoGolpe({ poder, status });
-    const threshold = clamp(Math.round(20 * chance) - dificuldade, 1, 19);
+    const exigencia = exigenciaD20(chance, dificuldade);
     const res = rollAttack();
-    const nivel = nivelDificuldadeD20(res.rolls[0]);
-    const base = { chance: threshold, dificuldade, nivel, fumacaMira, fumacaCamuflagem };
+    const nivel = nivelDificuldadeD20(exigencia);
+    const base = { chance, exigencia, dificuldade, nivel, fumacaMira, fumacaCamuflagem };
     if (res.isCrit) return { ...base, hit: true, crit: true, roll: res.rolls[0] };
     if (res.isFail) return { ...base, hit: false, crit: false, roll: res.rolls[0] };
     if (res.rolls[0] >= critThresh) return { ...base, hit: true, crit: true, roll: res.rolls[0] };
-    return { ...base, hit: res.rolls[0] <= threshold, crit: false, roll: res.rolls[0] };
+    return { ...base, hit: res.rolls[0] >= exigencia, crit: false, roll: res.rolls[0] };
   }
 
   _physMult(p) {
@@ -1728,7 +1729,7 @@ export class BattleManager {
     if (!mira.hit) {
       battle.log.push(
         makeLog(
-          `💨 ${p.charName} erra o ataque em ${principal.charName}. (d20 = ${mira.roll} · ${mira.nivel?.nome || '—'}, precisava de ${mira.chance})`,
+          `💨 ${p.charName} erra o ataque em ${principal.charName}. (d20 = ${mira.roll} · ${mira.nivel?.nome || '—'}, exigia ${mira.exigencia} no d20)`,
           'miss',
         ),
       );
@@ -1825,7 +1826,7 @@ export class BattleManager {
     if (!mira.hit) {
       battle.log.push(
         makeLog(
-          `💨 ${p.charName} erra ${nome} em ${principal.charName}. (d20 = ${mira.roll} · ${mira.nivel?.nome || '—'}, precisava de ${mira.chance}${mira.dificuldade ? `, dificuldade +${mira.dificuldade}` : ''})`,
+          `💨 ${p.charName} erra ${nome} em ${principal.charName}. (d20 = ${mira.roll} · ${mira.nivel?.nome || '—'}, exigia ${mira.exigencia}${mira.dificuldade ? `, dificuldade +${mira.dificuldade}` : ''})`,
           'miss',
         ),
       );

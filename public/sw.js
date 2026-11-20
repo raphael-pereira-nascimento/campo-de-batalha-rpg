@@ -1,7 +1,7 @@
-// v8: invalida o cache da v7 para distribuir a revisão das regras provisórias
-// dos canhões (paridade da mesa, penalidade de mira do Bombasta, seção 14.1 e
-// redação do tripé) espelhada nos motores cliente/servidor e no catálogo.
-const CACHE = 'cbrpg-v8';
+// v9: invalida o cache da v8 para distribuir a revisão D-68: painel 🧰 de
+// artilharia na Batalha de Mesa e d20 rolar-maior (exigência) espelhado nos
+// motores cliente/servidor, na mesa, no Campo de Batalha e nas regras.
+const CACHE = 'cbrpg-v9';
 const PRECACHE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {

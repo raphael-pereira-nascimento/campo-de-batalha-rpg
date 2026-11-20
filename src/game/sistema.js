@@ -390,11 +390,11 @@ export function curaMagica(intFinal, poderPct = 100, mult = 1, coef = DANO_COEF_
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   7. DIFICULDADE DO GOLPE — PROVISÓRIO
+   7. DIFICULDADE DO GOLPE — PROVISÓRIO (D-68)
    Golpes mais fortes e efeitos (status/debuff) mais pesados exigem um d20
-   melhor. A dificuldade é um inteiro >= 0 que REDUZ o alvo de acerto
-   (o combate é "rolar-menor": acerta se d20 <= alvo − dificuldade).
-   O log mostra o alvo e "dificuldade +N".
+   melhor. A dificuldade é um inteiro >= 0 que AUMENTA a exigência
+   (o combate é "rolar-maior": acerta se d20 >= exigência; 1 é falha natural
+   e 20 é crítico natural). O log mostra a exigência e "dificuldade +N".
 
    Referências (provisórias — ajuste só aqui):
    - Golpe comum (100% de poder): dificuldade 0.
@@ -434,8 +434,8 @@ export function dificuldadeDoGolpe({ poder = DIFICULDADE_PODER_REF, status = nul
                   (multiplicador `splash`, padrão 50%).
    Golpes de área/cone/explosão podem "sair pela culatra": se a rolagem de mira
    for uma FALHA CRÍTICA (d20 <= limiar, padrão 1), há chance de o golpe desviar
-   e acertar um aliado. Como o sistema é "rolar-menor" (rolagem baixa = boa mira),
-   só a pior rolagem possível (1) espalha o golpe nos amigos. Tudo ajustável aqui.
+   e acertar um aliado. Com "rolar-maior" (D-68), rolagem alta = boa mira
+   e só a pior rolagem possível (1) espalha o golpe nos amigos. Tudo ajustável aqui.
    ═══════════════════════════════════════════════════════════════════════════ */
 export const MULTI_ALVO_PADRAO = 3; // nº máx. de alvos em cone/explosão
 export const MULTI_SPLASH_PADRAO = 0.5; // dano dos alvos secundários na explosão
@@ -498,8 +498,8 @@ export function alvoNormalizado(golpe = {}) {
 /**
  * O golpe de área/cone/explosão desviou para aliados?
  * Só quando a rolagem de mira é uma FALHA CRÍTICA (d20 <= limiar, padrão 1) E a
- * rolagem de desvio (0..1) fica abaixo da chance. Como o acerto é "rolar-menor",
- * rolagens baixas normais são boas miras — apenas o 1 espalha o golpe.
+ * rolagem de desvio (0..1) fica abaixo da chance. Com "rolar-maior" (D-68),
+ * rolagens altas são boas miras — apenas o 1 espalha o golpe.
  * `r` é injetável para testes determinísticos.
  */
 export function desviouParaAliado(
@@ -656,11 +656,12 @@ export function fumacaEstado(fumaca) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   11. FAIXAS DE DIFICULDADE DO D20 — CONFIRMADA (direção), PROVISÓRIA (nomes)
-   O acerto é "rolar-menor": quanto MAIOR o d20, mais difícil o resultado.
+   11. FAIXAS DE EXIGÊNCIA DO D20 — CONFIRMADA (números), PROVISÓRIA (D-68)
+   O acerto é "rolar-maior": quanto MAIOR o d20, mais fácil o resultado. Os
+   números 1–20 representam a EXIGÊNCIA da ação, não a rolagem.
    Faixas pedidas pelo criador:
    - Fácil: 1–4 · Médio: 5–10 · Difícil: 11–16 · Muito Difícil: 17–20.
-   A faixa é informativa: o log mostra em que faixa caiu a rolagem.
+   A faixa é informativa: o log mostra a faixa da exigência da ação.
    ═══════════════════════════════════════════════════════════════════════════ */
 export const NIVEIS_DIFICULDADE_D20 = [
   { id: 'facil', nome: 'Fácil', min: 1, max: 4, icon: '🟢' },
@@ -669,7 +670,7 @@ export const NIVEIS_DIFICULDADE_D20 = [
   { id: 'muito_dificil', nome: 'Muito Difícil', min: 17, max: 20, icon: '🔴' },
 ];
 
-/** Faixa de dificuldade de uma rolagem de d20 (1..20) ou null se inválida. */
+/** Faixa da exigência de um d20 (1..20) ou null se inválida. */
 export function nivelDificuldadeD20(roll) {
   const n = Math.round(Number(roll));
   if (!Number.isFinite(n) || n < 1 || n > 20) return null;
@@ -680,4 +681,18 @@ export function nivelDificuldadeD20(roll) {
 export function rotuloDificuldadeD20(roll) {
   const nivel = nivelDificuldadeD20(roll);
   return nivel ? `${nivel.nome} (${nivel.min}–${nivel.max})` : '—';
+}
+
+/**
+ * D-68 — converte a chance de acerto (0..1) na exigência do d20.
+ * O número devolvido é o MÍNIMO que a rolagem precisa atingir. A conversão é
+ * o espelho do antigo alvo de "rolar-menor", preservando a probabilidade:
+ * chance 0.35 → exigência 14 (7 faces), chance 0.95 → exigência 2 (19 faces).
+ * 1 continua sendo falha natural e 20 continua sendo crítico natural.
+ */
+export function exigenciaD20(chance, dificuldade = 0) {
+  const p = Number.isFinite(Number(chance)) ? Number(chance) : 0.5;
+  const dif = Number.isFinite(Number(dificuldade)) ? Number(dificuldade) : 0;
+  const alvo = Math.max(1, Math.min(19, Math.round(20 * p) - dif));
+  return Math.max(2, Math.min(20, 21 - alvo));
 }
