@@ -704,44 +704,31 @@ const [lastRoll, setLastRoll] = useState(null);
 
   const addFighter = useCallback(() => {
     if (!newName.trim()) return;
-    setFighters((prevFighters) => {
-      const next = [...prevFighters, makeFighter(newName.trim(), newTeam, { ...newAttrs })];
-      if (initiativeRolled) {
-        setInitiativeOrder((prevOrder) => [...prevOrder, next[next.length - 1].id]);
-      }
-      return next;
-    });
+    const f = makeFighter(newName.trim(), newTeam, { ...newAttrs });
+    setFighters((prevFighters) => [...prevFighters, f]);
+    // setState dentro de updater roda duas vezes no StrictMode e duplica a ordem.
+    if (initiativeRolled) setInitiativeOrder((prevOrder) => [...prevOrder, f.id]);
     setNewName('');
   }, [newName, newTeam, newAttrs, initiativeRolled]);
 
   const removeFighter = useCallback((id) => {
-    setFighters((prevFighters) => {
-      const removedIdx = prevFighters.findIndex((f) => f.id === id);
-      const updated = prevFighters.filter((f) => f.id !== id);
-      setInitiativeOrder((prevOrder) => {
-        if (!prevOrder.includes(id)) return prevOrder;
-        const next = prevOrder.filter((fid) => fid !== id);
-        const curIdx = prevOrder.indexOf(id);
-        let newIdx = currentTurnIndex;
-        if (curIdx <= currentTurnIndex) newIdx = Math.max(0, currentTurnIndex - 1);
-        if (newIdx >= next.length) newIdx = Math.max(0, next.length - 1);
-        setCurrentTurnIndex(newIdx);
-        return next;
-      });
-      return updated;
-    });
-  }, [currentTurnIndex]);
+    setFighters((prevFighters) => prevFighters.filter((f) => f.id !== id));
+    if (!initiativeOrder.includes(id)) return;
+    const next = initiativeOrder.filter((fid) => fid !== id);
+    const curIdx = initiativeOrder.indexOf(id);
+    let newIdx = currentTurnIndex;
+    if (curIdx <= currentTurnIndex) newIdx = Math.max(0, currentTurnIndex - 1);
+    if (newIdx >= next.length) newIdx = Math.max(0, next.length - 1);
+    setInitiativeOrder(next);
+    setCurrentTurnIndex(newIdx);
+  }, [currentTurnIndex, initiativeOrder]);
 
   const importCharacter = useCallback((charId) => {
     const c = characters.find((ch) => ch.id === charId);
     if (!c) return;
-    setFighters((prevFighters) => {
-      const next = [...prevFighters, { ...fighterFromCharacter(c, importTeam), _charId: charId }];
-      if (initiativeRolled) {
-        setInitiativeOrder((prevOrder) => [...prevOrder, next[next.length - 1].id]);
-      }
-      return next;
-    });
+    const f = { ...fighterFromCharacter(c, importTeam), _charId: charId };
+    setFighters((prevFighters) => [...prevFighters, f]);
+    if (initiativeRolled) setInitiativeOrder((prevOrder) => [...prevOrder, f.id]);
   }, [characters, importTeam, initiativeRolled]);
 
   // Inicializa wpnUsos, wpnRecarga, calor, travamento e fumaça para fighters
@@ -811,13 +798,8 @@ const [lastRoll, setLastRoll] = useState(null);
       { ...def.attributes },
       { protection, _bossId: def.id, _eclipse: bossEclipse && def.varianteEclipse ? true : null, spells: def.spells || [] }
     );
-    setFighters((prevFighters) => {
-      const next = [...prevFighters, f];
-      if (initiativeRolled) {
-        setInitiativeOrder((prevOrder) => [...prevOrder, next[next.length - 1].id]);
-      }
-      return next;
-    });
+    setFighters((prevFighters) => [...prevFighters, f]);
+    if (initiativeRolled) setInitiativeOrder((prevOrder) => [...prevOrder, f.id]);
     const golpes = (def.spells || []).map((s) => SPELLS[s]?.nome || s).join(', ');
     const protoTxt = protection
       ? ` 🛡️ Proteção: ${protection.hp}/${protection.maxHp} (${bossEclipse ? 'Eclipse' : 'normal'})`
@@ -828,20 +810,20 @@ const [lastRoll, setLastRoll] = useState(null);
 
   // Rola iniciativa (D20 + VEL) para todos que ainda não têm e define a ordem de turnos.
   const rollInitiative = useCallback(() => {
-    setFighters((prev) =>
-      prev.map((f) => ({
-        ...f,
-        initiative: f.initiative ?? Math.floor(Math.random() * 20) + 1 + effectiveStat(f, 'destreza'),
-      }))
-    );
-    const order = [...fighters]
+    // Usa o estado recém-calculado (não o `fighters` fechado) para a ordem.
+    const atualizados = fighters.map((f) => ({
+      ...f,
+      initiative: f.initiative ?? Math.floor(Math.random() * 20) + 1 + effectiveStat(f, 'destreza'),
+    }));
+    setFighters(atualizados);
+    const order = atualizados
       .filter((f) => f.hp > 0)
       .sort((a, b) => (b.initiative ?? 0) - (a.initiative ?? 0))
       .map((f) => f.id);
     setInitiativeOrder(order);
     setCurrentTurnIndex(0);
     setInitiativeRolled(true);
-    addLog(`🎯 Iniciativa rolada! Ordem: ${order.map((id) => fighters.find((f) => f.id === id)?.name).join(' → ')}`);
+    addLog(`🎯 Iniciativa rolada! Ordem: ${order.map((id) => atualizados.find((f) => f.id === id)?.name).join(' → ')}`);
   }, [fighters, addLog, effectiveStat]);
 
   const applyBuff = useCallback(() => {
@@ -870,6 +852,101 @@ const [lastRoll, setLastRoll] = useState(null);
     else setCustomDebuffs((p) => [...p, eff]);
     setCbName('');
   }, [cbName, cbStat, cbValue, cbIcon, customBuffs, customDebuffs]);
+
+  // Valida recarga/usos/superaquecimento e consome o disparo UMA vez, mesmo
+  // quando ele erra ou atinge vários alvos. Compartilhado pelas Ações Rápidas
+  // e pelo "Ataque com Dado": os dois caminhos precisam pagar o mesmo preço.
+  const prepararDisparo = useCallback((attacker, arma) => {
+    const usaRecarga = armaUsaRecarga(arma);
+    const recargaAtual = ((wpnRecarga[attacker.id] || {})[arma.id]) || 0;
+    const usosAtuais = ((wpnUsos[attacker.id] || {})[arma.id]) ?? arma.usosMax ?? 1;
+    if (usaRecarga && recargaAtual > 0) {
+      addLog(`⏳ ${arma.nome} ainda está recarregando (${recargaAtual} turno(s)).`);
+      return false;
+    }
+    if (usaRecarga && arma.usosMax && usosAtuais <= 0) {
+      addLog(`🔫 ${arma.nome} está sem munição.`);
+      return false;
+    }
+    const superaquecimentoAtual = ((wpnSuperaquecido[attacker.id] || {})[arma.id]) || 0;
+    if (superaquecimentoAtual > 0) {
+      addLog(`🌡️ ${arma.nome} está superaquecida e precisa esfriar (${superaquecimentoAtual} rodada(s)).`);
+      return false;
+    }
+
+    if (usaRecarga) {
+      const recargaTurnos = recargaDeArma(arma);
+      if (arma.usosMax) {
+        const restante = usosAtuais - 1;
+        setWpnUsos((prev) => ({
+          ...prev,
+          [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: restante },
+        }));
+        if (restante <= 0 && recargaTurnos > 0) {
+          setWpnRecarga((prev) => ({
+            ...prev,
+            [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: recargaTurnos + 1 },
+          }));
+        }
+      } else if (recargaTurnos > 0) {
+        setWpnRecarga((prev) => ({
+          ...prev,
+          [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: recargaTurnos + 1 },
+        }));
+      }
+    }
+
+    if (armaDeFogo(arma)) {
+      const calorAntes = Number((wpnCalor[attacker.id] || {})[arma.id]) || 0;
+      const calorDepois = Math.min(
+        SUPERAQUECIMENTO.calorMax,
+        calorAntes + calorDoDisparo(arma),
+      );
+      setWpnCalor((prev) => ({
+        ...prev,
+        [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: calorDepois },
+      }));
+      setWpnDisparou((prev) => ({
+        ...prev,
+        [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: true },
+      }));
+      if (calorDepois >= SUPERAQUECIMENTO.calorMax) {
+        setWpnSuperaquecido((prev) => ({
+          ...prev,
+          [attacker.id]: {
+            ...(prev[attacker.id] || {}),
+            [arma.id]: SUPERAQUECIMENTO.bloqueioTurnos + 1,
+          },
+        }));
+        setWpnCalor((prev) => ({
+          ...prev,
+          [attacker.id]: {
+            ...(prev[attacker.id] || {}),
+            [arma.id]: SUPERAQUECIMENTO.calorAposBloqueio,
+          },
+        }));
+        addLog(`🔥 ${arma.nome} SUPERAQUECEU! ${attacker.name} precisa deixá-la esfriar por ${SUPERAQUECIMENTO.bloqueioTurnos} rodada(s).`);
+      } else if (
+        calorAntes < SUPERAQUECIMENTO.limiarAviso &&
+        calorDepois >= SUPERAQUECIMENTO.limiarAviso
+      ) {
+        addLog(`🥵 ${arma.nome} está muito quente (${Math.round(calorDepois)}/${SUPERAQUECIMENTO.calorMax}).`);
+      }
+
+      const fumacaAntes = Number(fumaca[attacker.id]) || 0;
+      const fumacaDepois = Math.min(
+        FUMACA.max,
+        fumacaAntes + fumacaDoDisparo(arma, rajadaDaArma(arma)),
+      );
+      setFumaca((prev) => ({ ...prev, [attacker.id]: fumacaDepois }));
+      if (fumacaAntes < FUMACA.limiarDenso && fumacaDepois >= FUMACA.limiarDenso) {
+        addLog(`🌫️ A fumaça ao redor de ${attacker.name} fica densa (${Math.round(fumacaDepois)}/${FUMACA.max}).`);
+      } else if (fumacaAntes < FUMACA.limiarVisivel && fumacaDepois >= FUMACA.limiarVisivel) {
+        addLog(`💨 ${attacker.name} some parcialmente numa nuvem de fumaça.`);
+      }
+    }
+    return true;
+  }, [wpnRecarga, wpnUsos, wpnSuperaquecido, wpnCalor, fumaca, addLog]);
 
   // Executa uma ação rápida: ataque físico, magia (consome MP) ou item (cura).
   const executarAcao = useCallback(() => {
@@ -905,114 +982,11 @@ const [lastRoll, setLastRoll] = useState(null);
         return;
       }
 
-      // ── Recarga e usos de canhões/armas utilitárias (por lutador e arma) ──
-      const usaRecarga = armaUsaRecarga(arma);
-      const recargaAtual = ((wpnRecarga[attacker.id] || {})[arma.id]) || 0;
-      const usosAtuais = ((wpnUsos[attacker.id] || {})[arma.id]) ?? arma.usosMax ?? 1;
-      if (usaRecarga && recargaAtual > 0) {
-        addLog(`⏳ ${arma.nome} ainda está recarregando (${recargaAtual} turno(s)).`);
+      // Recarga/usos/superaquecimento e consumo do disparo (compartilhados com
+      // o Ataque com Dado).
+      if (!prepararDisparo(attacker, arma)) {
         setActTargets([]);
         return;
-      }
-      if (usaRecarga && arma.usosMax && usosAtuais <= 0) {
-        addLog(`🔫 ${arma.nome} está sem munição.`);
-        setActTargets([]);
-        return;
-      }
-
-      // Superaquecimento: a arma travada não dispara até esfriar.
-      const superaquecimentoAtual = ((wpnSuperaquecido[attacker.id] || {})[arma.id]) || 0;
-      if (superaquecimentoAtual > 0) {
-        addLog(
-          `🌡️ ${arma.nome} está superaquecida e precisa esfriar (${superaquecimentoAtual} rodada(s)).`,
-        );
-        setActTargets([]);
-        return;
-      }
-
-      // O disparo consome munição uma única vez, mesmo quando erra ou atinge
-      // vários alvos. Armas com `usosMax` (canhões/utilitárias) só recarregam
-      // ao esvaziar a carga; as demais armas de fogo entram em recarga após
-      // cada disparo.
-      if (usaRecarga) {
-        const recargaTurnos = recargaDeArma(arma);
-        if (arma.usosMax) {
-          const restante = usosAtuais - 1;
-          setWpnUsos((prev) => ({
-            ...prev,
-            [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: restante },
-          }));
-          if (restante <= 0 && recargaTurnos > 0) {
-            setWpnRecarga((prev) => ({
-              ...prev,
-              [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: recargaTurnos + 1 },
-            }));
-          }
-        } else if (recargaTurnos > 0) {
-          setWpnRecarga((prev) => ({
-            ...prev,
-            [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: recargaTurnos + 1 },
-          }));
-        }
-      }
-
-      // O tiro saiu: esquenta a arma e levanta fumaça, mesmo se errar ou
-      // atingir vários alvos. A fumaça do disparo atual só passa a valer
-      // para os próximos tiros (a mira usa o estado anterior à emissão).
-      if (armaDeFogo(arma)) {
-        const calorAntes = Number((wpnCalor[attacker.id] || {})[arma.id]) || 0;
-        const calorDepois = Math.min(
-          SUPERAQUECIMENTO.calorMax,
-          calorAntes + calorDoDisparo(arma),
-        );
-        setWpnCalor((prev) => ({
-          ...prev,
-          [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: calorDepois },
-        }));
-        setWpnDisparou((prev) => ({
-          ...prev,
-          [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: true },
-        }));
-        if (calorDepois >= SUPERAQUECIMENTO.calorMax) {
-          setWpnSuperaquecido((prev) => ({
-            ...prev,
-            [attacker.id]: {
-              ...(prev[attacker.id] || {}),
-              [arma.id]: SUPERAQUECIMENTO.bloqueioTurnos + 1,
-            },
-          }));
-          setWpnCalor((prev) => ({
-            ...prev,
-            [attacker.id]: {
-              ...(prev[attacker.id] || {}),
-              [arma.id]: SUPERAQUECIMENTO.calorAposBloqueio,
-            },
-          }));
-          addLog(
-            `🔥 ${arma.nome} SUPERAQUECEU! ${attacker.name} precisa deixá-la esfriar por ${SUPERAQUECIMENTO.bloqueioTurnos} rodada(s).`,
-          );
-        } else if (
-          calorAntes < SUPERAQUECIMENTO.limiarAviso &&
-          calorDepois >= SUPERAQUECIMENTO.limiarAviso
-        ) {
-          addLog(
-            `🥵 ${arma.nome} está muito quente (${Math.round(calorDepois)}/${SUPERAQUECIMENTO.calorMax}).`,
-          );
-        }
-
-        const fumacaAntes = Number(fumaca[attacker.id]) || 0;
-        const fumacaDepois = Math.min(
-          FUMACA.max,
-          fumacaAntes + fumacaDoDisparo(arma, rajadaDaArma(arma)),
-        );
-        setFumaca((prev) => ({ ...prev, [attacker.id]: fumacaDepois }));
-        if (fumacaAntes < FUMACA.limiarDenso && fumacaDepois >= FUMACA.limiarDenso) {
-          addLog(
-            `🌫️ A fumaça ao redor de ${attacker.name} fica densa (${Math.round(fumacaDepois)}/${FUMACA.max}).`,
-          );
-        } else if (fumacaAntes < FUMACA.limiarVisivel && fumacaDepois >= FUMACA.limiarVisivel) {
-          addLog(`💨 ${attacker.name} some parcialmente numa nuvem de fumaça.`);
-        }
       }
 
       const danoBase = danoFisicoAtaque(effectiveStat(attacker, 'forca'), danoBaseDaArma(arma));
@@ -1298,7 +1272,14 @@ const [lastRoll, setLastRoll] = useState(null);
 
       setFighters((prev) => prev.map((f) => {
         if (f.id !== attacker.id) return f;
-        let nf = { ...f, inventory: (f.inventory || []).filter((x) => x.id !== it.id) };
+        // Consome UMA cópia: itens iguais ocupam entradas distintas no inventário.
+        const idx = (f.inventory || []).findIndex((x) => x.id === it.id);
+        let nf = {
+          ...f,
+          inventory: idx < 0
+            ? (f.inventory || [])
+            : (f.inventory || []).filter((_, i) => i !== idx),
+        };
         let hp = nf.hp;
         let mp = nf.mp;
         if (it.cura) hp = Math.max(0, Math.min(nf.hpMax, hp + curaItem));
@@ -1325,9 +1306,8 @@ const [lastRoll, setLastRoll] = useState(null);
   }, [
     fighters, actAttacker, actTargets, actionMode, selWeaponId, selSpellId, selItemId,
     armasDoLutador, magiasDoLutador, itensDoLutador, alvosDoGolpe, alvosDeSuporte,
-    magiaSuporte, addLog,
-    initiativeRolled, initiativeOrder, currentTurnIndex, wpnRecarga, wpnUsos,
-    wpnCalor, wpnSuperaquecido, fumaca,
+    magiaSuporte, addLog, prepararDisparo,
+    initiativeRolled, initiativeOrder, currentTurnIndex, fumaca,
   ]);
 
   const removeCustomEffect = useCallback((type, uid_) => {
@@ -1405,6 +1385,9 @@ const [lastRoll, setLastRoll] = useState(null);
         .sort((a, b) => (danoBaseDaArma(b) || 0) - (danoBaseDaArma(a) || 0))[0]
       || armas[0]
       || null;
+    // Mesmo caminho das Ações Rápidas: arma travada/sem munição não dispara,
+    // e o tiro consome munição, recarga, calor e fumaça.
+    if (arma && !prepararDisparo(attacker, arma)) return;
     setRolling(true);
     setRollResult(null);
     let step = 0;
@@ -1448,7 +1431,7 @@ const [lastRoll, setLastRoll] = useState(null);
       }
     }, 60);
     rollTimers.current.add(interval);
-  }, [atkAttacker, atkDefender, fighters, addLog, initiativeRolled, initiativeOrder, currentTurnIndex, fumaca, armasDoLutador, selWeaponId]);
+  }, [atkAttacker, atkDefender, fighters, addLog, initiativeRolled, initiativeOrder, currentTurnIndex, fumaca, armasDoLutador, selWeaponId, prepararDisparo]);
 
   // Fim de rodada: avança a recarga de cada arma e recarrega as utilitárias
   // quando o contador zera (volta ao `usosMax`).
@@ -2043,7 +2026,17 @@ const [lastRoll, setLastRoll] = useState(null);
               <div className="actions-row">
                 <div className="action-field">
                   <label>Atacante</label>
-                  <select value={actAttacker} onChange={(e) => { setActAttacker(e.target.value); setActTargets([]); }}>
+                  <select
+                    value={actAttacker}
+                    onChange={(e) => {
+                      setActAttacker(e.target.value);
+                      setActTargets([]);
+                      // Magia/item do lutador anterior não existem no novo:
+                      // sem limpar, o botão fica habilitado e a ação não faz nada.
+                      setSelSpellId('');
+                      setSelItemId('');
+                    }}
+                  >
                     <option value="">—</option>
                     {alive.map((f) => (
                       <option key={f.id} value={f.id}>{f.name} (HP {f.hp} MP {f.mp})</option>
@@ -2145,8 +2138,9 @@ const [lastRoll, setLastRoll] = useState(null);
                     <label>Item</label>
                     <select value={selItemId} onChange={(e) => setSelItemId(e.target.value)}>
                       <option value="">— Escolha um item —</option>
-                      {itensDoLutador(fighters.find((f) => f.id === actAttacker)).map((it) => (
-                        <option key={it.id} value={it.id}>{it.nome}{it.cura ? ` +${it.cura} HP` : ''}{it.mana ? ` +${it.mana} MP` : ''}</option>
+                      {itensDoLutador(fighters.find((f) => f.id === actAttacker)).map((it, idx) => (
+                        // Itens repetidos têm o mesmo id: a chave precisa da posição.
+                        <option key={`${it.id}-${idx}`} value={it.id}>{it.nome}{it.cura ? ` +${it.cura} HP` : ''}{it.mana ? ` +${it.mana} MP` : ''}</option>
                       ))}
                     </select>
                   </div>

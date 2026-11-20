@@ -46,7 +46,7 @@ function golpeParaEditor(s = {}) {
 
 export default function CharacterManager({ player, characters, onRefresh, onBack }) {
   const [selectedId, setSelectedId] = useState(characters[0]?.id || '');
-  const [form, setForm] = useState({ name: '', gender: 'masculino', passiva: '', skills: [] });
+  const [form, setForm] = useState({ name: '', gender: 'masculino', passiva: '', desc: '', skills: [] });
   const [golpe, setGolpe] = useState(GOLPE_VAZIO);
   const [editIndex, setEditIndex] = useState(null);
   const [error, setError] = useState('');
@@ -67,13 +67,14 @@ export default function CharacterManager({ player, characters, onRefresh, onBack
 
   useEffect(() => {
     if (!selected) {
-      setForm({ name: '', gender: 'masculino', passiva: '', skills: [] });
+      setForm({ name: '', gender: 'masculino', passiva: '', desc: '', skills: [] });
       return;
     }
     setForm({
       name: selected.name || '',
       gender: selected.gender || 'masculino',
       passiva: selected.passiva || '',
+      desc: selected.desc || '',
       skills: (selected.skills || []).map(golpeParaEditor),
     });
     setGolpe(GOLPE_VAZIO);
@@ -172,6 +173,7 @@ export default function CharacterManager({ player, characters, onRefresh, onBack
         name: form.name.trim(),
         gender: form.gender,
         passiva: form.passiva,
+        desc: form.desc,
         attributes: selected.attributes,
         races: selected.races,
         classes: selected.classes,
@@ -251,6 +253,10 @@ export default function CharacterManager({ player, characters, onRefresh, onBack
           <label>
             Passiva
             <input value={form.passiva} onChange={(e) => setForm((f) => ({ ...f, passiva: e.target.value }))} maxLength={300} placeholder="Habilidade passiva da ficha" />
+          </label>
+          <label>
+            Descrição (opcional)
+            <textarea value={form.desc} onChange={(e) => setForm((f) => ({ ...f, desc: e.target.value }))} rows={3} maxLength={300} placeholder="História, aparência, características..." />
           </label>
           <p className="muted small">
             Raças, classes, atributos e equipamento são preservados da ficha original para não

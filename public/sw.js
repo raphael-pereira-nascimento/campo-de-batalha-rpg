@@ -1,8 +1,8 @@
-// v3: invalida o cache das versões anteriores para distribuir a aba de gestão
-// de fichas/árvore de golpes. v2 só cacheava respostas válidas (ok), mas o
-// fallback ao cache podia servir bundles antigos quando a rede falhava,
-// escondendo novos botões/abas mesmo após um deploy bem-sucedido.
-const CACHE = 'cbrpg-v3';
+// v4: invalida o cache da v3 para distribuir as correções de descrição da
+// ficha, buffs/congelamento dos motores e Ações Rápidas/Ataque com Dado da
+// Batalha de Mesa. O fallback ao cache podia servir bundles antigos quando a
+// rede falhava, escondendo correções mesmo após um deploy bem-sucedido.
+const CACHE = 'cbrpg-v4';
 const PRECACHE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {

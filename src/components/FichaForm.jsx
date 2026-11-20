@@ -183,6 +183,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
         races,
         classes,
         passiva,
+        desc,
         skills,
         ultimate,
         especial,
@@ -750,6 +751,19 @@ const clampNum = (v, min, max, padrao) => {
   return Math.max(min, Math.min(max, Math.round(Number.isFinite(n) ? n : padrao)));
 };
 
+// Ao trocar o tipo, um status escolhido antes pode deixar de fazer sentido
+// (cura não recebe DOT; ataque não recebe HoT; buff/defesa não aplicam status).
+// Limpar aqui evita salvar um status que o seletor nem mostra mais.
+function aoTrocarTipo(form, tipo) {
+  const def = STATUS_DEFS[form.statusTipo];
+  let compativel = !def;
+  if (def) {
+    if (tipo === 'cura') compativel = def.tipo === 'hot';
+    else if (tipo === 'fisico' || tipo === 'magia') compativel = def.tipo !== 'hot';
+  }
+  return { ...form, tipo, statusTipo: compativel ? form.statusTipo : '' };
+}
+
 // Monta o golpe no formato persistido (normalizeSkill do servidor). Só inclui
 // campos que fazem sentido para o tipo escolhido, para não criar lixo.
 function montarGolpe(form, id) {
@@ -911,7 +925,7 @@ function SkillsStep({ skills, setSkills, customSkills, player }) {
           </label>
           <label>
             Tipo
-            <select value={form.tipo} onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value }))}>
+            <select value={form.tipo} onChange={(e) => setForm((f) => aoTrocarTipo(f, e.target.value))}>
               {Object.entries(SKILL_TYPES).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}
@@ -1075,14 +1089,23 @@ function megaFormInicial(allowModo) {
 }
 
 function MegaSkillStep({ title, value, onChange, allowModo }) {
-  const [form, setForm] = useState(() => ({
-    ...megaFormInicial(allowModo),
+  const [form, setForm] = useState(() => {
+    const inicial = megaFormInicial(allowModo);
+    if (!value) return inicial;
     // O golpe salvo guarda `status` como objeto; o formulário usa
-    // statusTipo/statusTurnos/statusDano. `golpeParaForm` faz a conversão.
-    ...golpeParaForm(value || {}),
-    // `modo` antigo podia vir nulo mesmo em ultimate: o editor sempre tem um.
-    modo: allowModo ? { ...MODO_PADRAO, ...(value?.modo || {}) } : null,
-  }));
+    // statusTipo/statusTurnos/statusDano. `golpeParaForm` faz a conversão,
+    // mas traz defaults de golpe comum (poder 100 / status 0) — aqui os
+    // valores de especial/ultimate só são substituídos quando realmente salvos.
+    const salvo = golpeParaForm(value);
+    return {
+      ...inicial,
+      ...salvo,
+      poder: Number(value.poder) || inicial.poder,
+      statusDano: value.status?.dano == null ? inicial.statusDano : salvo.statusDano,
+      // `modo` antigo podia vir nulo mesmo em ultimate: o editor sempre tem um.
+      modo: allowModo ? { ...MODO_PADRAO, ...(value.modo || {}) } : null,
+    };
+  });
   const [hasCond, setHasCond] = useState(!!value?.condicao);
   const [condTipo, setCondTipo] = useState(value?.condicao?.tipo || 'danoRecebido');
   const [condValor, setCondValor] = useState(value?.condicao?.valor ?? 50);
@@ -1132,7 +1155,7 @@ function MegaSkillStep({ title, value, onChange, allowModo }) {
           </label>
           <label>
             Tipo do golpe
-            <select value={form.tipo} onChange={set('tipo')}>
+            <select value={form.tipo} onChange={(e) => setForm((f) => aoTrocarTipo(f, e.target.value))}>
               {Object.entries(SKILL_TYPES).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}

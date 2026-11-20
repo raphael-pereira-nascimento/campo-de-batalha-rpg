@@ -288,6 +288,7 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
         <span className="class-icon">{CLASS_ICONS[classes[0]?.archetype || character.class]}</span>
         <div>
           <h3>{character.name}</h3>
+          {character.desc && <p className="muted small">{character.desc}</p>}
           <span className="tag">{character.custom_class_name || cls?.nome}</span>
           {races.map((r) => (
             <span className="tag" key={r.id}>{r.nome}</span>

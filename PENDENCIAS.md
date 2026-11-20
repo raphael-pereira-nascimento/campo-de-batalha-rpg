@@ -1,8 +1,9 @@
 # Pendências — Materiais, Metais e Podridão
 
-Atualizado em 17/11/2026 — Etapa 9 (runas na forja, Corrupção com API/UI,
-imunidade do Tenebrium e preparação de Contaminação Profana/Núcleo Pandemônico)
-e rodada de buffs, cura, Ações Rápidas e canhões (D-44 a D-47).
+Atualizado em 19/11/2026 — Etapa 9 (runas na forja, Corrupção com API/UI,
+imunidade do Tenebrium e preparação de Contaminação Profana/Núcleo Pandemônico),
+rodada de buffs, cura, Ações Rápidas e canhões (D-44 a D-47) e auditoria de
+correções de comportamento em fichas, motores e Batalha de Mesa (1.9).
 
 Este arquivo separa o que já foi **aprovado**, o que foi implementado como
 **provisório**, o que continua **pendente** e o que é apenas **sugestão**.
@@ -411,7 +412,7 @@ Campo de Batalha.
   “(atual)”.
 - **Testes:** `battle.test.js` ganhou cinco casos de magia/buff/cura e um de
   redução de cura recebida; nessa rodada o harness passou **336/336**. O total
-  atual está em 1.8.
+  daquele ponto era 1.8; o total atual está em 1.9.
 
 ### 1.8 Consolidação da criação de golpes e paridade motor/mesa (D-48 a D-52)
 
@@ -448,8 +449,42 @@ Mundo e modo offline concordem.
   demais fontes.
 - **Testes:** novos `customSkills.test.js` (7 casos) e `offlineSkills.test.js`
   (3 casos), `battle.test.js` estendido com duração do congelamento e
-  `weaponId` utilitário. Harness de navegador: **347/347**, sem erros de
-  console.
+  `weaponId` utilitário. Harness daquele ponto: **347/347**, sem erros de
+  console; total atual: **356/356** (1.9).
+
+### 1.9 Auditoria de regressões em fichas, motores e Batalha de Mesa
+
+Rodada de correções feitas apenas sobre comportamentos confirmados por leitura
+e teste. As decisões D-01 a D-53 continuam válidas; nenhuma regra, nome, valor
+ou fórmula oficial foi inventada.
+
+| ID | Área | Correção confirmada |
+| --- | --- | --- |
+| F1 | Golpes — alvo | `normalizeSkill` preserva a **chave** (`unico`, `area`, `cone`, `explosao`) em vez de gravar o rótulo de `ALVO_TIPOS`. Valor inválido continua sendo rejeitado |
+| F2 | Wizard — especial/ultimate | `MegaSkillStep` mantém os defaults próprios (poder `300`, status `2/50`, modo do ultimate) e só substitui por valores realmente salvos. Especial `420/2/77` e ultimate `300/3/50` sobreviveram ao ciclo editar → voltar |
+| F3 | Wizard — tipo × status | `aoTrocarTipo` limpa status incompatível: `queimadura` some ao trocar para cura; `regeneracao` some ao voltar para magia/físico; buff/defesa não guardam status |
+| F4 | Descrição da ficha | O campo “Descrição (opcional)” do wizard agora entra no payload; `CharacterManager.jsx` carrega/edita/envia `desc`; `decorateCharacter` devolve `desc` a partir da coluna `descricao`; `CharacterSheet.jsx` exibe o texto |
+| F4 | Migração | `server/src/db/migrations/0014_character_descricao.sql` adiciona `descricao TEXT NOT NULL DEFAULT ''`, preservando fichas antigas. Edição sem `desc` não apaga descrição já salva |
+| M1 | IA — congelamento | `_pularTurnoSeCongelado` é usado por `handleAction` e por `_aiAction` nos dois motores (servidor e cliente): monstro congelado não ataca e consome uma duração por turno |
+| M2 | Buffs — duração | `buffPhysicalTurns` e `buffMagicTurns` são independentes; magia/item atualizam só o eixo correspondente; `buffTurns` permanece como compatibilidade para participantes/batalhas antigas |
+| T1 | Mesa — Ações Rápidas | Trocar o atacante limpa magia e item selecionados, evitando botão habilitado para ação que não existe no novo lutador |
+| T2 | Mesa — iniciativa | `rollInitiative` usa os participantes recém-atualizados para ordenar e para o log; combatentes adicionados depois entram uma única vez na ordem |
+| T3 | Mesa — StrictMode | `addFighter`, `importCharacter`, `removeFighter` e chefe de bioma não chamam `setState` dentro de updaters; ordem e índice de turno deixaram de duplicar |
+| T4 | Mesa — itens | Consome apenas **uma** entrada do inventário por id (duas poções idênticas caem para uma). A chave do `<select>` usa `${it.id}-${idx}` para eliminar aviso de children com mesma chave |
+| T5 | Mesa — Ataque com Dado | `prepararDisparo` é compartilhado com Ações Rápidas: munição, recarga, calor, superaquecimento e fumaça são validados e consumidos uma vez por disparo, inclusive quando o D20 erra |
+
+Regressões adicionadas em `server/tests/auditoria.test.js` e importadas pelo
+harness: F1, M1 (dois casos) e M2 (dois casos). Bundle do cliente, do harness e
+das páginas de smoke recompilados sem avisos novos.
+
+Validação visual no navegador: descrição carregada/salva exatamente e exibida
+na ficha; wizard com poder `300` e limpeza de status; pistola em “Ataque com
+Dado” com `⏳ 2t`, calor `41%` e fumaça `22%`, segundo tiro bloqueado por
+recarga; duas poções idênticas reduzidas a uma; troca de atacante limpando
+item; iniciativa `Atirador → Alvo`, combatente novo entrando uma vez
+(`1/3`) e ciclo `Alvo → Novo → Atirador`. Harness final: **356/356** testes,
+0 falhas, 0 erros de console e 0 avisos de chave duplicada. Nos smoke tests
+offline, o único erro de console é o 404 esperado de `/api/health`.
 
 ---
 
@@ -785,11 +820,12 @@ O que falta preencher com o criador/documentação:
   erros no console, incluindo fichas de runas, validação/persistência de runas na
   forja, imunidade do Tenebrium, Contaminação Profana/Núcleo Pandemônico e
   Ruptura Profana em crítico.
-- Resultado do harness nesta rodada (buff/cura/Ações Rápidas/canhões):
-  **347/347 testes passam**, sem falhas e sem erros no console, incluindo os
+- Resultado do harness na rodada de buff/cura/Ações Rápidas/canhões:
+  **347/347 testes passaram**, sem falhas e sem erros no console, incluindo os
   casos de Cura em Massa, Grito de Guerra, Benção, item com redução de cura,
   cura de magia em aliado com Contaminação Pandemônica, persistência de
-  metadados de golpes, duração do congelamento e `weaponId` utilitário.
+  metadados de golpes, duração do congelamento e `weaponId` utilitário. Total
+  atual, após a auditoria 1.9: **356/356**.
 - Nesta rodada, `npm run test:unit`, `npm run test:e2e` e `npm run build` não
   puderam ser executados porque `node`/`npm` continuam fora do `PATH`; a
   validação foi feita pelo bundle do esbuild e pelo harness de navegador.
@@ -951,7 +987,7 @@ golpes.
 | Mesa — Ações Rápidas | Ataque, magia e item com cooldown, MP, alvos, cura/buff/defesa; alvo vazio deixou de bloquear ações em si; área automática dispensa alvo |
 | Mesa — cura | `statusParaEfeito` carrega `reducaoCuraPct`; `reducaoDeCuraRecebida`/`curaRecebida` aplicam a redução com o arredondamento do motor; item cura a si mesmo, como `_resolveItem` |
 | Mesa — equipar | Equipar arma grava `id`; arsenal aceita arma fora do catálogo |
-| Testes | `battle.test.js` com 70 casos (6 novos de magia/buff/cura); harness **347/347**, sem erros de console |
+| Testes | `battle.test.js` com 70 casos (6 novos de magia/buff/cura); harness da rodada **347/347**, sem erros de console; total atual **356/356** (1.9) |
 | Limpeza | `smoke-tb-ficha.jsx` e bundles temporários de smoke removidos |
 
 ### 3.11 Auditorias e correções finais de golpes e paridade
@@ -964,7 +1000,7 @@ golpes.
 | Mesa — efeitos | HoT/DOT sequenciais, `danoDeStatus` (Podridão incluída), chances/somente-crítico/renovação por `statusId`, controle ativo, defesa em três camadas, itens no próprio usuário com `drunk`, suporte com critérios do motor, recarga por turno do dono, arma da UI no Ataque com Dado, proteção sem mutação e cleanup dos timers |
 | Motor — API/paridade | `attackUtility` aceita `weaponId`; congelamento não sofre mais off-by-one; gemas com o mesmo efeito nos dois motores e regen de gema com redução de cura |
 | Verificado, sem alteração | `condicao`/`modo` são campos de especial/ultimate e já passam por `normalizeMegaSkill`; golpes comuns não os usam no motor. Não existe limite oficial de golpes por ficha — criar um seria inventar regra; aguarda decisão do criador. Canhões de artilharia permanecem como distância (`categoriaDeArma`), os utilitários seguem em `attackUtility` |
-| Testes | `customSkills.test.js`, `offlineSkills.test.js` e `battle.test.js` estendidos; harness **347/347**, sem erros de console; bundle do cliente sem avisos |
+| Testes | `customSkills.test.js`, `offlineSkills.test.js` e `battle.test.js` estendidos; harness da rodada **347/347**, sem erros de console; bundle do cliente sem avisos; total atual **356/356** (1.9) |
 
 ### 3.12 Gestão de fichas e árvore técnica de golpes (D-53)
 
@@ -977,7 +1013,19 @@ golpes.
 | Combate | Filtro de golpes indisponíveis em `skillsOf` dos motores cliente/servidor e em `makeFighter` da Mesa, para golpes bloqueados ou acima do nível não serem usados |
 | Não inventado | Árvore é estrutura técnica/provisória: sem custo de XP, sem pré-requisitos entre nós e sem regra oficial de desbloqueio (P-15/P-01 seguem pendentes) |
 | Verificado | Smoke offline: desbloqueio persistiu e `spells` ficou `['golpe_a', 'golpe_b']` com ids válidos; golpe de nível 10 permaneceu fora da ficha nível 5. Os 404 de `/api/health` no servidor estático são esperados no modo offline |
-| Testes | `customSkills.test.js` e `offlineSkills.test.js` estendidos; harness **350/350**, sem erros de console; bundle do cliente compilado com `--jsx=automatic` |
+| Testes | `customSkills.test.js` e `offlineSkills.test.js` estendidos; harness da rodada **350/350**, sem erros de console; bundle do cliente compilado com `--jsx=automatic`; total atual **356/356** (1.9) |
+
+### 3.13 Auditoria de correções de comportamento (1.9)
+
+| Área | Resultado |
+| --- | --- |
+| Criação de golpes | `alvo` volta a ser gravado como chave; defaults de especial/ultimate não são sobrescritos por defaults de golpe comum; trocar o tipo limpa status incompatível |
+| Fichas | Descrição do wizard salva, persistida online/offline, editável em `CharacterManager.jsx` e visível em `CharacterSheet.jsx`; migração 0014 idempotente; edição parcial não apaga `desc` |
+| Motores online/offline | IA respeita congelamento; buffs físico e mágico expiram em contadores próprios com compatibilidade para `buffTurns`; alterações espelhadas nos dois `battleManager.js` |
+| Batalha de Mesa | Limpeza de seleção ao trocar atacante; iniciativa com estado atual; sem `setState` em updaters; uma cópia por item consumida; `prepararDisparo` unifica o custo do tiro no Ataque com Dado e nas Ações Rápidas |
+| Interface | Smoke pages confirmaram descrição, wizard e mesa no navegador; aviso de `same key` das poções idênticas eliminado |
+| Testes | `auditoria.test.js` com 6 casos importado pelo harness; **356/356**, 0 falhas, 0 erros de console e 0 avisos de chave duplicada |
+| Publicação | Bump do service worker para `cbrpg-v4`, invalidando `cbrpg-v3` e forçando o download dos bundles corrigidos |
 
 ---
 

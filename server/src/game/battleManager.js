@@ -335,6 +335,8 @@ export class BattleManager {
       buffPhysical: 1,
       buffMagic: 1,
       buffTurns: 0,
+      buffPhysicalTurns: 0,
+      buffMagicTurns: 0,
       statuses: [],
       kills: 0,
       xpGained: 0,
@@ -638,13 +640,19 @@ export class BattleManager {
       if (p.hp > before) battle.log.push(makeLog(`🌿 ${p.charName} regenera ${p.hp - before} de HP.`, 'heal'));
     }
     this._processStatuses(battle, p);
-    if (p.buffTurns > 0) {
-      p.buffTurns -= 1;
-      if (p.buffTurns === 0) {
-        p.buffPhysical = 1;
-        p.buffMagic = 1;
+    // Buffs físico e mágico têm durações próprias. Participantes antigos
+    // guardavam só `buffTurns`: nesse caso ele vale para os dois eixos uma vez.
+    if ((p.buffTurns || 0) > 0 && !(p.buffPhysicalTurns > 0) && !(p.buffMagicTurns > 0)) {
+      p.buffPhysicalTurns = p.buffTurns;
+      p.buffMagicTurns = p.buffTurns;
+    }
+    for (const [mult, turnos] of [['buffPhysical', 'buffPhysicalTurns'], ['buffMagic', 'buffMagicTurns']]) {
+      if ((p[turnos] || 0) > 0) {
+        p[turnos] -= 1;
+        if (p[turnos] === 0) p[mult] = 1;
       }
     }
+    if ((p.buffTurns || 0) > 0) p.buffTurns -= 1;
     if (p.drunk && p.drunkTurns > 0) {
       p.drunkTurns -= 1;
       if (p.drunkTurns === 0) {
@@ -1260,8 +1268,14 @@ export class BattleManager {
     const tipo = skill.buffTipo;
     for (const t of alvos) {
       if (!t) continue;
-      if (tipo !== 'magico') t.buffPhysical = (t.buffPhysical || 1) + pct / 100;
-      if (tipo !== 'fisico') t.buffMagic = (t.buffMagic || 1) + pct / 100;
+      if (tipo !== 'magico') {
+        t.buffPhysical = (t.buffPhysical || 1) + pct / 100;
+        t.buffPhysicalTurns = Math.max(t.buffPhysicalTurns || 0, duracao);
+      }
+      if (tipo !== 'fisico') {
+        t.buffMagic = (t.buffMagic || 1) + pct / 100;
+        t.buffMagicTurns = Math.max(t.buffMagicTurns || 0, duracao);
+      }
       t.buffTurns = Math.max(t.buffTurns || 0, duracao);
     }
   }
@@ -1816,10 +1830,12 @@ export class BattleManager {
     }
     if (item.buffFisico) {
       p.buffPhysical = (p.buffPhysical || 1) + item.buffFisico;
+      p.buffPhysicalTurns = Math.max(p.buffPhysicalTurns || 0, item.buffTurns || 3);
       consumiu.push(`+${Math.round(item.buffFisico * 100)}% dano físico`);
     }
     if (item.buffMagico) {
       p.buffMagic = (p.buffMagic || 1) + item.buffMagico;
+      p.buffMagicTurns = Math.max(p.buffMagicTurns || 0, item.buffTurns || 3);
       consumiu.push(`+${Math.round(item.buffMagico * 100)}% dano mágico`);
     }
     if (item.buffFisico || item.buffMagico) {
@@ -1833,6 +1849,22 @@ export class BattleManager {
     const icone = item.tipo === 'bebida' ? (item.emoji || '🍺') : item.tipo === 'comida' ? (item.emoji || '🍽️') : '🧪';
     const detalhe = consumiu.length ? `: ${consumiu.join(', ')}.` : '.';
     battle.log.push(makeLog(`${icone} ${p.charName} usa ${item.nome}${detalhe}`, 'heal'));
+  }
+
+  // Congelamento: aplica o pulo de turno e consome UMA duração. Usado tanto
+  // por jogadores (handleAction) quanto por monstros controlados pela IA.
+  _pularTurnoSeCongelado(battle, p) {
+    if (!hasStatus(p, 'congelamento')) return false;
+    battle.log.push(makeLog(`🧊 ${p.charName} está congelado e pula o turno.`));
+    const gelo = p.statuses.find((s) => s.id === 'congelamento');
+    if (gelo) {
+      gelo.turnos = Math.max(0, (Number(gelo.turnos) || 0) - 1);
+      if (gelo.turnos === 0) {
+        p.statuses = p.statuses.filter((s) => s !== gelo);
+        battle.log.push(makeLog(`🧊 ${p.charName} se libertou do gelo.`));
+      }
+    }
+    return true;
   }
 
   handleAction({ battleId, characterId, playerId, action }) {
@@ -1863,18 +1895,7 @@ export class BattleManager {
       return battle;
     }
 
-    if (hasStatus(p, 'congelamento')) {
-      battle.log.push(makeLog(`🧊 ${p.charName} está congelado e pula o turno.`));
-      // Consome um turno da duração SÓ depois de aplicar o pulo. Assim um
-      // congelamento de 2 turnos faz o alvo perder 2 ações.
-      const gelo = p.statuses.find((s) => s.id === 'congelamento');
-      if (gelo) {
-        gelo.turnos = Math.max(0, (Number(gelo.turnos) || 0) - 1);
-        if (gelo.turnos === 0) {
-          p.statuses = p.statuses.filter((s) => s !== gelo);
-          battle.log.push(makeLog(`🧊 ${p.charName} se libertou do gelo.`));
-        }
-      }
+    if (this._pularTurnoSeCongelado(battle, p)) {
       this._advanceTurn(battle);
       this._aiLoop(battle);
       this.emit(battle);
@@ -2095,6 +2116,8 @@ export class BattleManager {
       battle.log.push(makeLog(`☠️ ${p.charName} sucumbe aos efeitos de status.`, 'death'));
       return;
     }
+    // Mesma regra do handleAction: congelado não ataca e gasta um turno do gelo.
+    if (this._pularTurnoSeCongelado(battle, p)) return;
     if (p.spells?.length && p.mp > 0) {
       const usaveis = (p.spells || [])
         .map((sid) => SPELLS[sid])

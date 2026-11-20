@@ -139,7 +139,8 @@ export function normalizeSkill(s = {}) {
     afetaAliados: !!s.afetaAliados,
     buffTipo: s.buffTipo === 'fisico' || s.buffTipo === 'magico' ? s.buffTipo : null,
     duracao: s.duracao ? clampInt(s.duracao, 1, 8) : null,
-    alvo: ALVO_TIPOS[s.alvo] || null,
+    // ALVO_TIPOS é um dicionário de rótulos; a ficha guarda a CHAVE (area, cone...).
+    alvo: ALVO_TIPOS[s.alvo] ? s.alvo : null,
     alvos: s.alvos ? clampInt(s.alvos, 2, 10) : null,
     splash: s.splash ? clampFloat(s.splash, 0.1, 1) : null,
     danoMult: s.danoMult ? clampFloat(s.danoMult, 0.1, 1) : null,
@@ -279,7 +280,7 @@ function presetSkillsFrom(classes) {
   return out;
 }
 
-export function buildCharacterData(playerId, { name, gender, attributes, races, classes, passiva, skills, ultimate, especial, equipment, habilidades, race, raceChoice, class: legacyClass }) {
+export function buildCharacterData(playerId, { name, gender, attributes, races, classes, passiva, desc, skills, ultimate, especial, equipment, habilidades, race, raceChoice, class: legacyClass }) {
   const trimmed = String(name).trim();
   if (!trimmed) throw new Error('Informe o nome do personagem.');
 
@@ -335,6 +336,7 @@ export function buildCharacterData(playerId, { name, gender, attributes, races, 
     races: normRaces,
     classes: normClasses,
     passiva: String(passiva || '').trim().slice(0, 300),
+    desc: String(desc || '').trim().slice(0, 300),
     skills: skillsList,
     ultimate: normalizeMegaSkill(ultimate),
     especial: normalizeMegaSkill(especial),
@@ -369,8 +371,8 @@ export async function createCharacter(input) {
     `INSERT INTO characters
       (player_id, name, gender, class, race, custom_class_name, races, classes, passiva, skills, ultimate, especial, habilidades,
        level, xp, hp_current, hp_max, mp_current, mp_max,
-       attributes, equipment, inventory, spells)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+       attributes, equipment, inventory, spells, descricao)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
      RETURNING *`,
     [
       data.playerId,
@@ -396,6 +398,7 @@ export async function createCharacter(input) {
       JSON.stringify(data.equipment),
       JSON.stringify(data.inventory),
       JSON.stringify(data.spells),
+      data.desc,
     ],
   );
   return decorateCharacter(rows[0]);
@@ -427,6 +430,8 @@ export function buildCharacterUpdate(existing, input) {
     races: dados.races,
     classes: dados.classes,
     passiva: dados.passiva,
+    // Editor antigo não envia `desc`: não apaga a descrição já salva.
+    desc: input.desc === undefined ? (existing.desc || '') : dados.desc,
     skills: dados.skills,
     ultimate: dados.ultimate,
     especial: dados.especial,
@@ -455,14 +460,16 @@ export async function updateCharacter(characterId, playerId, input) {
         SET name = $1, gender = $2, class = $3, race = $4, custom_class_name = $5,
             races = $6, classes = $7, passiva = $8, skills = $9, ultimate = $10,
             especial = $11, habilidades = $12, attributes = $13, equipment = $14,
-            spells = $15, hp_max = $16, mp_max = $17, hp_current = $18, mp_current = $19
-      WHERE id = $20 AND player_id = $21`,
+            spells = $15, hp_max = $16, mp_max = $17, hp_current = $18, mp_current = $19,
+            descricao = $20
+      WHERE id = $21 AND player_id = $22`,
     [
       c.name, c.gender, c.class, c.race, c.custom_class_name,
       JSON.stringify(c.races), JSON.stringify(c.classes), c.passiva,
       JSON.stringify(c.skills), JSON.stringify(c.ultimate), JSON.stringify(c.especial),
       JSON.stringify(c.habilidades), JSON.stringify(c.attributes), JSON.stringify(c.equipment),
       JSON.stringify(c.spells), c.hp_max, c.mp_max, c.hp_current, c.mp_current,
+      c.desc,
       characterId, playerId,
     ],
   );
@@ -509,6 +516,7 @@ function decorateCharacter(row) {
     races: jsonOrObj(row.races) || [],
     classes: jsonOrObj(row.classes) || [],
     passiva: row.passiva || '',
+    desc: row.descricao || '',
     skills: jsonOrObj(row.skills) || [],
     ultimate: jsonOrObj(row.ultimate) || null,
     especial: jsonOrObj(row.especial) || null,
