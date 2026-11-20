@@ -5,7 +5,8 @@ imunidade do Tenebrium e preparação de Contaminação Profana/Núcleo Pandemô
 rodada de buffs, cura, Ações Rápidas e canhões (D-44 a D-47), auditoria de
 correções de comportamento em fichas, motores e Batalha de Mesa (1.9) e
 implementação do Kraken do Abismo Eclipse com passiva, habilidades, horda e
-arena espelhadas nos motores cliente/servidor (D-54 a D-60, seções 1.10 e 3.14).
+arena espelhadas nos motores cliente/servidor (D-54 a D-61, seções 1.10, 3.14 e
+3.15).
 
 Este arquivo separa o que já foi **aprovado**, o que foi implementado como
 **provisório**, o que continua **pendente** e o que é apenas **sugestão**.
@@ -29,7 +30,7 @@ Legenda:
 
 ---
 
-## Índice das decisões D-01 a D-60
+## Índice das decisões D-01 a D-61
 
 | Código | Assunto | Status |
 | --- | --- | --- |
@@ -93,6 +94,7 @@ Legenda:
 | D-58 | Horda de Marinheiros Afogados (1d4+2, pool de HP e Moral) | Provisório; Moral e dano escalável |
 | D-59 | Tentáculos/Maré Negra (CD 16/18) e Chamado do Abismo (recarga 4) | Provisório; CD 16/18 e durações dos status vêm da especificação do chefe |
 | D-60 | UI da Batalha e regressões do Kraken em cliente/servidor | Implementado; 13 testes novos no harness |
+| D-61 | Renderização da horda invocada pelo Kraken na arena | Corrigido; memos de combatentes passam a depender também de `battle` |
 
 ---
 
@@ -1068,6 +1070,16 @@ golpes.
 | Testes | `server/tests/kraken.test.js` com 13 casos importado pelo harness; `data.test.js` atualizado para os 13 status e também importado pelo harness, evitando que o Vitest do CI veja uma regressão que o navegador não via; recompilação com aliases de `vitest`, `node:*`, `pg` e `@electric-sql/pglite`; **426/426**, 0 falhas e 0 erros de console |
 | Publicação | Service worker bumpado para `cbrpg-v5`, invalidando `cbrpg-v4`; build/publish via Actions e Pages, com verificação no site público |
 | Não inventado | Durações de 2/3 turnos, CDs 16/18, cura de 5% e invocação 1d4+2 vêm da especificação do chefe; penalidades numéricas da arena, Confusão/Medo, dano escalável e recarga do Chamado seguem provisórias (D-54 a D-59) |
+
+### 3.15 Correção da horda na arena (D-61)
+
+| Área | Resultado |
+| --- | --- |
+| Bug | Após `Chamado do Abismo`, a horda entrava em `participants`, aparecia na timeline, no seletor e no log, mas não renderizava como `.ff-fighter` na arena e não exibia a barra de Moral |
+| Causa | `_invocarHordaKraken` adiciona o participante mutando `battle.participants` no mesmo array; `emit` publica só uma cópia rasa de `battle`. Os memos de `heroes`, `enemies`, `teamA` e `teamB` em `src/pages/Battle.jsx` dependiam apenas de `participants` e ficavam presos à referência antiga |
+| Correção | `heroes`, `enemies`, `teamA` e `teamB` agora dependem também de `battle`; a formação e a arena passam a ver o novo combatente na mesma atualização que já atualizava timeline/log |
+| Validação | Smoke local com `Chamado do Abismo`: lado “👹 Inimigos” passou a conter `Marinheiros Afogados` com barras `HP 4458/4458` e `Moral 100/100`; arquivo temporário removido após a checagem |
+| Regras | Nenhuma regra nova. A horda, o pool de HP e a Moral continuam provisórios conforme D-58 |
 
 ---
 

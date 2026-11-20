@@ -1,8 +1,8 @@
-// v5: invalida o cache da v4 para distribuir o Kraken do Abismo Eclipse —
-// passiva, habilidades, horda/arena e a UI da Batalha — espelhados nos motores
-// cliente/servidor. O fallback ao cache podia servir bundles antigos quando a
-// rede falhava, escondendo correções mesmo após um deploy bem-sucedido.
-const CACHE = 'cbrpg-v5';
+// v6: invalida o cache da v5 para distribuir a correção da horda do Kraken na
+// arena. Os memos de heróis/inimigos/equipes agora dependem também do objeto
+// battle, porque o motor adiciona combatentes mutando `participants` no mesmo
+// array e emite apenas uma cópia rasa do battle.
+const CACHE = 'cbrpg-v6';
 const PRECACHE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {

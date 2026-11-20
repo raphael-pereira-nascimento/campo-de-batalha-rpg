@@ -215,10 +215,14 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
   const fumacaInfo = fumacaEstado(active?.fumaca || 0);
   const fumacaAtiva = !!active && (Number(active.fumaca) || 0) >= FUMACA.limiarVisivel;
 
-  const heroes = useMemo(() => participants.filter((p) => !p.isMonster), [participants]);
-  const enemies = useMemo(() => participants.filter((p) => p.isMonster), [participants]);
-  const teamA = useMemo(() => participants.filter((p) => p.team === 'A'), [participants]);
-  const teamB = useMemo(() => participants.filter((p) => p.team === 'B'), [participants]);
+  // O motor pode adicionar combatentes (horda do Kraken, monstros pelo Mestre)
+  // mutando `battle.participants` no mesmo array e emitindo uma cópia rasa do
+  // battle. Sem `battle` nas dependências, os memos abaixo ficam presos à
+  // referência antiga e a arena não mostra quem acabou de entrar.
+  const heroes = useMemo(() => participants.filter((p) => !p.isMonster), [participants, battle]);
+  const enemies = useMemo(() => participants.filter((p) => p.isMonster), [participants, battle]);
+  const teamA = useMemo(() => participants.filter((p) => p.team === 'A'), [participants, battle]);
+  const teamB = useMemo(() => participants.filter((p) => p.team === 'B'), [participants, battle]);
 
   // Formação estilo Final Fantasy: dois lados frente a frente.
   // No modo livre (sem lados), todos ficam lado a lado em uma linha única.
