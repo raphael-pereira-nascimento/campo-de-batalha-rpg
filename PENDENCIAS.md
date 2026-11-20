@@ -1137,6 +1137,18 @@ golpes.
 | Não inventado | Nenhum número foi apresentado como regra oficial: os valores de D-62 a D-67 são provisórios e P-14 continua aberto para escudos e itens mágicos |
 | Publicação | Commit `fe331da` em `origin/main`, Actions #123 verde (build + deploy); site público servindo `cbrpg-v7`. Verificado no navegador: loja com “💣 Artilharia 8” e descrições mecânicas publicadas (tripé `Recarga 5`, pólvora negra `+1 fumaça`, bombasta `−1 DEX/REF`, Dragões `ignora 25% da defesa`); únicos erros de console: os dois `/api/health` offline conhecidos |
 
+### 3.17 Revisão dos canhões — paridade e regras 14.1 (1.12)
+
+| Área | Resultado |
+| --- | --- |
+| Batalha de Mesa | `TableBattle.jsx` passou a aplicar D-64, D-65 e D-67 e as penalidades de equipamento na mira; antes essas regras existiam só nos dois `battleManager.js`. A mesa não usa `BattleManager`, então a paridade foi implementada diretamente nela |
+| Mira (D-66) | Novo helper `penalidadesEquipamento` nos dois `data.js`, usado por `_attrsMira` nos motores e por `effectiveStat` na mesa. Só malefícios entram na rolagem; bônus de equipamento continuam fora. Sem isso, o `−1 DEX/REF` do Bombasta não tinha efeito em combate |
+| Regras | Seção **14.1 Canhões e Artilharia (PROVISÓRIO — D-62 a D-67)** publicada em `Rules.jsx`, com D-01 a D-61 mantidos. Corrigidas as passagens antigas que diziam que canhões ocupavam slot utilitário, que toda artilharia usava `usosMax`, que havia “munição relevante” e que o tripé somava +1 turno extra |
+| Catálogo | Descrição do Canhão de Cerco trocada para “Tripé embutido: recarga de 5 turnos (+1 sem ajudante)” nos dois `data.js`; o +1 provisório restante é apenas o de tripulação incompleta (D-64) |
+| Testes | Novo caso para a penalidade de mira do Bombasta em `server/tests/canhoes.test.js`; harness **440/440**, 0 falhas. Bundle do cliente compilado com esbuild; única compilação oficial permanece a do Actions |
+| Publicação | Commit `05dd717` em `origin/main`, Actions **#125** verde (build + deploy), deployment `7950273127` com status `success`. Site público servindo `cbrpg-v8` (`caches.keys()` confirmou o cache ativo). Verificado no navegador: seção 14.1 completa publicada; Bombasta com VEL/REF 7 e recarga 6t; Canhão de Ferro sem ajudante com aviso, recarga 6t e +1 fumaça; Canhão de Dragões com crítico e 520 dano contra defesa 100 (D-65) |
+| Follow-up | Divergência preexistente fora desta revisão: `_physMult` do cliente lê `g.efeitos?.[categoria]?.bonus?.forca`, enquanto o servidor lê `fx?.bonus?.forca`. Avaliar em separado antes de mexer, para não alterar equilíbrio sem decisão |
+
 ---
 
 ## 4. Sugestão
