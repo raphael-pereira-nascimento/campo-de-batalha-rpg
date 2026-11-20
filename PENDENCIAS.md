@@ -1116,6 +1116,7 @@ golpes.
 | Compatibilidade | Campos opcionais; armas sem tripulação ignoram a verificação. Durante o teste foi encontrado e corrigido um nome trocado (`ignorarDefesaPct` → `ignoraDefesaPct`) nos dois motores — sem essa correção o dano não mudava |
 | Testes | `server/tests/canhoes.test.js` com 8 casos e `server/tests/data.test.js` com 5 casos novos, ambos importados pelo harness; recompilação com aliases de `vitest`, `node:*`, `pg` e `@electric-sql/pglite`; **439/439**, 0 falhas, 0 erros de console e 0 avisos |
 | Não inventado | Nenhum número foi apresentado como regra oficial: os valores de D-62 a D-67 são provisórios e P-14 continua aberto para escudos e itens mágicos |
+| Publicação | Commit `fe331da` em `origin/main`, Actions #123 verde (build + deploy); site público servindo `cbrpg-v7`. Verificado no navegador: loja com “💣 Artilharia 8” e descrições mecânicas publicadas (tripé `Recarga 5`, pólvora negra `+1 fumaça`, bombasta `−1 DEX/REF`, Dragões `ignora 25% da defesa`); únicos erros de console: os dois `/api/health` offline conhecidos |
 
 ---
 
