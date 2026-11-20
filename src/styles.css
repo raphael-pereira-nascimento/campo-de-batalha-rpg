@@ -324,6 +324,24 @@ select:focus {
   margin-right: 6px;
 }
 
+.tag.arena-effect-tag {
+  background: rgba(74, 144, 226, 0.16);
+  border-color: #4a90e2;
+  color: #9cc9ff;
+}
+
+.tag.arena-penalty-tag {
+  background: rgba(230, 57, 70, 0.16);
+  border-color: #e63946;
+  color: #ffb3ba;
+}
+
+.tag.kraken-skill-tag {
+  background: rgba(139, 95, 191, 0.16);
+  border-color: #8b5fbf;
+  color: #d8bfff;
+}
+
 .tag.recommend-tag {
   background: rgba(255, 209, 102, 0.18);
   border-color: var(--accent-2);

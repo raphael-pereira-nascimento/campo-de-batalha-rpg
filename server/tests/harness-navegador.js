@@ -15,6 +15,7 @@ import './forgeMaterials.test.js';
 import './customSkills.test.js';
 import './offlineSkills.test.js';
 import './auditoria.test.js';
+import './kraken.test.js';
 
 executarTestes().then((resumo) => {
   window.__TESTES__ = resumo;

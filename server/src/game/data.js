@@ -144,6 +144,30 @@ export const SPELLS = {
   redemoinho_aguas_profundas: { nome: 'Redemoinho das Águas Profundas', tipo: 'ataque', custo: 15, poder: 2.6, desc: 'Redemoinho de mar profundo atingindo todos ao redor.', elemento: 'agua', status: { tipo: 'cegueira', turnos: 2 }, alvo: 'area' },
   maremoto_colossal: { nome: 'Maremoto Colossal', tipo: 'ataque', custo: 25, poder: 3.2, desc: 'Maremoto devastador varrendo o campo inteiro.', elemento: 'agua', status: { tipo: 'lentidao', turnos: 3 }, alvo: 'area' },
 
+  // ── Kraken do Abismo Eclipse (PROVISÓRIO: números e CDs ajustáveis) ──
+  // As CD dos testes e os status abaixo vêm da especificação do chefe;
+  // dano, recarga e quantidade da horda são valores provisórios de balanceamento.
+  tentaculos_da_loucura: {
+    nome: 'Tentáculos da Loucura', tipo: 'ataque', custo: 0, poder: 2.4,
+    desc: 'Até 3 alvos testam D20 + Reflexo (CD 16). Falha: dano físico e Confusão ou Medo por 2 turnos.',
+    elemento: 'fisico', kraken: true, chave: 'tentaculos_da_loucura', saveDC: 16,
+    saveAttr: 'reflexos', alvosMax: 3,
+    statusesAleatorias: [{ tipo: 'confusao', turnos: 2 }, { tipo: 'medo', turnos: 2 }],
+  },
+  mare_negra: {
+    nome: 'Maré Negra', tipo: 'ataque', custo: 0, poder: 2.2,
+    desc: 'Todos testam D20 + Reflexo (CD 18). Falha: dano, Cegueira e Veneno por 3 turnos.',
+    elemento: 'trevas', alvo: 'area', kraken: true, chave: 'mare_negra', saveDC: 18,
+    saveAttr: 'reflexos',
+    statuses: [{ tipo: 'cegueira', turnos: 3 }, { tipo: 'veneno', turnos: 3, dano: 40 }],
+  },
+  chamado_do_abismo: {
+    nome: 'Chamado do Abismo', tipo: 'invocacao', custo: 0, cooldown: 4,
+    desc: 'Invoca 1d4 + 2 Marinheiros Afogados usando o sistema de horda.',
+    kraken: true, chave: 'chamado_do_abismo',
+    invocacaoHorda: { monstro: 'horda_marinheiros_afogados', quantidadeDados: 1, faces: 4, bonus: 2 },
+  },
+
   // Espírito da Floresta
   raiz_enraizante: { nome: 'Raiz Enraizante', tipo: 'ataque', custo: 10, poder: 2.0, desc: 'Raízes brotam do solo, prendendo e causando dano.', elemento: 'terra', status: { tipo: 'lentidao', turnos: 3 }, alcanceVertical: 'terrestre', alvo: 'area' },
   floresta_vingativa: { nome: 'Floresta Vingativa', tipo: 'ataque', custo: 15, poder: 2.5, desc: 'Espinhos e galhos atacam todos os inimigos.', elemento: 'terra', status: { tipo: 'sangramento', turnos: 3 }, alvo: 'area' },
@@ -196,7 +220,15 @@ export function skillFromSpell(s) {
     tipo: s.tipo === 'ataque' ? 'magia' : s.tipo,
     poder: Math.round((s.poder || 1) * 100),
     custo: s.custo || 0,
-    cooldown: 0,
+    cooldown: s.cooldown || 0,
+    chave: s.chave || null,
+    kraken: !!s.kraken,
+    saveDC: s.saveDC ?? null,
+    saveAttr: s.saveAttr || null,
+    alvosMax: s.alvosMax ?? null,
+    statuses: s.statuses ? s.statuses.map((x) => ({ ...x })) : null,
+    statusesAleatorias: s.statusesAleatorias ? s.statusesAleatorias.map((x) => ({ ...x })) : null,
+    invocacaoHorda: s.invocacaoHorda ? { ...s.invocacaoHorda } : null,
     todos: !!s.todos || s.nome === 'Cura em Massa',
     afetaAliados: !!s.afetaAliados,
     buffTipo: s.buffTipo === 'fisico' || s.buffTipo === 'magico' ? s.buffTipo : null,
@@ -303,6 +335,7 @@ export const EQUIPMENT = {
     coroa_do_sabio: { nome: 'Coroa do Sábio', tipo: 'acessorio', categoria: 'acessorio', preco: 2600, icone: '👑', bonus: { inteligencia: 3 }, socketSlots: 2, descricao: 'Coroa de metal antigo; dizem que sussurra segredos ao portador.' },
     medalhao_do_guardiao: { nome: 'Medalhão do Guardião', tipo: 'acessorio', categoria: 'acessorio', preco: 2600, icone: '🛡️', bonus: { resistencia: 3 }, socketSlots: 2, descricao: 'Símbolo de um guardião ancestral, reforça a defesa do corpo.' },
     pingente_da_sorte: { nome: 'Pingente da Sorte', tipo: 'acessorio', categoria: 'acessorio', preco: 3000, icone: '🍀', bonus: { forca: 1, destreza: 1, reflexos: 1 }, socketSlots: 1, descricao: 'Um trevo de quatro folhas banhado a ouro; sorte em todas as frentes.' },
+    respirador_abissal: { nome: 'Respirador Abissal', tipo: 'acessorio', categoria: 'acessorio', preco: 1200, icone: '🌬️', bonus: { resistencia: 1 }, efeito: { respiracaoAquatica: true }, socketSlots: 1, descricao: 'Válvula de madrepérola que permite respirar na Água Profunda Corrompida.' },
   },
 };
 
@@ -327,6 +360,10 @@ export const STATUS_DEFS = {
   // Condições próprias dos materiais (não são a mesma coisa entre si).
   podridao: { id: 'podridao', nome: 'Podridão', icon: '🦠', tipo: 'dot', desc: 'Dano por turno sobre a vida máxima original (Tenebrium).', duracaoPadrao: 3, danoPadrao: 0, danoPctVidaMaxima: 20, acumulo: 'renova', sistema: 'podridao', modificadores: '20% da vida máxima original por turno', remocao: ['expiração', 'tratamento de Podridão'] },
   contaminacaoPandemonica: { id: 'contaminacaoPandemonica', nome: 'Contaminação Pandemônica', icon: '☣️', tipo: 'dot', desc: 'Contaminação profana da Prata Pandemônica; o dano depende da aplicação.', duracaoPadrao: 3, danoPadrao: 0, danoPctVidaMaxima: null, reducaoCuraPct: 25, acumulo: 'renova', sistema: 'contaminacaoPandemica', modificadores: 'dano progressivo documentado e −25% de cura/proteção quando aplicável', remocao: ['expiração', 'purificação por Prata Sagrada'] },
+  // Kraken do Abismo Eclipse — condições pedidas pelo criador (PROVISÓRIO: números).
+  confusao: { id: 'confusao', nome: 'Confusão', icon: '🌀', tipo: 'debuff', desc: 'A mente se perde e os ataques ficam menos precisos.', duracaoPadrao: 2, danoPadrao: 0, acumulo: 'renova', modificadores: '-20% de acerto (provisório)', remocao: ['expiração'] },
+  medo: { id: 'medo', nome: 'Medo', icon: '😱', tipo: 'debuff', desc: 'O pavor atrapalha a reação e a mira.', duracaoPadrao: 2, danoPadrao: 0, acumulo: 'renova', modificadores: '-10% de acerto e -10% de esquiva (provisório)', remocao: ['expiração'] },
+  respiracao_aquatica: { id: 'respiracao_aquatica', nome: 'Respiração Aquática', icon: '🌬️', tipo: 'buff', desc: 'Permite respirar e agir normalmente na Água Profunda Corrompida.', duracaoPadrao: 3, danoPadrao: 0, acumulo: 'renova', modificadores: 'imunidade à penalidade da arena do Kraken', remocao: ['expiração'] },
 };
 
 export const STATUS_KEYS = Object.keys(STATUS_DEFS);
@@ -337,6 +374,7 @@ export const POTIONS = {
   pocao_cura_grande: { nome: 'Poção de Cura Grande', tipo: 'pocao', cura: 600, desc: 'Restaura 600 de HP.' },
   elixir_mana: { nome: 'Elixir de Mana', tipo: 'pocao', mana: 25, desc: 'Restaura 25 de MP.' },
   elixir_mana_grande: { nome: 'Elixir de Mana Grande', tipo: 'pocao', mana: 60, desc: 'Restaura 60 de MP.' },
+  pocao_respiracao_aquatica: { nome: 'Poção de Respiração Aquática', tipo: 'pocao', status: { tipo: 'respiracao_aquatica', turnos: 3 }, desc: 'Concede Respiração Aquática por 3 turnos contra a arena do Kraken.' },
 };
 
 export const ATTRIBUTE_KEYS = ['forca', 'inteligencia', 'resistencia', 'destreza', 'reflexos'];

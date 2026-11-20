@@ -1,9 +1,11 @@
 # Pendências — Materiais, Metais e Podridão
 
-Atualizado em 19/11/2026 — Etapa 9 (runas na forja, Corrupção com API/UI,
+Atualizado em 20/11/2026 — Etapa 9 (runas na forja, Corrupção com API/UI,
 imunidade do Tenebrium e preparação de Contaminação Profana/Núcleo Pandemônico),
-rodada de buffs, cura, Ações Rápidas e canhões (D-44 a D-47) e auditoria de
-correções de comportamento em fichas, motores e Batalha de Mesa (1.9).
+rodada de buffs, cura, Ações Rápidas e canhões (D-44 a D-47), auditoria de
+correções de comportamento em fichas, motores e Batalha de Mesa (1.9) e
+implementação do Kraken do Abismo Eclipse com passiva, habilidades, horda e
+arena espelhadas nos motores cliente/servidor (D-54 a D-60, seções 1.10 e 3.14).
 
 Este arquivo separa o que já foi **aprovado**, o que foi implementado como
 **provisório**, o que continua **pendente** e o que é apenas **sugestão**.
@@ -27,7 +29,7 @@ Legenda:
 
 ---
 
-## Índice das decisões D-01 a D-47
+## Índice das decisões D-01 a D-60
 
 | Código | Assunto | Status |
 | --- | --- | --- |
@@ -84,6 +86,13 @@ Legenda:
 | D-51 | Congelamento consome o turno depois de aplicar o pulo | Implementado |
 | D-52 | Gemas com comportamento idêntico offline/online; regen respeita redução de cura | Implementado |
 | D-53 | Gestão de fichas (editar/excluir) e árvore técnica de golpes por nível/elemento/desbloqueio | Implementado; regras oficiais (P-15/P-01) pendentes |
+| D-54 | Kraken do Abismo Eclipse como chefe autônomo de Eclipse | Provisório; `isEclipse` força o estado do dia 30 na batalha |
+| D-55 | Coração da Tempestade: cura de 5% e bloqueio por Luz/Sagrado | Provisório; aliases `luz`/`sagrado` normalizados |
+| D-56 | Água Profunda Corrompida: −2 DEX/REF sem Respiração Aquática | Provisório; imunidade por status, acessório ou poção |
+| D-57 | Confusão e Medo no Kraken; Cegueira e Veneno na Maré Negra | Provisório; −20% acerto e −10% acerto/esquiva |
+| D-58 | Horda de Marinheiros Afogados (1d4+2, pool de HP e Moral) | Provisório; Moral e dano escalável |
+| D-59 | Tentáculos/Maré Negra (CD 16/18) e Chamado do Abismo (recarga 4) | Provisório; CD 16/18 e durações dos status vêm da especificação do chefe |
+| D-60 | UI da Batalha e regressões do Kraken em cliente/servidor | Implementado; 13 testes novos no harness |
 
 ---
 
@@ -485,6 +494,26 @@ item; iniciativa `Atirador → Alvo`, combatente novo entrando uma vez
 (`1/3`) e ciclo `Alvo → Novo → Atirador`. Harness final: **356/356** testes,
 0 falhas, 0 erros de console e 0 avisos de chave duplicada. Nos smoke tests
 offline, o único erro de console é o 404 esperado de `/api/health`.
+
+### 1.10 Kraken do Abismo Eclipse (D-54 a D-60)
+
+Implementação publicável do chefe de Eclipse em `src/game/` e
+`server/src/game/`. Nenhuma regra oficial de D-01 a D-53 foi alterada; os
+valores novos que não vieram da especificação do chefe ficam marcados como
+provisórios em D-54–D-59.
+
+| Elemento | Comportamento implementado |
+| --- | --- |
+| Ativação | `kraken_abismo_eclipse` tem `isEclipse: true`. Ao entrar na batalha, o motor força `estadoEclipse(30, tipo)` mesmo que o calendário esteja no dia 1, ativando passiva, habilidades, horda e arena |
+| Coração da Tempestade | No início do turno do Kraken, cura `5%` do HP máximo. Dano de `Luz`/`Sagrado` (e `Luz Sagrada`) no turno anterior anula a cura; os aliases são normalizados sem criar elemento novo |
+| Arena | `Água Profunda Corrompida` reduz Destreza e Reflexos em `2` para heróis sem Respiração Aquática (provisório). A proteção vem de status `respiracao_aquatica`, `respirador_abissal` ou `pocao_respiracao_aquatica` |
+| Tentáculos da Loucura | Até 3 alvos testam `D20 + Reflexo` contra **CD 16**; falha causa dano físico e Confusão ou Medo por 2 turnos |
+| Maré Negra | Todos os heróis vivos testam `D20 + Reflexo` contra **CD 18**; falha causa dano mágico, Cegueira e Veneno por 3 turnos |
+| Chamado do Abismo | Invoca `1d4 + 2` Marinheiros Afogados com a definição de horda existente; recarga provisória de 4 turnos |
+| Horda | HP é um pool por unidade (`HP individual × corpos`), Moral começa em 100 e cai com abates/dano; o dano escala com corpos e Moral, com barra própria na Batalha |
+| Status | `cegueira`, `veneno`, `confusao` (−20% acerto, provisório), `medo` (−10% acerto/esquiva, provisório) e `respiracao_aquatica` passaram a existir no catálogo e na UI |
+| Interface | Banner mostra a arena e quantos heróis estão penalizados; o combatente do Kraken mostra passiva, habilidades e arena; a horda mostra Moral; heróis sem respiração exibem o aviso |
+| Paridade | `kraken.test.js` com 13 casos cobre ativação, CDs, passiva, aliases de Luz, status, invocação, Moral e arena. Harness local: **369/369**, 0 falhas e 0 erros de console |
 
 ---
 
@@ -1026,6 +1055,19 @@ golpes.
 | Interface | Smoke pages confirmaram descrição, wizard e mesa no navegador; aviso de `same key` das poções idênticas eliminado |
 | Testes | `auditoria.test.js` com 6 casos importado pelo harness; **356/356**, 0 falhas, 0 erros de console e 0 avisos de chave duplicada |
 | Publicação | Bump do service worker para `cbrpg-v4`, invalidando `cbrpg-v3` e forçando o download dos bundles corrigidos |
+
+### 3.14 Kraken Eclipse — implementação e validação (1.10)
+
+| Área | Resultado |
+| --- | --- |
+| Dados | `SPELLS` e `STATUS_DEFS` do Kraken, `respirador_abissal` e `pocao_respiracao_aquatica` espelhados em cliente/servidor; metadados de golpe preservados por `skillFromSpell` |
+| Bestiário | `kraken_abismo_eclipse` e `horda_marinheiros_afogados` com `isEclipse`, `arenaEffect`, `passivaEclipse`, `habilidades`, `horda` e moral; `buildMonster` expõe esses campos ao participante |
+| Motores | Passiva, bloqueio por Luz/Sagrado, arena, testes de Reflexo CD 16/18, três habilidades, IA do Kraken, dano escalável e queda de Moral espelhados nos dois `battleManager.js` |
+| Compatibilidade | `_rollToHit` ganhou um 5º argumento opcional `battle` e repassa o contexto nas chamadas internas; testes antigos continuam válidos. Diferenças prévias entre cliente e servidor (`randomUUID`, `clamp`, gemas, imports) foram preservadas |
+| Interface | Banner da arena, selos de Kraken/habilidades/penalidade e barra de Moral adicionados à Batalha |
+| Testes | `server/tests/kraken.test.js` com 13 casos importado pelo harness; recompilação com aliases de `vitest`, `node:*`, `pg` e `@electric-sql/pglite`; **369/369**, 0 falhas e 0 erros de console |
+| Publicação | Service worker bumpado para `cbrpg-v5`, invalidando `cbrpg-v4`; build/publish via Actions e Pages, com verificação no site público |
+| Não inventado | Durações de 2/3 turnos, CDs 16/18, cura de 5% e invocação 1d4+2 vêm da especificação do chefe; penalidades numéricas da arena, Confusão/Medo, dano escalável e recarga do Chamado seguem provisórias (D-54 a D-59) |
 
 ---
 

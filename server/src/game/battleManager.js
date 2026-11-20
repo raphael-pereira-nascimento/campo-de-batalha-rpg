@@ -52,7 +52,7 @@ import {
 } from './sistema.js';
 import { estadoEclipse, sortearVarianteEclipse, aplicarEclipseEmChefe, aplicarVarianteEclipseEmChefe } from './eclipse.js';
 import { RACES } from './races.js';
-import { buildMonster, bossActionsPerTurn, chefeHpMultPorAdversarios } from './monsters.js';
+import { MONSTERS, buildMonster, bossActionsPerTurn, chefeHpMultPorAdversarios } from './monsters.js';
 import {
   normalizarChance,
   danoDeStatus,
@@ -138,12 +138,61 @@ function hasStatus(p, id) {
   return Array.isArray(p.statuses) && p.statuses.some((s) => s.id === id);
 }
 
+// ── Kraken do Abismo Eclipse ──────────────────────────────────────────────
+// Luz e Sagrado são aliases: o catálogo de elementos do jogo usa `luz`, mas a
+// especificação do chefe cita os dois nomes. Nenhum novo elemento é criado.
+function normalizarElemento(valor) {
+  return String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[\s_-]/g, '');
+}
+
+function ehLuzOuSagrado(elemento) {
+  const el = normalizarElemento(elemento);
+  return el === 'luz' || el === 'sagrado' || el === 'luzsagrada' || el === 'sagrada';
+}
+
+// Respiração Aquática pode vir de status, acessório ou poção.
+function itensDoParticipante(p) {
+  const itens = [];
+  const vistos = new WeakSet();
+  const visitar = (valor) => {
+    if (!valor || typeof valor !== 'object' || vistos.has(valor)) return;
+    vistos.add(valor);
+    if (Array.isArray(valor)) {
+      valor.forEach(visitar);
+      return;
+    }
+    if (valor.id || valor.nome) itens.push(valor);
+    Object.values(valor).forEach(visitar);
+  };
+  Object.values(p?.equipment || {}).forEach(visitar);
+  (p?.inventory || []).forEach(visitar);
+  return itens;
+}
+
+function temRespiracaoAquatica(p) {
+  if (hasStatus(p, 'respiracao_aquatica')) return true;
+  return itensDoParticipante(p).some((item) =>
+    item.efeito?.respiracaoAquatica === true
+    || item.status?.tipo === 'respiracao_aquatica'
+    || ['respirador_abissal', 'pocao_respiracao_aquatica', 'respiracao_aquatica'].includes(item.id),
+  );
+}
+
 // Resumo dos debuffs ativos (cegueira, lentidão, fraqueza) para as fórmulas.
 function statusEffects(p) {
   const out = { accPenalty: 0, dodgePenalty: 0, danoMult: 1 };
   for (const s of p.statuses || []) {
     if (s.id === 'cegueira') out.accPenalty += 0.25;
     if (s.id === 'lentidao') {
+      out.accPenalty += 0.1;
+      out.dodgePenalty += 0.1;
+    }
+    if (s.id === 'confusao') out.accPenalty += 0.2;
+    if (s.id === 'medo') {
       out.accPenalty += 0.1;
       out.dodgePenalty += 0.1;
     }
@@ -395,7 +444,15 @@ export class BattleManager {
       throw new Error(`Limite de ${MAX_PLAYERS_PER_BATTLE} participantes atingido.`);
 
     const uid = randomUUID();
-    const eclipse = battle.eclipse || estadoEclipse(1);
+    let eclipse = battle.eclipse || estadoEclipse(1);
+    // Uma definição `isEclipse` transforma esta batalha num encontro de Eclipse:
+    // ativa passiva, habilidades, horda e arena do Kraken sem exigir que o
+    // Mestre tenha avançado o calendário até o dia 30.
+    if (monsterDef?.isEclipse && !eclipse.eclipseAtivo) {
+      eclipse = estadoEclipse(30, eclipse.tipo || 'comum');
+      battle.eclipse = eclipse;
+      battle.log.push(makeLog('🌑 O Kraken Eclipse traz o evento para esta batalha!', 'enemy'));
+    }
     // Variante de monstro sorteada durante o Eclipse (regra do criador).
     const variante = sortearVarianteEclipse(eclipse);
     let def = { ...monsterDef, _uid: uid };
@@ -457,6 +514,7 @@ export class BattleManager {
     m.monsterDef = { ...m.monsterDef, acoesPorTurno: m.acoesPorTurno };
     m.hpMaxOriginal = m.hpMax;
     battle.participants.push(m);
+    this._atualizarFlagsArena(battle);
     battle.log.push(makeLog(`🐲 ${m.monsterName} entra na batalha pelo lado do mestre!${m.isBoss ? ` (CHEFE · vida ajustada para ${playerCount} adversário(s))` : ''}`, 'enemy'));
     return battle;
   }
@@ -522,6 +580,7 @@ export class BattleManager {
     });
     // O turno extra do chefe durante o Eclipse entra na ordem de turnos.
     battle.eclipse = eclipse;
+    this._atualizarFlagsArena(battle);
 
     battle.status = 'in_progress';
     const indices = [];
@@ -571,6 +630,189 @@ export class BattleManager {
     battle.log.push(makeLog(`▶️ Turno de ${cur.charName}${tag}`));
   }
 
+  // O Kraken Eclipse só usar suas regras quando o evento está ativo. A
+  // definição `isEclipse` também força a batalha para o estado de Eclipse.
+  _ehKrakenEclipse(p, battle) {
+    return !!(p?.isMonster && p.alive && (p.isEclipse || p.monsterDef?.isEclipse) && battle?.eclipse?.eclipseAtivo);
+  }
+
+  _arenaAquaticaAtiva(battle) {
+    if (!battle?.eclipse?.eclipseAtivo) return false;
+    return (battle.participants || []).some((m) =>
+      m.isMonster
+      && m.alive
+      && (m.arenaEffect === 'Água Profunda Corrompida' || m.monsterDef?.arenaEffect === 'Água Profunda Corrompida'),
+    );
+  }
+
+  _atualizarFlagsArena(battle) {
+    const ativa = this._arenaAquaticaAtiva(battle);
+    for (const p of battle.participants || []) {
+      if (p.isMonster) continue;
+      p.arenaPenalizada = ativa && !temRespiracaoAquatica(p);
+    }
+  }
+
+  _processarCoracaoDaTempestade(battle, p) {
+    const regra = p.monsterDef?.passivaEclipse || {};
+    const nome = regra.nome || 'Coração da Tempestade';
+    const pct = Number(regra.curaPct ?? 0.05);
+    const turnoDano = Number(p.ultimoDanoLuzSagradoTurno);
+    const turno = Number(battle.turno) || 0;
+    if (Number.isFinite(turnoDano) && turnoDano >= turno - 1) {
+      battle.log.push(makeLog(`⛔ ${p.charName}: ${nome} é anulado por dano de Luz/Sagrado no turno anterior.`, 'status'));
+      return;
+    }
+    const curaBruta = Math.max(1, Math.round((p.hpMax || 0) * pct));
+    const cura = this._curaRecebida(p, curaBruta);
+    const antes = p.hp;
+    p.hp = clamp(p.hp + cura, 0, p.hpMax);
+    if (p.hp > antes) {
+      battle.log.push(makeLog(`🌊 ${p.charName} usa ${nome} e recupera ${p.hp - antes} HP (${Math.round(pct * 100)}%).`, 'heal'));
+    }
+  }
+
+  // Hordas causam mais dano enquanto há corpos e moral; a perda de moral
+  // acompanha os abates registrados em `_applyDamage`.
+  _danoHordaMult(p) {
+    if (!p?.horda) return 1;
+    const corpos = Math.max(1, Number(p.horda.quantidade) || 1);
+    const escalonavel = Number(p.horda.danoEscalonavel ?? 0.1);
+    const moralMax = Number(p.horda.moralMax ?? 100) || 100;
+    const moral = clamp(Number(p.horda.moral ?? moralMax), 0, moralMax);
+    return Math.max(0.25, (1 + (corpos - 1) * escalonavel) * (0.5 + 0.5 * (moral / moralMax)));
+  }
+
+  _testeReflexoKraken(battle, alvo, cd) {
+    const d20 = 1 + Math.floor(Math.random() * 20);
+    const reflexos = Number(this._rollAttrs(alvo, battle).reflexos) || 0;
+    const total = d20 + reflexos;
+    return { d20, reflexos, total, cd, falhou: total < cd };
+  }
+
+  _alvosKraken(battle, p, target, max) {
+    const heroes = battle.participants.filter((h) => !h.isMonster && h.alive);
+    const principal = heroes.find((h) => h.uid === target?.uid || h.characterId === target?.characterId);
+    const selecionados = [];
+    if (principal) selecionados.push(principal);
+    for (const h of heroes) {
+      if (selecionados.length >= max) break;
+      if (!selecionados.includes(h)) selecionados.push(h);
+    }
+    return selecionados;
+  }
+
+  _invocarHordaKraken(battle, p, skill) {
+    const cfg = skill.invocacaoHorda || {};
+    const def = MONSTERS[cfg.monstro];
+    if (!def) {
+      battle.log.push(makeLog(`❌ ${p.charName} tentou invocar uma horda desconhecida.`, 'miss'));
+      return false;
+    }
+    const vagas = MAX_PLAYERS_PER_BATTLE - battle.participants.length;
+    if (vagas <= 0) {
+      battle.log.push(makeLog(`❌ ${p.charName} não há espaço no campo para a horda.`, 'miss'));
+      return false;
+    }
+    const dados = Math.max(1, Number(cfg.quantidadeDados) || 1);
+    const faces = Math.max(2, Number(cfg.faces) || 4);
+    let quantidade = Number(cfg.bonus) || 0;
+    for (let i = 0; i < dados; i += 1) quantidade += 1 + Math.floor(Math.random() * faces);
+    quantidade = Math.max(1, Math.min(vagas, quantidade));
+
+    const uid = randomUUID();
+    const defInvocada = { ...def, _uid: uid, horda: { ...(def.horda || {}), quantidade } };
+    const m = buildMonster(defInvocada);
+    m.uid = uid;
+    m.wpnCalor = {};
+    m.wpnSuperaquecido = {};
+    m.wpnDisparou = {};
+    m.fumaca = 0;
+    const eclipse = battle.eclipse || estadoEclipse(1);
+    if (eclipse.monstroMult !== 1) {
+      const escala = eclipse.monstroMult;
+      for (const key of Object.keys(m.attributes)) {
+        m.attributes[key] = Math.max(1, Math.min(12, Math.round(m.attributes[key] * escala * 10) / 10));
+      }
+      if (m.horda) {
+        m.horda.hpPorUnidade = Math.round(m.horda.hpPorUnidade * escala);
+        m.hp = m.hpMax = m.horda.hpPorUnidade * quantidade;
+      }
+      m.eclipse = true;
+    }
+    m.hpMaxOriginal = m.hpMax;
+    battle.participants.push(m);
+    const novaPosicao = battle.turnOrder.length;
+    battle.turnOrder.splice(novaPosicao, 0, battle.participants.length - 1);
+    battle.log.push(
+      makeLog(
+        `🌊 ${p.charName} usa ${skill.nome}: ${quantidade} Marinheiro(s) Afogado(s) emerge(m) (${m.hp}/${m.hpMax} HP, moral ${m.horda?.moral ?? 100}).`,
+        'enemy',
+      ),
+    );
+    this._atualizarFlagsArena(battle);
+    return true;
+  }
+
+  _resolveKrakenSkill(battle, p, target, skill, extras = []) {
+    if (!skill.kraken || !this._ehKrakenEclipse(p, battle)) return false;
+    const chave = skill.chave || skill.id;
+    const cd = Number(skill.saveDC) || 16;
+
+    if (chave === 'tentaculos_da_loucura') {
+      const alvos = this._alvosKraken(battle, p, target, Number(skill.alvosMax) || 3);
+      const danoBase = danoFisicoGolpe(
+        this._finalAttrs(p, battle).forca,
+        skill.poder,
+        this._physMult(p) * (p.buffPhysical || 1),
+      );
+      for (const alvo of alvos) {
+        const teste = this._testeReflexoKraken(battle, alvo, cd);
+        battle.log.push(
+          makeLog(
+            `🎲 ${alvo.charName}: D20 ${teste.d20} + REF ${teste.reflexos} = ${teste.total} vs CD ${cd}${teste.falhou ? ' — FALHOU' : ' — passou'}.`,
+            teste.falhou ? 'damage' : 'info',
+          ),
+        );
+        if (!teste.falhou) continue;
+        const dano = Math.max(1, Math.round(danoBase));
+        this._applyDamage(alvo, dano, battle, p, 'physical', skill.elemento || 'fisico');
+        if (alvo.alive && Array.isArray(skill.statusesAleatorias) && skill.statusesAleatorias.length) {
+          const st = skill.statusesAleatorias[Math.floor(Math.random() * skill.statusesAleatorias.length)];
+          this._applyStatus(battle, alvo, st, p);
+        }
+      }
+      return true;
+    }
+
+    if (chave === 'mare_negra') {
+      const alvos = battle.participants.filter((h) => !h.isMonster && h.alive);
+      const danoBase = magicDamage(p, { poder: skill.poder }, this._magMult(p) * (p.buffMagic || 1)).total;
+      for (const alvo of alvos) {
+        const teste = this._testeReflexoKraken(battle, alvo, cd);
+        battle.log.push(
+          makeLog(
+            `🎲 ${alvo.charName}: D20 ${teste.d20} + REF ${teste.reflexos} = ${teste.total} vs CD ${cd}${teste.falhou ? ' — FALHOU' : ' — passou'}.`,
+            teste.falhou ? 'damage' : 'info',
+          ),
+        );
+        if (!teste.falhou) continue;
+        this._applyDamage(alvo, danoBase, battle, p, 'magic', skill.elemento || 'trevas');
+        if (alvo.alive) {
+          for (const st of skill.statuses || []) this._applyStatus(battle, alvo, st, p);
+        }
+      }
+      return true;
+    }
+
+    if (chave === 'chamado_do_abismo') {
+      this._invocarHordaKraken(battle, p, skill);
+      return true;
+    }
+
+    return false;
+  }
+
   _condicaoAtendida(battle, p, cond) {
     if (!cond) return true;
     switch (cond.tipo) {
@@ -598,6 +840,11 @@ export class BattleManager {
   }
 
   _resolveTurnGains(battle, p) {
+    // Coração da Tempestade: cura no início do turno do Kraken Eclipse.
+    if (this._ehKrakenEclipse(p, battle)) this._processarCoracaoDaTempestade(battle, p);
+    if (!p.isMonster) {
+      p.arenaPenalizada = this._arenaAquaticaAtiva(battle) && !temRespiracaoAquatica(p);
+    }
     const efeito = efeitosDe(p);
     // Recuperação de mana CONFIRMADA: o que foi gasto ÷ 2, no máximo 10% do MP total.
     const gastoTurno = Number(p.manaGastoTurno) || 0;
@@ -686,22 +933,31 @@ export class BattleManager {
 
   // Atributos efetivos considerando o status "Bêbado":
   // +1 em Força, -1 em Destreza e -1 em Reflexo nas rolagens.
-  _rollAttrs(p) {
-    if (!p.drunk) return p.attributes;
-    return {
-      ...p.attributes,
-      forca: (p.attributes?.forca || 0) + 1,
-      destreza: (p.attributes?.destreza || 0) - 1,
-      reflexos: (p.attributes?.reflexos || 0) - 1,
-    };
+  _rollAttrs(p, battle = null) {
+    const attrs = p.drunk
+      ? {
+          ...p.attributes,
+          forca: (p.attributes?.forca || 0) + 1,
+          destreza: (p.attributes?.destreza || 0) - 1,
+          reflexos: (p.attributes?.reflexos || 0) - 1,
+        }
+      : p.attributes;
+    if (!p?.isMonster && this._arenaAquaticaAtiva(battle) && !temRespiracaoAquatica(p)) {
+      return {
+        ...attrs,
+        destreza: (attrs?.destreza || 0) - 2,
+        reflexos: (attrs?.reflexos || 0) - 2,
+      };
+    }
+    return attrs;
   }
 
   // Atributo Final do participante (base + raça/classe/equipamento/gemas),
   // já com o efeito de bêbado. Mesmo conceito da vida/mana — ver
   // effectiveAttributes em data.js.
-  _finalAttrs(p) {
+  _finalAttrs(p, battle = null) {
     const attrs = effectiveAttributes(
-      this._rollAttrs(p),
+      this._rollAttrs(p, battle),
       p.equipment || {},
       p.races || null,
       p.classes || null,
@@ -765,8 +1021,8 @@ export class BattleManager {
     }
     // Voo natural: fadiga acumulada e teste de controle.
     if (p.vooTipo === 'natural' && p.vooTurnos >= VOO.fadigaTurnos) {
-      const controle = pesoAtributo('controleVoo', this._rollAttrs(p))
-        + pesoAtributo('resistenciaVoo', this._rollAttrs(p));
+      const controle = pesoAtributo('controleVoo', this._rollAttrs(p, battle))
+        + pesoAtributo('resistenciaVoo', this._rollAttrs(p, battle));
       const d20 = Math.floor(Math.random() * 20) + 1;
       const dif = 15;
       if (d20 + controle < dif) {
@@ -821,13 +1077,13 @@ export class BattleManager {
     battle.log.push(makeLog(`🕊️ ${p.charName} ${dir === 'descer' ? 'desce' : 'sobe'} para a altitude ${novo} (controle ${Math.round(controle)}).`, 'buff'));
   }
 
-  _rollToHit(attacker, defender, kind, { poder = 100, status = null } = {}) {
+  _rollToHit(attacker, defender, kind, { poder = 100, status = null } = {}, battle = null) {
     const dodgeBonus = this._dodgeBonus(defender);
     const stAtk = statusEffects(attacker);
     const stDef = statusEffects(defender);
     const critThresh = 21 - Math.round(this._critBonus(attacker) * 20);
-    const atkA = this._rollAttrs(attacker);
-    const defA = this._rollAttrs(defender);
+    const atkA = this._rollAttrs(attacker, battle);
+    const defA = this._rollAttrs(defender, battle);
     // Fumaça: atrapalha a mira de quem está dentro dela e camufla o alvo.
     const fumacaMira = fumacaMiraPenalidade(attacker.fumaca);
     const fumacaCamuflagem = fumacaCamuflagemBonus(defender.fumaca);
@@ -959,7 +1215,7 @@ export class BattleManager {
     p.especialBar = clamp((p.especialBar || 0) + amount, 0, 100);
   }
 
-  _applyDamage(target, baseDamage, battle, source, kind = null) {
+  _applyDamage(target, baseDamage, battle, source, kind = null, elemento = null) {
     if (target.defense) {
       battle.log.push(makeLog(`${target.charName} se defendeu! Dano reduzido pela metade.`, 'defense'));
       baseDamage = Math.round(baseDamage / 2);
@@ -973,6 +1229,12 @@ export class BattleManager {
     }
     const reduced = Math.max(0, baseDamage - target.defesa);
     let finalDamage = reduced === 0 ? Math.max(1, Math.round(baseDamage * 0.1)) : reduced;
+
+    // Coração da Tempestade: registra dano de Luz/Sagrado para anular a cura
+    // do Kraken no turno seguinte.
+    if (finalDamage > 0 && ehLuzOuSagrado(elemento)) {
+      target.ultimoDanoLuzSagradoTurno = battle.turno || 0;
+    }
 
     // ── Vibranium: absorção cinética aprovada ─────────────────────────────────
     // Apenas dano físico (cinético). A fração absorvida vira PE e abate o dano;
@@ -1028,6 +1290,11 @@ export class BattleManager {
       const abatidos = target.horda.quantidade - restantes;
       if (abatidos > 0) {
         target.horda.quantidade = restantes;
+        target.horda.moral = clamp(
+          (target.horda.moral ?? target.horda.moralMax ?? 100) - abatidos * 10 - Math.floor(finalDamage / 200),
+          0,
+          target.horda.moralMax ?? 100,
+        );
         target.hpMax = Math.max(1, porUnidade * restantes);
         target.hp = hpDepois;
         target.danoRecebido = (target.danoRecebido || 0) + finalDamage;
@@ -1351,9 +1618,9 @@ export class BattleManager {
     const elem = elemento || 'fisico';
     const multBase = spec.danoMult || 1;
     for (const t of alvos) {
-      const total = Math.max(1, Math.round(danoBase * multBase * MULTI_FOGO_AMIGO_MULT * this._elemMult(elem, t)));
+      const total = Math.max(1, Math.round(danoBase * multBase * MULTI_FOGO_AMIGO_MULT * this._elemMult(elem, t) * this._danoHordaMult(p)));
       battle.log.push(makeLog(`💥 ${p.charName} atinge o aliado ${t.charName} por engano: ${total} de dano.`, 'damage'));
-      this._applyDamage(t, total, battle, p, kind);
+      this._applyDamage(t, total, battle, p, kind, elem);
     }
   }
 
@@ -1389,7 +1656,7 @@ export class BattleManager {
       );
       return;
     }
-    const mira = this._rollToHit(p, principal, 'physical');
+    const mira = this._rollToHit(p, principal, 'physical', {}, battle);
     // O tiro saiu: a arma entra em recarga, esquenta e levanta fumaça mesmo
     // se errar (ou sair pela culatra).
     this._recarregarArma(p, weapon);
@@ -1428,7 +1695,7 @@ export class BattleManager {
         battle.log.push(makeLog(`🕊️ ${weaponName} não alcança ${t.charName} na altitude ${t.altitude}.`, 'miss'));
         return;
       }
-      const res = i === 0 ? mira : this._rollToHit(p, t, 'physical');
+      const res = i === 0 ? mira : this._rollToHit(p, t, 'physical', {}, battle);
       if (i > 0 && (res.roll === 1 || !res.hit)) {
         battle.log.push(
           makeLog(`💨 ${p.charName} erra o ataque em ${t.charName}. (d20 = ${res.roll} · ${res.nivel?.nome || '—'})`, 'miss'),
@@ -1437,7 +1704,7 @@ export class BattleManager {
       }
       const elemM = this._elemMult(atkElem, t);
       const multSec = i > 0 ? spec.splash : spec.danoMult;
-      const total = Math.round(danoBase * (res.crit ? 2 : 1) * multSec * elemM);
+      const total = Math.round(danoBase * (res.crit ? 2 : 1) * multSec * elemM * this._danoHordaMult(p));
       const elemTag = elemM > 1 ? ` ⚡${atkElem} fragiliza!` : elemM < 1 ? ` 🛡${atkElem} resistido!` : '';
       battle.log.push(
         makeLog(
@@ -1446,7 +1713,7 @@ export class BattleManager {
         ),
       );
       this._chargeEspecial(battle, p, res.crit ? 15 : 8);
-      const dealt = this._applyDamage(t, total, battle, p, 'physical');
+      const dealt = this._applyDamage(t, total, battle, p, 'physical', atkElem);
       if (dealt > 0) this._lifesteal(battle, p, dealt);
       if (!t.alive && !t.horda) p.kills += 1;
       if (ataqueStatus && t.alive) this._applyStatus(battle, t, ataqueStatus, p);
@@ -1487,12 +1754,12 @@ export class BattleManager {
       );
       return;
     }
-    const mira = this._rollToHit(p, principal, kind, { poder: skill.poder, status: skill.status });
+    const mira = this._rollToHit(p, principal, kind, { poder: skill.poder, status: skill.status }, battle);
     // Dano base (independe do alvo: usa apenas os atributos do atacante).
     let danoBase;
     if (skill.tipo === 'fisico') {
       const mult = this._physMult(p) * (p.buffPhysical || 1);
-      danoBase = danoFisicoGolpe(this._finalAttrs(p).forca, skill.poder, mult, mega ? DANO_COEF_MEGA : undefined);
+      danoBase = danoFisicoGolpe(this._finalAttrs(p, battle).forca, skill.poder, mult, mega ? DANO_COEF_MEGA : undefined);
     } else {
       danoBase = magicDamage(p, { poder: skill.poder }, this._magMult(p) * (p.buffMagic || 1)).total;
     }
@@ -1522,7 +1789,7 @@ export class BattleManager {
         battle.log.push(makeLog(`🕊️ ${nome} não alcança ${t.charName} na altitude ${t.altitude}.`, 'miss'));
         return;
       }
-      const res = i === 0 ? mira : this._rollToHit(p, t, kind, { poder: skill.poder, status: skill.status });
+      const res = i === 0 ? mira : this._rollToHit(p, t, kind, { poder: skill.poder, status: skill.status }, battle);
       if (i > 0 && (res.roll === 1 || !res.hit)) {
         battle.log.push(
           makeLog(
@@ -1534,7 +1801,7 @@ export class BattleManager {
       }
       const em = this._elemMult(elem, t);
       const multSec = i > 0 ? spec.splash : spec.danoMult;
-      const total = Math.round(danoBase * (res.crit ? 2 : 1) * multSec * em);
+      const total = Math.round(danoBase * (res.crit ? 2 : 1) * multSec * em * this._danoHordaMult(p));
       const tag = em > 1 ? ` ⚡${elem} fragiliza!` : em < 1 ? ` 🛡${elem} resistido!` : '';
       const dif = `${res.dificuldade ? ` dificuldade +${res.dificuldade}.` : ''} d20 ${res.roll} · ${res.nivel?.nome || '—'}.`;
       battle.log.push(
@@ -1544,7 +1811,7 @@ export class BattleManager {
         ),
       );
       if (!mega) this._chargeEspecial(battle, p, res.crit ? 15 : 8);
-      const dealt = this._applyDamage(t, total, battle, p, kind);
+      const dealt = this._applyDamage(t, total, battle, p, kind, elem);
       if (dealt > 0) this._lifesteal(battle, p, dealt);
       if (!t.alive && !t.horda) p.kills += 1;
       if (skill.status && t.alive) this._applyStatus(battle, t, skill.status, p, { crit: res.crit });
@@ -1708,9 +1975,16 @@ export class BattleManager {
     p.mp -= cost;
     p.manaGastoTurno = (p.manaGastoTurno || 0) + cost;
 
+    // Habilidades próprias do Kraken usam testes de resistência e horda,
+    // em vez da resolução genérica de golpes.
+    if (skill.kraken && this._resolveKrakenSkill(battle, p, target, skill, extras)) {
+      this._setCooldown(p, skill);
+      return;
+    }
+
     if (skill.tipo === 'cura') {
       // Cura reformada: INT Final × poder% × 1,4 × 10 (mesma escala do dano).
-      const healing = curaMagica(this._finalAttrs(p).inteligencia, skill.poder);
+      const healing = curaMagica(this._finalAttrs(p, battle).inteligencia, skill.poder);
       const allies = this._aliadosComVoce(battle, p);
       const targets = skill.todos ? allies : [target && target.alive ? target : p];
       targets.forEach((t) => {
@@ -1759,7 +2033,7 @@ export class BattleManager {
   _resolveMegaSkill(battle, p, target, skill, extras = []) {
     if (skill.tipo === 'cura') {
       // Cura mega: mesma fórmula com coeficiente 2,2 (DANO_COEF_MEGA).
-      const healing = curaMagica(this._finalAttrs(p).inteligencia, skill.poder, 1, DANO_COEF_MEGA);
+      const healing = curaMagica(this._finalAttrs(p, battle).inteligencia, skill.poder, 1, DANO_COEF_MEGA);
       const allies = this._aliadosComVoce(battle, p);
       const targets = skill.todos ? allies : [target && target.alive ? target : p];
       targets.forEach((t) => {
@@ -2118,6 +2392,20 @@ export class BattleManager {
     }
     // Mesma regra do handleAction: congelado não ataca e gasta um turno do gelo.
     if (this._pularTurnoSeCongelado(battle, p)) return;
+    if (this._ehKrakenEclipse(p, battle)) {
+      const ordem = ['tentaculos_da_loucura', 'mare_negra', 'chamado_do_abismo'];
+      const rot = Math.max(0, Math.floor(Number(battle.turno) || 0)) % ordem.length;
+      const golpes = skillsOf(p).filter((s) => s.kraken);
+      for (let i = 0; i < ordem.length; i += 1) {
+        const chave = ordem[(rot + i) % ordem.length];
+        const golpe = golpes.find((s) => s.chave === chave);
+        if (!golpe || (p.cooldowns || {})[golpe.id] > 0) continue;
+        if (chave === 'chamado_do_abismo'
+          && battle.participants.some((m) => m.isMonster && m.alive && m.horda)) continue;
+        this._resolveSkill(battle, p, target, golpe, []);
+        return;
+      }
+    }
     if (p.spells?.length && p.mp > 0) {
       const usaveis = (p.spells || [])
         .map((sid) => SPELLS[sid])

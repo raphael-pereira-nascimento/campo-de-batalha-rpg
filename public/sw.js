@@ -1,8 +1,8 @@
-// v4: invalida o cache da v3 para distribuir as correções de descrição da
-// ficha, buffs/congelamento dos motores e Ações Rápidas/Ataque com Dado da
-// Batalha de Mesa. O fallback ao cache podia servir bundles antigos quando a
+// v5: invalida o cache da v4 para distribuir o Kraken do Abismo Eclipse —
+// passiva, habilidades, horda/arena e a UI da Batalha — espelhados nos motores
+// cliente/servidor. O fallback ao cache podia servir bundles antigos quando a
 // rede falhava, escondendo correções mesmo após um deploy bem-sucedido.
-const CACHE = 'cbrpg-v4';
+const CACHE = 'cbrpg-v5';
 const PRECACHE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {

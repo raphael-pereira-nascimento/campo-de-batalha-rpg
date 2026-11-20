@@ -110,6 +110,13 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
   }, [battle, registerFloat]);
 
   const participants = battle?.participants || [];
+  // Efeito de arena do Kraken: o motor sinaliza quem não tem Respiração
+  // Aquática, e o banner mostra o efeito e quantos estão penalizados.
+  const arenaMonstro = participants.find(
+    (p) => p.isMonster && (p.arenaEffect || p.monsterDef?.arenaEffect),
+  );
+  const arenaEffect = arenaMonstro?.arenaEffect || arenaMonstro?.monsterDef?.arenaEffect || null;
+  const arenaPenalizados = participants.filter((p) => !p.isMonster && p.arenaPenalizada).length;
   const currentIdx = battle?.turnOrder?.[battle.currentTurnIndex];
   const currentChar = currentIdx !== undefined ? participants[currentIdx] : null;
   const isHost = battle?.host === player.id;
@@ -483,7 +490,14 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
         </button>
       </header>
 
-      {battle.eclipse && <EclipseBanner eclipse={battle.eclipse} dungeonId={battle.dungeonId} />}
+      {battle.eclipse && (
+        <EclipseBanner
+          eclipse={battle.eclipse}
+          dungeonId={battle.dungeonId}
+          arenaEffect={arenaEffect}
+          arenaPenalizados={arenaPenalizados}
+        />
+      )}
 
       <div className="battle-layout">
         <div className="arena">
@@ -1235,7 +1249,7 @@ function QuickChat({ battle, player }) {
   );
 }
 
-function EclipseBanner({ eclipse, dungeonId }) {
+export function EclipseBanner({ eclipse, dungeonId, arenaEffect = null, arenaPenalizados = 0 }) {
   if (!eclipse) return null;
   const forte = eclipse.eclipseAtivo;
   const classe = forte ? 'eclipse-banner forte' : eclipse.sinais ? 'eclipse-banner sinais' : 'eclipse-banner';
@@ -1254,6 +1268,15 @@ function EclipseBanner({ eclipse, dungeonId }) {
         ) : (
           <span className="eclipse-mults">
             {' '}faltam {eclipse.diasParaEclipse} dia(s) para o Eclipse
+          </span>
+        )}
+        {arenaEffect && (
+          <span
+            className="tag arena-effect-tag"
+            title="Arena do Kraken: sem Respiração Aquática, heróis sofrem −2 de Destreza e Reflexos."
+          >
+            🌊 {arenaEffect}
+            {arenaPenalizados > 0 && ` · ${arenaPenalizados} sem respiração`}
           </span>
         )}
         {dungeonId && <span className="tag">🗺️ Dungeon</span>}
@@ -1303,9 +1326,13 @@ function VictoryPanel({ battle, player, onExit }) {
   );
 }
 
-function FfFighter({ p, index, mirrored, current, gameData, floats = [], selected, selectTarget, onToggleDrunk }) {
+export function FfFighter({ p, index, mirrored, current, gameData, floats = [], selected, selectTarget, onToggleDrunk }) {
   const isCurrent = !!current && (current.characterId === p.characterId || current.uid === p.uid);
   const icon = p.isMonster ? (p.isBoss ? BOSS_ICON : MONSTER_ICON) : CLASS_ICONS[p.cls] || '🧙';
+  const ehKraken = !!p.isMonster && !!(p.isEclipse || p.monsterDef?.isEclipse);
+  const passivaEclipse = ehKraken ? (p.monsterDef?.passivaEclipse || null) : null;
+  const habilidadesKraken = ehKraken ? (p.habilidades || p.monsterDef?.habilidades || []) : [];
+  const arenaDoMonstro = p.isMonster ? (p.arenaEffect || p.monsterDef?.arenaEffect || null) : null;
   const myFloats = floats.filter((f) => f.key === (p.characterId || p.uid));
   const calorMaxArma = Math.max(0, ...Object.values(p.wpnCalor || {}).map((v) => Number(v) || 0));
   const calorFighter = calorEstado(calorMaxArma);
@@ -1362,6 +1389,30 @@ function FfFighter({ p, index, mirrored, current, gameData, floats = [], selecte
         </span>
       )}
       {p.eclipse && <span className="tag eclipse-tag" title="Monstro fortalecido pelo Eclipse.">🩸 Eclipse</span>}
+      {ehKraken && (
+        <span className="tag" title={p.passiva || 'Kraken do Abismo Eclipse'}>
+          🌑 Kraken · {passivaEclipse?.nome || 'Coração da Tempestade'}
+        </span>
+      )}
+      {arenaDoMonstro && (
+        <span className="tag arena-effect-tag" title="Arena ativa enquanto este monstro estiver vivo.">
+          🌊 {arenaDoMonstro}
+        </span>
+      )}
+      {!p.isMonster && p.arenaPenalizada && (
+        <span className="tag arena-penalty-tag" title="Sem Respiração Aquática: −2 de Destreza e Reflexos na arena do Kraken.">
+          🚫 Sem respiração (−2 DEX/REF)
+        </span>
+      )}
+      {habilidadesKraken.map((h) => (
+        <span
+          className="tag kraken-skill-tag"
+          key={h.chave || h.id || h.nome}
+          title={`Habilidade do Kraken: ${h.nome || h.chave}${h.cd ? ` — CD ${h.cd}` : ''}${h.quantidade ? ` — ${h.quantidade}` : ''}`}
+        >
+          ✦ {h.nome || h.chave}{h.cd ? ` (CD ${h.cd})` : h.quantidade ? ` (${h.quantidade})` : ''}
+        </span>
+      ))}
       {fumegando && (
         <span
           className={`tag smoke-tag smoke-${fumacaFighter.nivel}`}
@@ -1381,6 +1432,14 @@ function FfFighter({ p, index, mirrored, current, gameData, floats = [], selecte
       {p.alive ? (
         <>
           <StatBar label="HP" value={p.hp} max={p.hpMax} color="#e63946" />
+          {p.horda && (
+            <StatBar
+              label="Moral"
+              value={p.horda.moral ?? p.horda.moralMax ?? 100}
+              max={p.horda.moralMax ?? 100}
+              color="#6fcf97"
+            />
+          )}
           {!p.isMonster && <StatBar label="MP" value={p.mp} max={p.mpMax} color="#4a90e2" />}
           {!p.isMonster && p.vibraniumPE && (
             <StatBar label="PE" value={p.vibraniumPE.pe} max={p.vibraniumPE.peMax} color="#8b5fbf" />

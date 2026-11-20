@@ -100,6 +100,47 @@ export const MONSTERS = {
       efeitos: { danoFisicoMult: 0.15, danoMagicoMult: 0.15 },
     },
   },
+  // ── Forma Eclipse do Kraken (PROVISÓRIO: números de balanceamento) ─────
+  // Definição autônoma para aparecer no bestiário/lobby e poder ser invocada
+  // pelo Mestre. `isEclipse` + `arenaEffect` ativam as regras do evento mesmo
+  // que o calendário do mundo não esteja no dia 30 (a batalha vira Eclipse).
+  kraken_abismo_eclipse: {
+    id: 'kraken_abismo_eclipse',
+    nome: 'Kraken do Abismo Eclipse',
+    tipo: 'chefe',
+    bioma: 'oceano profundo',
+    icone: '🌑🦑',
+    nivel: 30,
+    attributes: { forca: 10, inteligencia: 10, resistencia: 10, destreza: 5, reflexos: 6 },
+    arma: { nome: 'Tentáculos do Abismo Eclipse', danoBase: 19, elemento: 'agua' },
+    spells: ['tentaculos_da_loucura', 'mare_negra', 'chamado_do_abismo'],
+    especial: 'mare_negra',
+    ultimate: 'chamado_do_abismo',
+    passiva: 'Coração da Tempestade: no início do turno, recupera 5% do HP máximo durante o Eclipse. Dano de Luz ou Sagrado no turno anterior anula a cura.',
+    passivaEclipse: {
+      nome: 'Coração da Tempestade',
+      curaPct: 0.05,
+      bloqueiaCuraElementos: ['luz', 'sagrado'],
+      bloqueioTurnos: 1,
+    },
+    efeitos: { danoFisicoMult: 0.2, danoMagicoMult: 0.2, imune: ['sangramento'] },
+    escalaChefe: true,
+    multiplicadorHP: 3.2,
+    isEclipse: true,
+    arenaEffect: 'Água Profunda Corrompida',
+    habilidades: [
+      { chave: 'tentaculos_da_loucura', nome: 'Tentáculos da Loucura', cd: 16, alvos: 3 },
+      { chave: 'mare_negra', nome: 'Maré Negra', cd: 18, alvo: 'todos' },
+      { chave: 'chamado_do_abismo', nome: 'Chamado do Abismo', quantidade: '1d4+2' },
+    ],
+    fraquezas: ['luz', 'ar'],
+    resistencias: ['agua', 'trevas', 'fisico'],
+    varianteEclipse: {
+      sufixo: 'Absoluto',
+      passiva: 'No Eclipse Absoluto, o Coração da Tempestade bate sem descanso.',
+      efeitos: { danoFisicoMult: 0.1, danoMagicoMult: 0.1 },
+    },
+  },
   espirito_floresta: {
     id: 'espirito_floresta',
     nome: 'Espírito da Floresta',
@@ -342,6 +383,21 @@ export const MONSTERS = {
     efeitos: { resisteMorte: 1 },
     horda: { quantidade: 6 },
   },
+  // Horda invocada pelo Chamado do Abismo. HP é um pool por unidade, o dano
+  // escala com os corpos restantes e a Moral cai conforme os abates.
+  horda_marinheiros_afogados: {
+    id: 'horda_marinheiros_afogados',
+    nome: 'Marinheiros Afogados',
+    tipo: 'horda',
+    nivel: 12,
+    icone: '🧟‍♂️',
+    attributes: { forca: 6, inteligencia: 1, resistencia: 5, destreza: 3, reflexos: 2 },
+    arma: { nome: 'Garras Encharcadas', danoBase: 10, elemento: 'agua' },
+    spells: [],
+    passiva: 'Horda afogada: o dano cresce com o número de corpos e a Moral cai com cada abate.',
+    efeitos: { imune: ['veneno'] },
+    horda: { quantidade: 4, moral: 100, moralMax: 100, danoEscalonavel: 0.12 },
+  },
   bandido: {
     id: 'bandido',
     nome: 'Bandido',
@@ -507,8 +563,18 @@ export function buildMonster(def, playerHpSum = 0) {
     alcanceVertical: def.alcanceVertical ?? null,
     // ── Horda ──
     horda: unidadesHorda > 0
-      ? { quantidade: unidadesHorda, hpPorUnidade, inicial: unidadesHorda }
+      ? {
+          quantidade: unidadesHorda,
+          hpPorUnidade,
+          inicial: unidadesHorda,
+          moral: Number(def.horda?.moral ?? 100),
+          moralMax: Number(def.horda?.moralMax ?? def.horda?.moral ?? 100),
+          danoEscalonavel: Number(def.horda?.danoEscalonavel ?? 0.1),
+        }
       : null,
+    isEclipse: !!def.isEclipse,
+    arenaEffect: def.arenaEffect || null,
+    habilidades: def.habilidades || [],
     xpPorUnidade: monsterXp(def),
     contribuicao: { dano: 0, cura: 0, acertos: 0, acoes: 0, suporte: 0 },
   };
