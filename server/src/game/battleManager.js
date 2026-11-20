@@ -1077,7 +1077,22 @@ export class BattleManager {
     battle.log.push(makeLog(`🕊️ ${p.charName} ${dir === 'descer' ? 'desce' : 'sobe'} para a altitude ${novo} (controle ${Math.round(controle)}).`, 'buff'));
   }
 
-  _rollToHit(attacker, defender, kind, { poder = 100, status = null } = {}, battle = null) {
+  // D-64: canhões de artilharia exigem atirador + 1 ajudante vivo. Como não há
+  // recurso de tripulação persistente, o ajudante é qualquer aliado vivo do
+  // mesmo lado na batalha. Sem ele: −20% de acerto e +1 turno de recarga.
+  _tripulacaoIncompleta(battle, p, weapon) {
+    const minimo = Number(weapon?.tripulacaoMinima) || 0;
+    if (minimo <= 1 || !battle) return false;
+    const mesmoLado = (battle.participants || []).filter((q) =>
+      q.alive
+      && q.characterId !== p.characterId
+      && q.uid !== p.uid
+      && (p.team ? q.team === p.team : !!q.isMonster === !!p.isMonster),
+    );
+    return mesmoLado.length < minimo - 1;
+  }
+
+  _rollToHit(attacker, defender, kind, { poder = 100, status = null, acertoPenalidade = 0 } = {}, battle = null) {
     const dodgeBonus = this._dodgeBonus(defender);
     const stAtk = statusEffects(attacker);
     const stDef = statusEffects(defender);
@@ -1095,7 +1110,7 @@ export class BattleManager {
         ? pesoAtributo('esquiva', defA) + pesoAtributo('esquiva', defA) * 0.5
         : pesoAtributo('esquiva', defA);
       chance = clamp(
-        0.35 + (acc - dodge) * 0.035 - dodgeBonus - stAtk.accPenalty + stDef.dodgePenalty - fumacaMira - fumacaCamuflagem,
+        0.35 + (acc - dodge) * 0.035 - dodgeBonus - stAtk.accPenalty + stDef.dodgePenalty - fumacaMira - fumacaCamuflagem - acertoPenalidade,
         0.15,
         0.95,
       );
@@ -1106,7 +1121,7 @@ export class BattleManager {
         ? defA.destreza + defA.reflexos
         : pesoAtributo('esquiva', defA);
       chance = clamp(
-        0.35 + (acc - dodge) * 0.03 - dodgeBonus - stAtk.accPenalty + stDef.dodgePenalty - fumacaMira - fumacaCamuflagem,
+        0.35 + (acc - dodge) * 0.03 - dodgeBonus - stAtk.accPenalty + stDef.dodgePenalty - fumacaMira - fumacaCamuflagem - acertoPenalidade,
         0.15,
         0.95,
       );
@@ -1215,7 +1230,7 @@ export class BattleManager {
     p.especialBar = clamp((p.especialBar || 0) + amount, 0, 100);
   }
 
-  _applyDamage(target, baseDamage, battle, source, kind = null, elemento = null) {
+  _applyDamage(target, baseDamage, battle, source, kind = null, elemento = null, opts = {}) {
     if (target.defense) {
       battle.log.push(makeLog(`${target.charName} se defendeu! Dano reduzido pela metade.`, 'defense'));
       baseDamage = Math.round(baseDamage / 2);
@@ -1227,7 +1242,9 @@ export class BattleManager {
     if (kind === 'magic' && efeito.reducaoDanoMagico) {
       baseDamage = Math.round(baseDamage * (1 - efeito.reducaoDanoMagico));
     }
-    const reduced = Math.max(0, baseDamage - target.defesa);
+    const ignoraDefesaPct = clamp(Number(opts.ignoraDefesaPct) || 0, 0, 100);
+    const defesa = Math.max(0, Math.round((target.defesa || 0) * (1 - ignoraDefesaPct / 100)));
+    const reduced = Math.max(0, baseDamage - defesa);
     let finalDamage = reduced === 0 ? Math.max(1, Math.round(baseDamage * 0.1)) : reduced;
 
     // Coração da Tempestade: registra dano de Luz/Sagrado para anular a cura
@@ -1656,10 +1673,17 @@ export class BattleManager {
       );
       return;
     }
-    const mira = this._rollToHit(p, principal, 'physical', {}, battle);
+    const tripIncompleta = this._tripulacaoIncompleta(battle, p, weapon);
+    if (tripIncompleta) {
+      battle.log.push(makeLog(`⚙️ ${weaponName} sem tripulação mínima: −20% de acerto e +1 turno de recarga.`, 'status'));
+    }
+    const mira = this._rollToHit(p, principal, 'physical', { acertoPenalidade: tripIncompleta ? 0.2 : 0 }, battle);
     // O tiro saiu: a arma entra em recarga, esquenta e levanta fumaça mesmo
     // se errar (ou sair pela culatra).
     this._recarregarArma(p, weapon);
+    if (tripIncompleta && this._armasRecarregaveis(weapon)) {
+      p.wpnRecarga[weapon.id] = (p.wpnRecarga[weapon.id] || 0) + 1;
+    }
     this._aquecerArma(battle, p, weapon);
     this._emitirFumaca(battle, p, weapon);
     const dmg = physicalDamage(
@@ -1695,7 +1719,7 @@ export class BattleManager {
         battle.log.push(makeLog(`🕊️ ${weaponName} não alcança ${t.charName} na altitude ${t.altitude}.`, 'miss'));
         return;
       }
-      const res = i === 0 ? mira : this._rollToHit(p, t, 'physical', {}, battle);
+      const res = i === 0 ? mira : this._rollToHit(p, t, 'physical', { acertoPenalidade: tripIncompleta ? 0.2 : 0 }, battle);
       if (i > 0 && (res.roll === 1 || !res.hit)) {
         battle.log.push(
           makeLog(`💨 ${p.charName} erra o ataque em ${t.charName}. (d20 = ${res.roll} · ${res.nivel?.nome || '—'})`, 'miss'),
@@ -1713,7 +1737,9 @@ export class BattleManager {
         ),
       );
       this._chargeEspecial(battle, p, res.crit ? 15 : 8);
-      const dealt = this._applyDamage(t, total, battle, p, 'physical', atkElem);
+      const dealt = this._applyDamage(t, total, battle, p, 'physical', atkElem, {
+        ignoraDefesaPct: weapon?.ignoraDefesaPct || 0,
+      });
       if (dealt > 0) this._lifesteal(battle, p, dealt);
       if (!t.alive && !t.horda) p.kills += 1;
       if (ataqueStatus && t.alive) this._applyStatus(battle, t, ataqueStatus, p);
@@ -1885,7 +1911,7 @@ export class BattleManager {
   _emitirFumaca(battle, p, weapon) {
     if (!armaDeFogo(weapon)) return;
     const antes = Number(p.fumaca) || 0;
-    const ganho = fumacaDoDisparo(weapon, rajadaDaArma(weapon));
+    const ganho = fumacaDoDisparo(weapon, rajadaDaArma(weapon)) + (Number(weapon?.fumacaExtra) || 0);
     p.fumaca = Math.min(FUMACA.max, antes + ganho);
     if (antes < FUMACA.limiarDenso && p.fumaca >= FUMACA.limiarDenso) {
       battle.log.push(

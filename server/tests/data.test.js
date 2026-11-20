@@ -117,6 +117,69 @@ describe('catálogo de equipamentos da loja', () => {
   });
 });
 
+describe('catálogo de canhões — regras provisórias D-62 a D-67', () => {
+  const ARTILHARIA = [
+    'canhao_leve',
+    'canhao_cerco',
+    'canhao_ferro',
+    'canhao_de_salto',
+    'canhao_morteiro',
+    'canhao_bombasta',
+    'canhao_dragoes',
+    'canhao_abismo',
+  ];
+  const UTILITARIOS = [
+    'canhao_de_mao',
+    'canhao_de_explosao',
+    'canhao_de_gelo',
+    'canhao_de_relampago',
+    'canhao_pesado',
+  ];
+
+  it('mantém os dois conjuntos oficiais com papéis distintos', () => {
+    expect(Object.keys(EQUIPMENT.canoes)).toHaveLength(8);
+    for (const id of ARTILHARIA) {
+      expect(EQUIPMENT.canoes[id], id).toBeDefined();
+      expect(EQUIPMENT.canoes[id].categoria).toBe('distancia');
+    }
+    for (const id of UTILITARIOS) {
+      expect(EQUIPMENT.armas[id], id).toBeDefined();
+      expect(EQUIPMENT.armas[id].categoria).toBe('utilitaria');
+    }
+    expect(EQUIPMENT.armas.besta_pesada.ignoraDefesaPct).toBe(25);
+  });
+
+  it('toda artilharia exige tripulação mínima de 2 (atirador + ajudante)', () => {
+    for (const id of ARTILHARIA) {
+      expect(EQUIPMENT.canoes[id].tripulacaoMinima, id).toBe(2);
+    }
+  });
+
+  it('descrições mecânicas viram campos provisórios', () => {
+    expect(EQUIPMENT.canoes.canhao_cerco.recarga).toBe(5); // tripé: +1 turno
+    expect(EQUIPMENT.canoes.canhao_ferro.fumacaExtra).toBe(1); // pólvora negra
+    expect(EQUIPMENT.canoes.canhao_bombasta.penalidade).toEqual({ destreza: -1, reflexos: -1 });
+    expect(EQUIPMENT.canoes.canhao_dragoes.ignoraDefesaPct).toBe(25);
+  });
+
+  it('utilitários mantêm usos por combate + recarga, sem recurso de munição', () => {
+    for (const id of UTILITARIOS) {
+      const arma = EQUIPMENT.armas[id];
+      expect(arma.usosMax, id).toBe(1);
+      expect(arma.recargaTurnos, id).toBe(arma.recarga);
+      expect(arma.recargaTurnos, id).toBeGreaterThan(0);
+      expect(arma.municao, id).toBeUndefined();
+    }
+  });
+
+  it('o peso do bombasta reduz DEX e REF pela effectiveAttributes', () => {
+    const attrs = { forca: 5, inteligencia: 3, resistencia: 5, destreza: 5, reflexos: 5 };
+    const eff = effectiveAttributes(attrs, { arma: EQUIPMENT.canoes.canhao_bombasta });
+    expect(eff.destreza).toBe(4);
+    expect(eff.reflexos).toBe(4);
+  });
+});
+
 describe('deriveStats — vida/mana pela classe primária', () => {
   const classes = [
     { id: 'guerreiro', primary: true, hpPerLevel: 12, mpPerLevel: 3, bonus: { resistencia: 2, forca: 3 } },

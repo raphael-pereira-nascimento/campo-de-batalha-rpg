@@ -1,8 +1,7 @@
-// v6: invalida o cache da v5 para distribuir a correção da horda do Kraken na
-// arena. Os memos de heróis/inimigos/equipes agora dependem também do objeto
-// battle, porque o motor adiciona combatentes mutando `participants` no mesmo
-// array e emite apenas uma cópia rasa do battle.
-const CACHE = 'cbrpg-v6';
+// v7: invalida o cache da v6 para distribuir as regras provisórias dos canhões
+// (tripulação mínima, ignora-defesa, peso/tripé e pólvora negra) espelhadas nos
+// motores cliente/servidor e no catálogo da loja.
+const CACHE = 'cbrpg-v7';
 const PRECACHE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
