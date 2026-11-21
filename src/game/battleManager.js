@@ -1857,7 +1857,7 @@ export class BattleManager {
       const dif = `${res.dificuldade ? ` dificuldade +${res.dificuldade}.` : ''} d20 ${res.roll} · ${res.nivel?.nome || '—'}.`;
       battle.log.push(
         makeLog(
-          `${res.crit ? '✨ CRÍTICO! ' : ''}${mega ? '💫' : '✨'} ${p.charName} ${mega ? 'desfere' : 'usa'} ${nome} em ${t.charName}: ${total} de dano (${skill.poder}%)${mega ? '!' : '.'}${dif}${tag}`,
+          `${res.crit ? '✨ CRÍTICO! ' : ''}${mega ? '💫' : '✨'} ${p.charName} ${mega ? 'desfere' : 'usa'} ${nome} em ${t.charName}: ${total} de dano (poder do golpe ${skill.poder}%)${mega ? '!' : '.'}${dif}${tag}`,
           'attack',
         ),
       );
@@ -2061,7 +2061,7 @@ export class BattleManager {
       const alvos = skill.afetaAliados ? this._aliadosComVoce(battle, p) : [p];
       const duracao = Math.max(1, Number(skill.duracao) || 3);
       this._aplicarBuff(alvos, skill);
-      battle.log.push(makeLog(`🔮 ${p.charName} usa ${skill.nome}: dano de aliados aumentado em ${skill.poder}% por ${duracao} turno(s).`, 'buff'));
+      battle.log.push(makeLog(`🔮 ${p.charName} usa ${skill.nome}: aumento de dano aliado +${skill.poder}% por ${duracao} turno(s).`, 'buff'));
       this._marcarSuporte(p, alvos.length);
       this._setCooldown(p, skill);
       return;
@@ -2105,7 +2105,7 @@ export class BattleManager {
       const alvos = skill.afetaAliados ? this._aliadosComVoce(battle, p) : [p];
       const duracao = Math.max(1, Number(skill.duracao) || 3);
       this._aplicarBuff(alvos, skill);
-      battle.log.push(makeLog(`🔮 ${p.charName} usa ${skill.nome}: poder aliado +${skill.poder}% por ${duracao} turno(s).`, 'buff'));
+      battle.log.push(makeLog(`🔮 ${p.charName} usa ${skill.nome}: aumento de dano aliado +${skill.poder}% por ${duracao} turno(s).`, 'buff'));
       this._marcarSuporte(p, alvos.length);
       return;
     }

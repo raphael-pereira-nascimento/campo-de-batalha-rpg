@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, isOffline } from '../api.js';
-import { ATTRIBUTES, ATTRIBUTE_NAMES, SKILL_TYPES } from '../config.js';
+import { ATTRIBUTES, ATTRIBUTE_NAMES, SKILL_TYPES, rotuloPoder, ajudaPoder, resumoPoder, rotuloElemento } from '../config.js';
 import { ALVO_LABEL } from '../game/sistema.js';
 import { STATUS_DEFS, STATUS_KEYS, ELEMENTOS } from '../game/data.js';
 import { NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX } from '../game/skillValidation.js';
@@ -417,19 +417,19 @@ function MonsterRegistry({ player, items, scope, searchTerm, gameData, onChanged
             <label>
               Elemento do ataque
               <select value={form.elemento} onChange={(e) => setForm((f) => ({ ...f, elemento: e.target.value }))}>
-                {ELEMENTOS.map((el) => (<option key={el} value={el}>{el}</option>))}
+                {ELEMENTOS.map((el) => (<option key={el} value={el}>{rotuloElemento(el)}</option>))}
               </select>
             </label>
             <div>
               <span className="muted small">Fraquezas (dano ×1.5): </span>
               {ELEMENTOS.filter((e) => e !== 'fisico').map((el) => (
-                <label key={el} className="check-label inline"><input type="checkbox" checked={form.fraquezas.includes(el)} onChange={() => toggleList('fraquezas', el)} /> {el}</label>
+                <label key={el} className="check-label inline"><input type="checkbox" checked={form.fraquezas.includes(el)} onChange={() => toggleList('fraquezas', el)} /> {rotuloElemento(el)}</label>
               ))}
             </div>
             <div>
               <span className="muted small">Resistências (dano ×0.5): </span>
               {ELEMENTOS.filter((e) => e !== 'fisico').map((el) => (
-                <label key={el} className="check-label inline"><input type="checkbox" checked={form.resistencias.includes(el)} onChange={() => toggleList('resistencias', el)} /> {el}</label>
+                <label key={el} className="check-label inline"><input type="checkbox" checked={form.resistencias.includes(el)} onChange={() => toggleList('resistencias', el)} /> {rotuloElemento(el)}</label>
               ))}
             </div>
             <p className="muted small">Vida = 500 + Resistência × 10 · Mana = (Inteligência Final) × 10. Chefes ganham mais ações conforme o nº de jogadores.</p>
@@ -451,15 +451,15 @@ function MonsterRegistry({ player, items, scope, searchTerm, gameData, onChanged
                 <strong>{m.nome}</strong>{' '}
                 {m.escala_chefe && <span className="tag boss-tag">☠️ Chefe ×{m.multiplicador_hp}</span>}
                 <span className="tag">Nv. {m.nivel}</span>
-                {m.elemento && m.elemento !== 'fisico' && <span className="tag">{m.elemento}</span>}
+                {m.elemento && m.elemento !== 'fisico' && <span className="tag">{rotuloElemento(m.elemento)}</span>}
                 {m.is_public && <span className="tag">🌍 público</span>}
                 <span className="tag">por {m.creator_name}</span>
                 <p className="muted">HP {m.attributes.resistencia * 10} · MP {m.attributes.inteligencia * 10} · Arma: {m.arma ? `${m.arma.nome} (${m.arma.danoBase})` : 'sem arma'}</p>
                 {(m.fraquezas?.length > 0 || m.resistencias?.length > 0) && (
                   <p className="muted">
-                    {m.fraquezas?.length ? `⚠️ fraco: ${m.fraquezas.join(', ')}` : ''}
+                    {m.fraquezas?.length ? `⚠️ fraco: ${m.fraquezas.map(rotuloElemento).join(', ')}` : ''}
                     {m.fraquezas?.length && m.resistencias?.length ? ' · ' : ''}
-                    {m.resistencias?.length ? `🛡️ resiste: ${m.resistencias.join(', ')}` : ''}
+                    {m.resistencias?.length ? `🛡️ resiste: ${m.resistencias.map(rotuloElemento).join(', ')}` : ''}
                   </p>
                 )}
                 <p className="muted">✨ {m.passiva || 'Sem passiva'}</p>
@@ -747,7 +747,11 @@ function SkillRegistry({ player, items, scope, searchTerm, onChanged, setError, 
                   {Object.entries(SKILL_TYPES).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
                 </select>
               </label>
-              <label>Poder (%)<input type="number" min={10} max={1000} value={form.poder} onChange={(e) => setForm((f) => ({ ...f, poder: Number(e.target.value) }))} /></label>
+              <label>
+                {rotuloPoder(form.tipo)}
+                <input type="number" min={10} max={1000} value={form.poder} disabled={form.tipo === 'defesa'} title={ajudaPoder(form.tipo)} onChange={(e) => setForm((f) => ({ ...f, poder: Number(e.target.value) }))} />
+                <small className="muted small field-help">{ajudaPoder(form.tipo)}</small>
+              </label>
             </div>
             <div className="form-row">
               <label>Custo de MP<input type="number" min={0} max={99} value={form.custo} onChange={(e) => setForm((f) => ({ ...f, custo: Number(e.target.value) }))} /></label>
@@ -756,7 +760,7 @@ function SkillRegistry({ player, items, scope, searchTerm, onChanged, setError, 
             <div className="form-row">
               <label>Elemento mágico
                 <select value={form.elemento} onChange={(e) => setForm((f) => ({ ...f, elemento: e.target.value }))}>
-                  {ELEMENTOS.map((el) => (<option key={el} value={el}>{el}</option>))}
+                  {ELEMENTOS.map((el) => (<option key={el} value={el}>{rotuloElemento(el)}</option>))}
                 </select>
               </label>
               <label>Nível para adquirir
@@ -821,9 +825,9 @@ function SkillRegistry({ player, items, scope, searchTerm, onChanged, setError, 
               <div>
                 <strong>{s.nome}</strong>{' '}
                 <span className="tag">{SKILL_TYPES[s.tipo]}</span>
-                <span className="tag">{s.poder}%</span>
+                <span className="tag">{resumoPoder(s)}</span>
                 <span className="tag">MP {s.custo}</span>
-                <span className="tag">✦ {s.elemento || 'fisico'}</span>
+                <span className="tag">✦ {rotuloElemento(s.elemento || 'fisico')}</span>
                 <span className="tag">Nv {s.nivel || 1}</span>
                 {s.desbloqueado === false && <span className="tag">🔒 bloqueado</span>}
                 {s.cooldown > 0 && <span className="tag">⏳ {s.cooldown}t</span>}

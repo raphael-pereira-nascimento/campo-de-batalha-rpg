@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   raceBonusTotal,
   classBonusTotal,
+  attributeBreakdown,
   effectiveAttributes,
   deriveStats,
   gemsAttrs,
@@ -94,6 +95,39 @@ describe('effectiveAttributes', () => {
     });
     expect(eff.forca).toBe(7);
     expect(eff.reflexos).toBe(2);
+  });
+});
+
+describe('attributeBreakdown — Base / BR / BC / Final', () => {
+  const attrs = { forca: 5, inteligencia: 3, resistencia: 7, destreza: 3, reflexos: 3 };
+  const races = [anao, rockman];
+  const classes = [{ id: 'mago', bonus: { inteligencia: 3, resistencia: 1, reflexos: 2 } }];
+  const equipment = {
+    arma: { id: 'x', bonus: { forca: 2 }, penalidade: {} },
+    armadura: { penalidade: { destreza: -2 } },
+  };
+
+  it('separa cada origem sem alterar a base distribuída', () => {
+    const br = attributeBreakdown(attrs, equipment, races, classes);
+    expect(br.base).toEqual(attrs);
+    expect(br.race).toEqual({ forca: 1, resistencia: 1 }); // 2 × 0,7 arredondado
+    expect(br.class).toEqual({ inteligencia: 3, resistencia: 1, reflexos: 2 });
+    expect(br.equipment.forca).toBe(2);
+    expect(br.penalties.destreza).toBe(2);
+    expect(br.final.forca).toBe(8);
+    expect(br.final.inteligencia).toBe(6);
+    expect(br.final.destreza).toBe(1); // 3 − |−2| = 1
+  });
+
+  it('produz exatamente o mesmo resultado de effectiveAttributes', () => {
+    const br = attributeBreakdown(attrs, equipment, races, classes);
+    expect(br.final).toEqual(effectiveAttributes(attrs, equipment, races, classes));
+  });
+
+  it('expõe o detalhamento em deriveStats para a ficha', () => {
+    const stats = deriveStats(classes, 1, attrs, equipment, races);
+    expect(stats.attributeBreakdown.final).toEqual(stats.effectiveAttributes);
+    expect(stats.attributeBreakdown.base).toEqual(attrs);
   });
 });
 

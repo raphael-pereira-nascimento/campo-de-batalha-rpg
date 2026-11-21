@@ -1,15 +1,19 @@
 # Pendências — Materiais, Metais e Podridão
 
-Atualizado em 20/11/2026 — Etapa 9 (runas na forja, Corrupção com API/UI,
+Atualizado em 21/11/2026 — Etapa 9 (runas na forja, Corrupção com API/UI,
 imunidade do Tenebrium e preparação de Contaminação Profana/Núcleo Pandemônico),
 rodada de buffs, cura, Ações Rápidas e canhões (D-44 a D-47), auditoria de
 correções de comportamento em fichas, motores e Batalha de Mesa (1.9) e
 implementação do Kraken do Abismo Eclipse com passiva, habilidades, horda e
 arena espelhadas nos motores cliente/servidor (D-54 a D-61, seções 1.10, 3.14 e
 3.15), regras provisórias de canhões com tripulação mínima e descrições
-mecânicas (D-62 a D-67, seções 1.11 e 3.16) e a revisão D-68: painel 🧰 de
+mecânicas (D-62 a D-67, seções 1.11 e 3.16), a revisão D-68: painel 🧰 de
 artilharia na Batalha de Mesa e D20 “rolar-maior” com números de
-exigência em mesa, Campo e servidor (seções 1.11 e 3.18).
+exigência em mesa, Campo e servidor (seções 1.11 e 3.18) e a revisão de
+interface de 21/11: rótulos dinâmicos de `poder`, elemento mágico Sangue como
+elemento comum de combate e detalhamento Base/BR/BC/Final na criação e na
+ficha (seção 3.19). Nenhuma regra oficial foi inventada: D-01 a D-61 continuam
+válidos e D-62 em diante seguem provisórios.
 
 Este arquivo separa o que já foi **aprovado**, o que foi implementado como
 **provisório**, o que continua **pendente** e o que é apenas **sugestão**.
@@ -1178,6 +1182,20 @@ golpes.
 | Testes | `server/tests/sistema.test.js` com conversões 0,35 → 14, 0,5 → 11, 0,95 → 2, 0 → 20 e 1 → 2 e classificação pela exigência; `server/tests/battle.test.js` com rolagens altas equivalentes e exigência > para golpes fortes. Suíte completa: **623/623**, 0 falhas |
 | Validação local | `npm run build` OK (Vite 5.4.21; apenas aviso de tamanho de chunk). Smoke em `http://127.0.0.1:5173/mesa-de-batalha.html`: painel 🧰 com atirador/peça/alvos exibindo `exige 10 no D20`, tiro registrado `⚔️ Atirador erra Alvo com Canhão Leve → D20:7 · Médio (≥10)`, recarga `⏳ 4t` e ataque rápido `Chance: 53% (exige 10 ou mais no D20; 20 é crítico, 1 é falha)` com `Ajudante ataca Alvo → D20: 14 · Médio (≥10) → ACERTA → 100 dano` |
 | Publicação | Service worker bumpado para `cbrpg-v9`, invalidando `cbrpg-v8`. Commit `dca0333` em `origin/main`, Actions **#127** verde (build + testes + deploy), jobs `build` e `deploy` com `success`, deployment `7952442283` com status `success`. Verificado no navegador: `caches.keys()` passou a `cbrpg-v9`; regras com D-68, “rolar-maior”, `exigência = 21 − alvo + dificuldade`, seção 14.1 D-62 a D-68 e painel da mesa; mesa pública com o painel 💣 Artilharia (🧰) exibindo `exige 11 no D20`, tiro `⚔️ Atirador erra Alvo com Canhão Bombasta → D20:5 · Difícil (≥11)` e ataque rápido `Chance: 53% (exige 10 ou mais no D20; 20 é crítico, 1 é falha)` com `→ D20: 3 · Médio (≥10) → ERRA`. Únicos erros de console: os dois `/api/health` do Render offline, já conhecidos |
+
+### 3.19 Revisão de interface — Poder, Sangue e Atributos (21/11)
+
+| Área | Resultado |
+| --- | --- |
+| Decisões | Usuário escolheu **rótulos dinâmicos** para `poder`, **elemento comum** para Sangue, **Base/BR/BC/Final** para atributos e **publicar** após validar. Nenhuma regra oficial nova: D-01 a D-61 seguem válidos; D-62+ continuam provisórios |
+| `poder` — compatibilidade | Chave `poder`, escala 10–1000 e fórmulas do motor **inalteradas**. Mudaram só rótulos, ajuda, cartões, resumo e logs: “Poder do golpe/cura (%)” para ataque/cura, “Aumento de dano (%)” para buff, defesa com campo desativado e aviso de que o valor é ignorado. Logs passam a dizer `poder do golpe X%` e `aumento de dano aliado +X%` nos dois `battleManager.js` |
+| Auxiliares | `src/config.js`: `rotuloPoder`, `ajudaPoder`, `resumoPoder`, `ELEMENTOS_LABELS` e `rotuloElemento`, usados por `FichaForm`, `CharacterSheet`, `CharacterManager`, `Registry`, `ShareView` e `Battle` |
+| Sangue | `sangue` incluído nos catálogos canônicos (`src/game/data.js`, `server/src/game/data.js`) e na lista local de monstros customizados (`server/src/services/customContent.js`). Usa a regra genérica: fraqueza ×1,5, resistência ×0,5, sem efeito de status. A **Runa de Sangue** da Forja continua domínio separado (efeito de equipamento, sem alterar fraquezas/resistências) |
+| Atributos | `attributeBreakdown()` nos dois `data.js` expõe `base` (pontos distribuídos, já salvos em `attributes`), `race` (BR, com a penalidade de múltiplas raças), `class` (BC), equipamento/penalidades/gemas e `final`. `effectiveAttributes()` virou wrapper e `deriveStats()` também devolve `attributeBreakdown`; **nenhuma coluna, migração ou mudança de dados salvos** |
+| Interface | Etapa 9 do `FichaForm.jsx` e as fichas em `CharacterSheet.jsx`/`ShareView.jsx` mostram tabela Base / BR / BC / Final, estilo Pokémon/Evocreo. Escolher raça ou classe nunca altera a Base. O wizard agora preserva o `bonus` da classe selecionada — antes ele era descartado e a coluna BC ficava vazia na criação; o servidor continua normalizando pelo preset quando o bônus não vem no payload. `Rules.jsx` explica os dois usos de `poder`, o elemento Sangue e o detalhamento; `styles.css` ganhou `.attr-head`, `.attr-row.attr-detailed`, `.attr-bonus`, `.attr-total`, `.field-help` e `.elem-sangue` |
+| Testes | Novo `server/tests/elements.test.js` (catálogo, validadores online/offline, monstros customizados e `_elemMult` para sangue); casos em `data.test.js`, `customSkills.test.js`, `offlineSkills.test.js` e `characters.test.js`. Suíte completa: **630/630**, 0 falhas |
+| Validação local | `npm run build` OK (Vite 5.4.21; apenas aviso de tamanho de chunk). Smoke em `http://127.0.0.1:5173/` com conta offline: etapa 9 mostrando `Força 6 / BR +2 / BC +3 / Final 11`, `RES 6 / +2 / 8` e `DEX 6 / +1 / 7` com a Base inalterada; formulário de golpes com `🩸 Sangue` na lista de elementos e rótulos/ajuda alternando entre `Poder do golpe (%)`, `Poder da cura (%)`, `Aumento de dano (%)` e `Poder (não usado pela defesa)` (campo desativado), mantendo `min=10`/`max=1000`; `regras.html` com as seções 2 e 7 explicando Base/BR/BC/Final, os dois usos de `poder` e Sangue. Nenhum erro de console |
+| Publicação | Service worker bumpado para `cbrpg-v10`, invalidando `cbrpg-v9`. Commit, Actions/Pages e verificação no site público: **a registrar após a publicação** |
 
 ---
 

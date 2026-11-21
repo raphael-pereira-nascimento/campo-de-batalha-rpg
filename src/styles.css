@@ -513,6 +513,41 @@ label {
   font-size: 20px;
   font-weight: 700;
 }
+
+/* Tabela Base / BR / BC / Final (criação, ficha e compartilhamento). */
+.attr-head,
+.attr-row.attr-detailed {
+  display: grid;
+  grid-template-columns: minmax(110px, 1.6fr) minmax(120px, 1fr) 60px 60px 70px;
+  align-items: center;
+  gap: 8px;
+}
+.attr-head {
+  padding: 0 12px 2px;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.attr-head span:not(:first-child),
+.attr-row.attr-detailed > :not(:first-child) {
+  text-align: center;
+}
+.attr-bonus {
+  color: var(--accent-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+.attr-total {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--green);
+}
+.field-help {
+  display: block;
+  margin-top: 2px;
+  line-height: 1.3;
+}
 .form-meta {
   display: flex;
   justify-content: space-between;
@@ -1813,6 +1848,7 @@ button.danger {
 .elem-ar      { border-color: #5bd; color: #8ef; }
 .elem-luz     { border-color: #dd7; color: #ffa; }
 .elem-trevas  { border-color: #668; color: #99b; }
+.elem-sangue  { border-color: #c44; color: #f88; }
 .elem-fisico  { border-color: var(--border); color: var(--muted); }
 .weakness-msg { color: var(--red); font-weight: 600; }
 .resist-msg   { color: #5bc; }

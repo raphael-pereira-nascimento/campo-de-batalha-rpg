@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
-import { SKILL_TYPES } from '../config.js';
+import { SKILL_TYPES, rotuloPoder, ajudaPoder, resumoPoder, rotuloElemento } from '../config.js';
 import { ELEMENTOS } from '../game/data.js';
 import { NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX } from '../game/skillValidation.js';
 
@@ -286,7 +286,7 @@ export default function CharacterManager({ player, characters, onRefresh, onBack
             <label>
               Elemento mágico
               <select value={golpe.elemento} onChange={(e) => setCampoGolpe('elemento', e.target.value)}>
-                {ELEMENTOS.map((el) => (<option key={el} value={el}>{el}</option>))}
+                {ELEMENTOS.map((el) => (<option key={el} value={el}>{rotuloElemento(el)}</option>))}
               </select>
             </label>
           </div>
@@ -296,8 +296,9 @@ export default function CharacterManager({ player, characters, onRefresh, onBack
               <input type="number" min={0} max={99} value={golpe.custo} onChange={(e) => setCampoGolpe('custo', Number(e.target.value))} />
             </label>
             <label>
-              Poder (%)
-              <input type="number" min={10} max={1000} value={golpe.poder} onChange={(e) => setCampoGolpe('poder', Number(e.target.value))} />
+              {rotuloPoder(golpe.tipo)}
+              <input type="number" min={10} max={1000} value={golpe.poder} disabled={golpe.tipo === 'defesa'} title={ajudaPoder(golpe.tipo)} onChange={(e) => setCampoGolpe('poder', Number(e.target.value))} />
+              <small className="muted small field-help">{ajudaPoder(golpe.tipo)}</small>
             </label>
             <label>
               Recarga (turnos)
@@ -349,9 +350,9 @@ export default function CharacterManager({ player, characters, onRefresh, onBack
                       >
                         <strong>{skill.nome}</strong>
                         <span className="tag">{SKILL_TYPES[skill.tipo] || skill.tipo}</span>
-                        <span className="tag">✦ {skill.elemento || 'fisico'}</span>
+                        <span className="tag">✦ {rotuloElemento(skill.elemento || 'fisico')}</span>
                         <span className="tag">MP {skill.custo ?? 0}</span>
-                        <span className="tag">{skill.poder ?? 100}%</span>
+                        <span className="tag">{resumoPoder(skill)}</span>
                         {skill.desc && <p className="muted small">{skill.desc}</p>}
                         <div className="skill-node-actions">
                           <button className="ghost" onClick={() => alternarBloqueio(index)}>

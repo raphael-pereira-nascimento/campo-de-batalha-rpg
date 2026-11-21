@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, getSocket, emitAck, isOffline, applyOfflineRewards } from '../api.js';
+import { rotuloElemento } from '../config.js';
 import StatBar from '../components/StatBar.jsx';
 import { playLogKind, play, isMuted, toggleMute } from '../utils/sfx.js';
 import {
@@ -652,8 +653,8 @@ export default function Battle({ battleId, player, gameData, onExit, onBackToShe
               {stAlvo && (
                 <p className="muted small">
                   {stAlvo.charName} — imune a: {((stAlvo.monsterDef?.efeitos?.imune) || []).join(', ') || 'nada'};
-                  fraquezas: {(stAlvo.fraquezas || []).join(', ') || '—'};
-                  resistências: {(stAlvo.resistencias || []).join(', ') || '—'};
+                  fraquezas: {(stAlvo.fraquezas || []).map(rotuloElemento).join(', ') || '—'};
+                  resistências: {(stAlvo.resistencias || []).map(rotuloElemento).join(', ') || '—'};
                   ativos: {((stAlvo.statuses || []).map((s) => `${s.id} (${s.turnos}t)`).join(', ')) || 'nenhum'}.
                 </p>
               )}

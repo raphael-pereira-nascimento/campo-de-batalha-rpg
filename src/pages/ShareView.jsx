@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, isOffline } from '../api.js';
-import { ATTRIBUTES, ATTRIBUTE_NAMES } from '../config.js';
+import { ATTRIBUTES, ATTRIBUTE_NAMES, resumoPoder } from '../config.js';
 import { deriveStats } from '../game/data.js';
 import {
   armasDeEquipamento,
@@ -18,6 +18,7 @@ const CLASS_ICONS = {
   assassino: '🗡️',
   paladino: '⚔️',
 };
+const sinal = (v) => (!v ? '—' : v > 0 ? `+${v}` : String(v));
 
 // Campos que seguem o mesmo formato de criação (api.createCharacter) para que o
 // servidor revalide tudo ao importar — nada de dados forjados entrando na conta.
@@ -147,14 +148,26 @@ export default function ShareView({ shareId, player, gameData, onImported, onHom
           {' · '}Defesa: <strong>{derivados.defesa}</strong>
         </p>
 
-        <div className="attr-grid">
-          {ATTRIBUTES.map((k) => (
-            <div className="attr-chip" key={k}>
-              <span>{ATTRIBUTE_NAMES[k]}</span>
-              <strong>{ch.attributes?.[k]}</strong>
-            </div>
-          ))}
+        <div className="attr-head">
+          <span>Atributo</span><span>Base</span><span>BR</span><span>BC</span><span>Final</span>
         </div>
+        <div className="attrs">
+          {ATTRIBUTES.map((k) => {
+            const br = derivados.attributeBreakdown;
+            return (
+              <div className="attr-row attr-detailed" key={k}>
+                <span className="attr-name">{ATTRIBUTE_NAMES[k]}</span>
+                <span className="attr-value static" title="Pontos distribuídos na ficha">{br?.base?.[k] ?? ch.attributes?.[k]}</span>
+                <span className="attr-bonus" title="Bônus da raça">{sinal(br?.race?.[k])}</span>
+                <span className="attr-bonus" title="Bônus da classe">{sinal(br?.class?.[k])}</span>
+                <span className="attr-total" title="Atributo final usado em dano, vida e mana">{br?.final?.[k] ?? ch.attributes?.[k]}</span>
+              </div>
+            );
+          })}
+        </div>
+        <p className="muted small">
+          Base = pontos da ficha · BR = bônus racial · BC = bônus de classe · Final = base + BR + BC + equipamento + gemas.
+        </p>
 
         {ch.passiva && (
           <div className="race-passive-box">
@@ -193,7 +206,7 @@ export default function ShareView({ shareId, player, gameData, onImported, onHom
             {(ch.skills || []).map((s, i) => (
               <div className="spell-chip" key={s.id || i}>
                 <span>{s.nome}</span>
-                <small>poder {s.poder}% · custo {s.custo} MP{s.desc ? ` · ${s.desc}` : ''}</small>
+                <small>{resumoPoder(s)} · custo {s.custo} MP{s.desc ? ` · ${s.desc}` : ''}</small>
               </div>
             ))}
             {(ch.skills || []).length === 0 && <p className="muted">Nenhum golpe listado.</p>}
@@ -204,7 +217,7 @@ export default function ShareView({ shareId, player, gameData, onImported, onHom
           <div className="sheet-section">
             <h4>Ultimate</h4>
             <div className="spell-chip">
-              <span>🔥 {ch.ultimate.nome} ({ch.ultimate.poder}%)</span>
+              <span>🔥 {ch.ultimate.nome} ({resumoPoder(ch.ultimate)})</span>
               <small>{ch.ultimate.modo ? ` · ${ch.ultimate.modo.turnos}t +${ch.ultimate.modo.danoMultPct}%` : ''}</small>
             </div>
           </div>
@@ -214,7 +227,7 @@ export default function ShareView({ shareId, player, gameData, onImported, onHom
           <div className="sheet-section">
             <h4>Golpe Especial</h4>
             <div className="spell-chip">
-              <span>💥 {ch.especial.nome} ({ch.especial.poder}%)</span>
+              <span>💥 {ch.especial.nome} ({resumoPoder(ch.especial)})</span>
               <small>condição: {ch.especial.condicao?.tipo} {ch.especial.condicao?.valor || ''}</small>
             </div>
           </div>

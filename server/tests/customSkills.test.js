@@ -91,6 +91,9 @@ describe('Registro do Mundo — validação de golpes', () => {
     expect(validateCustomSkill({
       nome: 'Bola de Fogo', elemento: 'fogo', nivel: 12, desbloqueado: false, custo: 8,
     })).toMatchObject({ elemento: 'fogo', nivel: 12, desbloqueado: false, custo: 8 });
+    expect(validateCustomSkill({ nome: 'Lâmina Rubra', elemento: 'sangue' })).toMatchObject({
+      elemento: 'sangue',
+    });
     // Golpes salvos antes da árvore: físicos, nível 1 e já desbloqueados.
     expect(validateCustomSkill({ nome: 'Antigo' })).toMatchObject({
       elemento: 'fisico', nivel: 1, desbloqueado: true,

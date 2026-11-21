@@ -107,7 +107,7 @@ export const CLASSES = {
   },
 };
 
-export const ELEMENTOS = ['fisico', 'fogo', 'agua', 'terra', 'ar', 'luz', 'trevas'];
+export const ELEMENTOS = ['fisico', 'fogo', 'agua', 'terra', 'ar', 'luz', 'trevas', 'sangue'];
 
 export const SPELLS = {
   golpe_sangrento: { nome: 'Golpe Sangrento', tipo: 'ataque', custo: 5, poder: 2.0, desc: 'Ataque físico brutal com força aumentada.', status: { tipo: 'sangramento', turnos: 2, dano: 60 }, alcanceVertical: 'terrestre' },
@@ -932,19 +932,22 @@ export function penalidadesEquipamento(equipment = {}) {
   return acc;
 }
 
-export function effectiveAttributes(attributes, equipment = {}, races = null, classes = null) {
-  const eff = { ...attributes };
-  if (Array.isArray(races)) {
-    for (const [k, v] of Object.entries(raceBonusTotal(races))) eff[k] = (eff[k] || 0) + v;
-  } else if (races) {
-    const rb = applyRaceBonus(races, {});
-    for (const [k, v] of Object.entries(rb)) eff[k] = (eff[k] || 0) + v;
-  }
-  for (const [k, v] of Object.entries(classBonusTotal(classes))) eff[k] = (eff[k] || 0) + v;
+// Detalhamento usado pela criação de ficha e pela ficha pronta: mostra de onde
+// vem cada número sem mudar o valor salvo em `attributes`. A soma final é a
+// mesma de `effectiveAttributes` (mantida como wrapper para compatibilidade).
+export function attributeBreakdown(attributes, equipment = {}, races = null, classes = null) {
+  const base = { ...(attributes || {}) };
+  const race = Array.isArray(races)
+    ? raceBonusTotal(races)
+    : races ? applyRaceBonus(races, {}) : {};
+  const classe = classBonusTotal(classes);
+  const equipamento = {};
+  const penalidades = {};
+
   // Equipamento: armas equipadas (até 3) + armadura + acessório somam bônus/malefícios.
   // A arma legada equipment.arma entra via armasDeEquipamento sem duplicar.
-  for (const item of armasDeEquipamento(equipment).map((e) => e.arma).concat([equipment.armadura, equipment.acessorio]).filter(Boolean)) {
-    if (!item) continue;
+  for (const item of armasDeEquipamento(equipment).map((e) => e.arma)
+    .concat([equipment.armadura, equipment.acessorio]).filter(Boolean)) {
     // Itens craftados guardam em `atributosFinais` o bônus-base já somado aos
     // efeitos dos materiais. Quando presente, ele substitui `bonus` para não
     // contar o mesmo bônus duas vezes.
@@ -952,21 +955,44 @@ export function effectiveAttributes(attributes, equipment = {}, races = null, cl
       ? item.atributosFinais
       : item.bonus;
     if (atributosDoItem) {
-      for (const [k, v] of Object.entries(atributosDoItem)) eff[k] = (eff[k] || 0) + v;
+      for (const [k, v] of Object.entries(atributosDoItem)) {
+        equipamento[k] = (equipamento[k] || 0) + v;
+      }
     }
     if (item.penalidade) {
-      // Malefícios sempre reduzem o atributo (armaduras do catálogo guardam
-      // valores negativos; equipamentos customizados guardam valores positivos).
-      for (const [k, v] of Object.entries(item.penalidade)) eff[k] = (eff[k] || 0) - Math.abs(v);
+      // Malefícios sempre reduzem o atributo (catálogo negativo ou custom positivo).
+      for (const [k, v] of Object.entries(item.penalidade)) {
+        penalidades[k] = (penalidades[k] || 0) + Math.abs(v);
+      }
     }
   }
-  // Bônus das gemas socketadas (buffs positivos / debuffs negativos)
-  for (const [k, v] of Object.entries(gemsAttrs(equipment, GEMS))) eff[k] = (eff[k] || 0) + v;
-  for (const key of Object.keys(eff)) {
+
+  const gemas = gemsAttrs(equipment, GEMS);
+  const final = { ...base };
+  const chaves = new Set([
+    ...Object.keys(base), ...Object.keys(race), ...Object.keys(classe),
+    ...Object.keys(equipamento), ...Object.keys(penalidades), ...Object.keys(gemas),
+  ]);
+  for (const key of chaves) {
     if (key.startsWith('_')) continue;
-    eff[key] = Math.max(1, eff[key] || 1);
+    const total = (base[key] || 0) + (race[key] || 0) + (classe[key] || 0)
+      + (equipamento[key] || 0) + (gemas[key] || 0) - (penalidades[key] || 0);
+    final[key] = Math.max(1, total || 1);
   }
-  return eff;
+
+  return {
+    base,
+    race,
+    class: classe,
+    equipment: equipamento,
+    penalties: penalidades,
+    gems: gemas,
+    final,
+  };
+}
+
+export function effectiveAttributes(attributes, equipment = {}, races = null, classes = null) {
+  return attributeBreakdown(attributes, equipment, races, classes).final;
 }
 
 // Fórmulas de vida, mana e dano (regras do criador — ver sistema.js):
@@ -974,7 +1000,8 @@ export function effectiveAttributes(attributes, equipment = {}, races = null, cl
 //   Mana = (Inteligência Final × 10)
 //   Dano = (Força Final + danoBase da arma) × 10   [PROVISÓRIO]
 export function deriveStats(classes, level, attributes, equipment = {}, races = null) {
-  const eff = effectiveAttributes(attributes, equipment, races, classes);
+  const br = attributeBreakdown(attributes, equipment, races, classes);
+  const eff = br.final;
   const list = Array.isArray(classes) ? classes : classes ? [classes] : [];
   const primary = list.find((c) => c.primary) || list[0] || null;
   const hpPerLevel = primary?.hpPerLevel || 10;
@@ -993,7 +1020,7 @@ export function deriveStats(classes, level, attributes, equipment = {}, races = 
   // (maior dano base), igual ao combate.
   const dano = danoFisicoAtaque(eff.forca, danoBaseDaArma(melhorArma(equipment)));
 
-  return { hpMax, mpMax, defesa, dano, effectiveAttributes: eff };
+  return { hpMax, mpMax, defesa, dano, effectiveAttributes: eff, attributeBreakdown: br };
 }
 
 // Ordem de iniciativa: Reflexos pesa mais (reação), Destreza e Resistência
