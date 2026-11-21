@@ -349,6 +349,23 @@ function makeFighter(name, team, attrs = {}, extra = {}) {
   const a = { forca: 5, inteligencia: 5, resistencia: 5, destreza: 5, reflexos: 5, ...attrs };
   const hpMax = 500 + (a.resistencia || 5) * 10;
   const mpMax = (a.inteligencia || 5) * 10;
+  const level = Number(extra.level) || 1;
+  // A árvore é filtrada DEPOIS do spread: golpes bloqueados/acima do nível
+  // ficam guardados na ficha, mas nunca entram na mesa (paridade com o motor).
+  const temArvore = Array.isArray(extra.skills);
+  const skillsDisponiveis = temArvore ? golpesDisponiveis(extra.skills, level) : [];
+  const idsDisponiveis = new Set(skillsDisponiveis.map((s) => s?.id || s?.nome).filter(Boolean));
+  const spellsBrutos = Array.isArray(extra.spells) ? extra.spells : [];
+  // Chefes e fichas antigas usam só `spells` (catálogo SPELLS): não filtrar.
+  // Quando há árvore, só caem os ids de golpes guardados/bloqueados; magias do
+  // catálogo continuam disponíveis mesmo que a ficha nunca tenha sido re-salva.
+  const idsCatalogo = new Set([
+    ...Object.keys(SPELLS),
+    ...Object.values(SPELLS).map((s) => s?.nome).filter(Boolean),
+  ]);
+  const spellsDisponiveis = temArvore && skillsDisponiveis.length
+    ? spellsBrutos.filter((ref) => idsDisponiveis.has(ref) || idsCatalogo.has(ref))
+    : spellsBrutos;
   return {
     id: uid(), name, team,
     hp: hpMax, hpMax, mp: mpMax, mpMax,
@@ -358,18 +375,18 @@ function makeFighter(name, team, attrs = {}, extra = {}) {
     statusEffects: [],
     initiative: null,
     cooldowns: {},
-    protection: extra.protection || null,
-    equipment: extra.equipment || {},
-    spells: extra.spells || [],
-    skills: golpesDisponiveis(extra.skills || [], extra.level || 1),
-    inventory: extra.inventory || [],
-    level: extra.level || 1,
     defense: false,
     defesa: Number(extra.defesa) || 0,
     drunk: false,
     drunkTurns: 0,
-    _charId: extra._charId || null,
     ...extra,
+    level,
+    protection: extra.protection || null,
+    equipment: extra.equipment || {},
+    inventory: extra.inventory || [],
+    _charId: extra._charId || null,
+    skills: skillsDisponiveis,
+    spells: spellsDisponiveis,
     hpMaxOriginal: extra.hpMaxOriginal ?? hpMax,
   };
 }

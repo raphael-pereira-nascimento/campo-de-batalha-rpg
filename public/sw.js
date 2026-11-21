@@ -1,7 +1,6 @@
-// v10: invalida o cache da v9 para distribuir a revisão de interface de 21/11:
-// rótulos dinâmicos de `poder` (golpe/cura vs. aumento de dano), elemento mágico
-// Sangue no catálogo de combate e tabela Base/BR/BC/Final na ficha.
-const CACHE = 'cbrpg-v10';
+// v11: invalida o cache da v10 para distribuir exclusão por cartão, temas
+// visuais persistidos, correções/UX da árvore e responsividade mobile completa.
+const CACHE = 'cbrpg-v11';
 const PRECACHE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {

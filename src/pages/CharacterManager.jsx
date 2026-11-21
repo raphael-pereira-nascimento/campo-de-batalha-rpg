@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { SKILL_TYPES, rotuloPoder, ajudaPoder, resumoPoder, rotuloElemento } from '../config.js';
 import { ELEMENTOS } from '../game/data.js';
@@ -26,6 +26,17 @@ const clamp = (v, min, max, padrao) => {
   return Number.isFinite(n) ? Math.max(min, Math.min(max, Math.round(n))) : padrao;
 };
 
+// Motivo separado para não confundir "bloqueado pelo jogador" com
+// "nível ainda não alcançado" — os dois usavam a mesma classe .locked.
+function motivoIndisponivel(skill, nivelFicha) {
+  if (!skill) return '';
+  if (skill.desbloqueado === false || skill.desbloqueado === null) return '🔒 Bloqueado';
+  if (clamp(skill.nivel, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX, NIVEL_GOLPE_MIN) > nivelFicha) {
+    return `⏳ Requer nível ${skill.nivel}`;
+  }
+  return '';
+}
+
 function golpeParaEditor(s = {}) {
   return {
     ...GOLPE_VAZIO,
@@ -39,7 +50,7 @@ function golpeParaEditor(s = {}) {
     custo: clamp(s.custo, 0, 99, 0),
     cooldown: clamp(s.cooldown, 0, 20, 0),
     nivel: clamp(s.nivel, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX, NIVEL_GOLPE_MIN),
-    desbloqueado: s.desbloqueado !== false,
+    desbloqueado: s.desbloqueado !== false && s.desbloqueado !== null,
     desc: s.desc ?? s.descricao ?? '',
   };
 }
@@ -52,6 +63,10 @@ export default function CharacterManager({ player, characters, onRefresh, onBack
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
+  const [busca, setBusca] = useState('');
+  const [filtroTipo, setFiltroTipo] = useState('todos');
+  const [filtroEstado, setFiltroEstado] = useState('todos');
+  const editorRef = useRef(null);
 
   const selected = useMemo(
     () => characters.find((c) => c.id === selectedId) || null,
@@ -83,15 +98,38 @@ export default function CharacterManager({ player, characters, onRefresh, onBack
     setNotice('');
   }, [selected]);
 
+  const nivelFicha = selected?.level || 1;
+
+  const contadores = useMemo(() => {
+    const disponiveis = form.skills.filter((s) => !motivoIndisponivel(s, nivelFicha)).length;
+    return {
+      total: form.skills.length,
+      disponiveis,
+      guardados: form.skills.length - disponiveis,
+      niveis: new Set(form.skills.map((s) => s.nivel)).size,
+    };
+  }, [form.skills, nivelFicha]);
+
   const arvore = useMemo(() => {
+    const termo = busca.trim().toLocaleLowerCase('pt-BR');
     const niveis = new Map();
     form.skills.forEach((skill, index) => {
       const nivel = clamp(skill.nivel, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX, NIVEL_GOLPE_MIN);
+      const motivo = motivoIndisponivel(skill, nivelFicha);
+      if (termo && !`${skill.nome || ''} ${skill.desc || ''}`.toLocaleLowerCase('pt-BR').includes(termo)) return;
+      if (filtroTipo !== 'todos' && skill.tipo !== filtroTipo) return;
+      if (filtroEstado === 'disponivel' && motivo) return;
+      if (filtroEstado === 'indisponivel' && !motivo) return;
       if (!niveis.has(nivel)) niveis.set(nivel, []);
-      niveis.get(nivel).push({ skill, index });
+      niveis.get(nivel).push({ skill, index, motivo });
     });
-    return [...niveis.entries()].sort((a, b) => a[0] - b[0]);
-  }, [form.skills]);
+    return [...niveis.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([nivel, itens]) => [
+        nivel,
+        itens.sort((a, b) => String(a.skill.nome || '').localeCompare(String(b.skill.nome || ''), 'pt-BR')),
+      ]);
+  }, [form.skills, busca, filtroTipo, filtroEstado, nivelFicha]);
 
   const setCampoGolpe = (campo, valor) => {
     setGolpe((g) => ({ ...g, [campo]: valor }));
@@ -129,20 +167,52 @@ export default function CharacterManager({ player, characters, onRefresh, onBack
     setGolpe(golpeParaEditor(campos));
     setEditIndex(index);
     setError('');
+    setNotice('Editando golpe — clique em “Salvar golpe” e depois em “Salvar ficha”.');
+    requestAnimationFrame(() => editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
 
   const removerGolpe = (index) => {
+    const skill = form.skills[index];
+    if (!skill || !window.confirm(`Remover o golpe “${skill.nome}” da árvore?`)) return;
     setForm((f) => ({ ...f, skills: f.skills.filter((_, i) => i !== index) }));
     if (editIndex === index) {
       setGolpe(GOLPE_VAZIO);
       setEditIndex(null);
     }
+    setNotice('Golpe removido da árvore. Clique em “Salvar ficha” para persistir.');
+  };
+
+  const duplicarGolpe = (index) => {
+    const skill = form.skills[index];
+    if (!skill) return;
+    const copia = {
+      ...skill,
+      id: novoId(),
+      nome: `${String(skill.nome || 'Golpe').slice(0, 34)} (cópia)`,
+    };
+    setForm((f) => {
+      const skills = [...f.skills];
+      skills.splice(index + 1, 0, copia);
+      return { ...f, skills };
+    });
+    setNotice('Cópia criada. Clique em “Salvar ficha” para persistir.');
+  };
+
+  const moverGolpe = (index, nivel) => {
+    const alvo = clamp(nivel, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX, NIVEL_GOLPE_MIN);
+    setForm((f) => ({
+      ...f,
+      skills: f.skills.map((s, i) => (i === index ? { ...s, nivel: alvo } : s)),
+    }));
+    setNotice('Nível do golpe alterado. Clique em “Salvar ficha” para persistir.');
   };
 
   const alternarBloqueio = (index) => {
     setForm((f) => ({
       ...f,
-      skills: f.skills.map((s, i) => (i === index ? { ...s, desbloqueado: s.desbloqueado === false } : s)),
+      skills: f.skills.map((s, i) => (i === index
+        ? { ...s, desbloqueado: s.desbloqueado === false || s.desbloqueado === null }
+        : s)),
     }));
   };
 
@@ -162,7 +232,7 @@ export default function CharacterManager({ player, characters, onRefresh, onBack
           ...golpe,
           elemento: ELEMENTOS.includes(golpe.elemento) ? golpe.elemento : 'fisico',
           nivel: clamp(golpe.nivel, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX, NIVEL_GOLPE_MIN),
-          desbloqueado: golpe.desbloqueado !== false,
+          desbloqueado: golpe.desbloqueado === true,
           custo: clamp(golpe.custo, 0, 99, 0),
           poder: clamp(golpe.poder, 10, 1000, 100),
           cooldown: clamp(golpe.cooldown, 0, 20, 0),
@@ -265,7 +335,7 @@ export default function CharacterManager({ player, characters, onRefresh, onBack
 
           <hr />
 
-          <h2>➕ {editIndex === null ? 'Adicionar golpe' : 'Editar golpe'}</h2>
+          <h2 ref={editorRef}>➕ {editIndex === null ? 'Adicionar golpe' : 'Editar golpe'}</h2>
           <p className="muted small">
             Escolha qualquer tipo de golpe (físico, magia, cura, buff ou defesa). O custo de MP é
             gasto ao usar o golpe; o elemento define fraquezas/resistências no combate.
@@ -328,38 +398,89 @@ export default function CharacterManager({ player, characters, onRefresh, onBack
 
           <h2>🌳 Árvore de habilidades</h2>
           <p className="muted small">
-            Nível atual da ficha: <strong>{selected.level || 1}</strong>. Golpes com nível maior ou
-            bloqueados não entram no combate até serem liberados aqui.
+            Nível atual da ficha: <strong>{nivelFicha}</strong>. Golpes com nível maior ou
+            bloqueados não entram no combate até serem liberados aqui. Estrutura técnica provisória
+            (D-53): sem custo de XP ou pré-requisitos oficiais.
           </p>
+          <div className="tree-counters" aria-live="polite">
+            <span className="tag">{contadores.total} golpes na árvore</span>
+            <span className="tag tag-ok">✅ {contadores.disponiveis} disponíveis</span>
+            <span className="tag">{contadores.niveis} níveis ocupados</span>
+          </div>
+          <div className="tree-filters">
+            <label>
+              Buscar golpe
+              <input
+                type="search"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Nome ou descrição"
+              />
+            </label>
+            <label>
+              Tipo
+              <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
+                <option value="todos">Todos</option>
+                {Object.entries(SKILL_TYPES).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
+              </select>
+            </label>
+            <label>
+              Estado
+              <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
+                <option value="todos">Todos</option>
+                <option value="disponivel">Disponíveis</option>
+                <option value="indisponivel">Guardados/bloqueados</option>
+              </select>
+            </label>
+            {(busca || filtroTipo !== 'todos' || filtroEstado !== 'todos') && (
+              <button className="ghost" onClick={() => { setBusca(''); setFiltroTipo('todos'); setFiltroEstado('todos'); }}>
+                Limpar filtros
+              </button>
+            )}
+          </div>
           <div className="skill-tree">
             {arvore.map(([nivel, itens]) => (
               <section className="skill-tree-level" key={nivel}>
                 <h3>Nível {nivel}</h3>
                 <div className="skill-tree-branch">
-                  {itens.map(({ skill, index }) => {
-                    const bloqueado = skill.desbloqueado === false;
-                    const indisponivel = bloqueado || nivel > (selected.level || 1);
+                  {itens.map(({ skill, index, motivo }) => {
+                    const bloqueado = skill.desbloqueado === false || skill.desbloqueado === null;
+                    const classe = [
+                      'skill-node',
+                      motivo ? 'locked' : 'unlocked',
+                      editIndex === index ? 'editando' : '',
+                    ].filter(Boolean).join(' ');
                     return (
-                      <div
-                        className={
-                          indisponivel
-                            ? 'skill-node locked'
-                            : 'skill-node unlocked'
-                        }
-                        key={skill.id || index}
-                      >
-                        <strong>{skill.nome}</strong>
-                        <span className="tag">{SKILL_TYPES[skill.tipo] || skill.tipo}</span>
-                        <span className="tag">✦ {rotuloElemento(skill.elemento || 'fisico')}</span>
-                        <span className="tag">MP {skill.custo ?? 0}</span>
-                        <span className="tag">{resumoPoder(skill)}</span>
+                      <div className={classe} key={skill.id || index}>
+                        <div className="skill-node-head">
+                          <strong>{skill.nome}</strong>
+                          {motivo && <span className="tag tag-lock">{motivo}</span>}
+                        </div>
+                        <div className="skill-node-tags">
+                          <span className="tag">{SKILL_TYPES[skill.tipo] || skill.tipo}</span>
+                          <span className="tag">✦ {rotuloElemento(skill.elemento || 'fisico')}</span>
+                          <span className="tag">MP {skill.custo ?? 0}</span>
+                          <span className="tag">{resumoPoder(skill)}</span>
+                        </div>
                         {skill.desc && <p className="muted small">{skill.desc}</p>}
+                        <label className="skill-move">
+                          Nível
+                          <select
+                            value={clamp(skill.nivel, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX, NIVEL_GOLPE_MIN)}
+                            onChange={(e) => moverGolpe(index, Number(e.target.value))}
+                          >
+                            {Array.from({ length: NIVEL_GOLPE_MAX }, (_, i) => i + 1).map((n) => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                        </label>
                         <div className="skill-node-actions">
                           <button className="ghost" onClick={() => alternarBloqueio(index)}>
                             {bloqueado ? '🔓 Desbloquear' : '🔒 Bloquear'}
                           </button>
                           <button className="ghost" onClick={() => editarGolpe(index)}>✏️ Editar</button>
-                          <button className="ghost" onClick={() => removerGolpe(index)}>✕ Remover</button>
+                          <button className="ghost" onClick={() => duplicarGolpe(index)}>⧉ Duplicar</button>
+                          <button className="ghost danger-ghost" onClick={() => removerGolpe(index)}>✕ Remover</button>
                         </div>
                       </div>
                     );
@@ -368,6 +489,9 @@ export default function CharacterManager({ player, characters, onRefresh, onBack
               </section>
             ))}
             {form.skills.length === 0 && <p className="muted">Nenhum golpe na árvore desta ficha.</p>}
+            {form.skills.length > 0 && arvore.length === 0 && (
+              <p className="muted">Nenhum golpe corresponde aos filtros atuais.</p>
+            )}
           </div>
 
           <div className="manager-actions">

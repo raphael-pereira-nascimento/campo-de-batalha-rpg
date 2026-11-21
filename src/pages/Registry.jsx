@@ -226,22 +226,24 @@ export default function Registry({ player, gameData, onBack }) {
             <h2>🏆 Ranking dos Aventureiros</h2>
             {ranking.length === 0 && <p className="muted">Nenhum personagem registrado ainda.</p>}
             {ranking.length > 0 && (
-              <table className="ranking-table">
-                <thead>
-                  <tr><th>#</th><th>Nome</th><th>Nv.</th><th>XP</th><th>Vitórias</th></tr>
-                </thead>
-                <tbody>
-                  {ranking.map((r, i) => (
-                    <tr key={r.id}>
-                      <td>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`}</td>
-                      <td>{r.name}{r.gender === 'feminino' ? ' ♀' : r.gender === 'masculino' ? ' ♂' : ''}</td>
-                      <td>{r.level}</td>
-                      <td>{r.xp}</td>
-                      <td>{r.wins}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="table-scroll">
+                <table className="ranking-table">
+                  <thead>
+                    <tr><th>#</th><th>Nome</th><th>Nv.</th><th>XP</th><th>Vitórias</th></tr>
+                  </thead>
+                  <tbody>
+                    {ranking.map((r, i) => (
+                      <tr key={r.id}>
+                        <td>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`}</td>
+                        <td>{r.name}{r.gender === 'feminino' ? ' ♀' : r.gender === 'masculino' ? ' ♂' : ''}</td>
+                        <td>{r.level}</td>
+                        <td>{r.xp}</td>
+                        <td>{r.wins}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </section>
         )}

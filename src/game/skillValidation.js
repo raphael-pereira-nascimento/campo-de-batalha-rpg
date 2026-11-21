@@ -34,7 +34,9 @@ export function normalizarMetadadosGolpe(input = {}) {
 export function golpesDisponiveis(skills = [], level = 1) {
   const nivel = numero(level, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX);
   return (Array.isArray(skills) ? skills : []).filter((skill) => {
-    if (!skill || skill.desbloqueado === false) return false;
+    // `undefined` é golpe legado (disponível); `null` foi normalizado para
+    // bloqueado e precisa ser tratado igual em cliente e servidor.
+    if (!skill || skill.desbloqueado === false || skill.desbloqueado === null) return false;
     return numero(skill.nivel, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX) <= nivel;
   });
 }

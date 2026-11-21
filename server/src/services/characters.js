@@ -260,6 +260,9 @@ function presetSkillsFrom(classes) {
       const key = s.nome;
       if (out.some((x) => x.id === key)) continue;
       out.push({
+        // Golpes de classe também entram na árvore já com metadados, sem
+        // depender de um re-save pelo gerenciador.
+        ...normalizarMetadadosGolpe({}),
         id: key,
         nome: s.nome,
         tipo: s.tipo === 'ataque' ? 'magia' : s.tipo,
@@ -967,6 +970,10 @@ export async function grantRewards(battle) {
     const levelsGained = level - char.level;
     // Estilo FF/Pokémon: todos os atributos sobem juntos a cada nível.
     const attributes = aplicarCrescimentoNivel(char.attributes, levelsGained);
+    // `spells` é derivado da árvore: subir de nível pode liberar golpes.
+    const spells = levelsGained > 0
+      ? golpesDisponiveis(char.skills, level).map((s) => s.id)
+      : char.spells;
 
     const stats = applyMaxMults(
       deriveStats(char.classes, level, attributes, char.equipment, char.races),
@@ -995,8 +1002,8 @@ export async function grantRewards(battle) {
     await query(
       `UPDATE characters
        SET xp = $1, level = $2, hp_max = $3, mp_max = $4, hp_current = $5, mp_current = $6,
-           attributes = $7, wins = wins + 1
-       WHERE id = $8`,
+           attributes = $7, spells = $8, wins = wins + 1
+       WHERE id = $9`,
       [
         newXp,
         level,
@@ -1005,6 +1012,7 @@ export async function grantRewards(battle) {
         Math.min(char.hp_current + (hpMax - char.hp_max), hpMax),
         Math.min(char.mp_current + (mpMax - char.mp_max), mpMax),
         JSON.stringify(attributes),
+        JSON.stringify(spells),
         p.characterId,
       ],
     );
@@ -1038,6 +1046,8 @@ export function aplicarLevelUpManual(char) {
       level: level + 1,
       xp: xp - cost,
       attributes,
+      // Árvore: o cache `spells` acompanha o nível, como em create/update.
+      spells: golpesDisponiveis(char.skills, level + 1).map((s) => s.id),
       hp_max: stats.hpMax,
       mp_max: stats.mpMax,
       hp_current: Math.min(char.hp_current ?? stats.hpMax, stats.hpMax),
@@ -1058,9 +1068,9 @@ export async function levelUpCharacter(characterId, playerId) {
   await query(
     `UPDATE characters
      SET xp = $1, level = $2, hp_max = $3, mp_max = $4, hp_current = $5, mp_current = $6,
-         attributes = $7
-     WHERE id = $8`,
-    [c.xp, c.level, c.hp_max, c.mp_max, c.hp_current, c.mp_current, JSON.stringify(c.attributes), characterId],
+         attributes = $7, spells = $8
+     WHERE id = $9`,
+    [c.xp, c.level, c.hp_max, c.mp_max, c.hp_current, c.mp_current, JSON.stringify(c.attributes), JSON.stringify(c.spells), characterId],
   );
   return getCharacter(characterId);
 }
@@ -1174,6 +1184,8 @@ export function definirNivelManual(char, novoNivel) {
       level: alvo,
       xp: diff < 0 ? 0 : char.xp || 0,
       attributes,
+      // Ao descer de nível, golpes acima do novo nível voltam para a árvore.
+      spells: golpesDisponiveis(char.skills, alvo).map((s) => s.id),
       hp_max: stats.hpMax,
       mp_max: stats.mpMax,
       hp_current: Math.min(char.hp_current ?? stats.hpMax, stats.hpMax),
@@ -1194,9 +1206,9 @@ export async function setCharacterLevel(characterId, playerId, novoNivel) {
   await query(
     `UPDATE characters
      SET xp = $1, level = $2, hp_max = $3, mp_max = $4, hp_current = $5, mp_current = $6,
-         attributes = $7
-     WHERE id = $8`,
-    [c.xp, c.level, c.hp_max, c.mp_max, c.hp_current, c.mp_current, JSON.stringify(c.attributes), characterId],
+         attributes = $7, spells = $8
+     WHERE id = $9`,
+    [c.xp, c.level, c.hp_max, c.mp_max, c.hp_current, c.mp_current, JSON.stringify(c.attributes), JSON.stringify(c.spells), characterId],
   );
   return getCharacter(characterId);
 }
