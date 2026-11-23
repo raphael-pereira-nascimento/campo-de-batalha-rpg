@@ -26,6 +26,52 @@ export const SKILL_TYPES = {
   defesa: 'Defesa',
 };
 
+// O mesmo número `poder` tem dois usos diferentes no motor. Os rótulos abaixo
+// deixam isso explícito na criação de golpes sem mudar a chave nem a escala.
+const ROTULOS_PODER = {
+  fisico: 'Poder do golpe (%)',
+  magia: 'Poder do golpe (%)',
+  cura: 'Poder da cura (%)',
+  buff: 'Aumento de dano (%)',
+  defesa: 'Poder (não usado pela defesa)',
+};
+
+const AJUDAS_PODER = {
+  fisico: '100% = golpe comum · 150% = 1,5× o dano base.',
+  magia: '100% = magia comum · 150% = 1,5× o dano base.',
+  cura: '100% = cura comum · 200% = o dobro da cura base.',
+  buff: '15% = +15% de dano físico/mágico por N turnos — não é multiplicador de golpe.',
+  defesa: 'A Defesa não usa este número; ele fica salvo só para compatibilidade.',
+};
+
+export const rotuloPoder = (tipo) => ROTULOS_PODER[tipo] || 'Poder (%)';
+export const ajudaPoder = (tipo) => AJUDAS_PODER[tipo] || AJUDAS_PODER.fisico;
+
+// Texto curto para cartões e fichas: deixa claro se o número causa dano, cura
+// ou aumenta o dano do personagem.
+export function resumoPoder(skill) {
+  const valor = Number(skill?.poder) || 0;
+  if (skill?.tipo === 'defesa') return 'defesa —';
+  if (skill?.tipo === 'buff') return `+${valor}% dano`;
+  if (skill?.tipo === 'cura') return `cura ${valor}%`;
+  return `golpe ${valor}%`;
+}
+
+// Nomes amigáveis para o catálogo de combate. A runa de Sangue da Forja é um
+// domínio separado; aqui "Sangue" é o elemento de dano/fraqueza/resistência.
+export const ELEMENTOS_LABELS = {
+  fisico: 'Físico',
+  fogo: 'Fogo',
+  agua: 'Água',
+  terra: 'Terra',
+  ar: 'Ar',
+  luz: 'Luz',
+  trevas: 'Trevas',
+  sangue: '🩸 Sangue',
+};
+
+export const rotuloElemento = (elemento) => ELEMENTOS_LABELS[elemento] || String(elemento || 'fisico');
+
 export const CONDITION_TYPES = {
   danoRecebido: 'Levar X de dano',
   hpPct: 'HP abaixo de X%',

@@ -17,11 +17,33 @@ export default function Characters({ player, characters, gameData, customClasses
   const [pasteText, setPasteText] = useState('');
   const [pasteError, setPasteError] = useState('');
   const [pasteBusy, setPasteBusy] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null); // character
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const fileRef = useRef(null);
 
   const created = () => {
     setCreating(false);
     onRefresh();
+  };
+
+  // Exclusão por cartão: confirmação modal (o confirm nativo é ruim no mobile),
+  // recarrega a lista e limpa a seleção se a ficha excluída era a atual.
+  const confirmarExclusao = async () => {
+    if (!deleteTarget) return;
+    setDeleteBusy(true);
+    setDeleteError('');
+    try {
+      await api.deleteCharacter(deleteTarget.id);
+      setSelected((s) => (s === deleteTarget.id ? null : s));
+      setDeleteTarget(null);
+      await onRefresh?.();
+    } catch (err) {
+      setDeleteError(err?.message || 'Não foi possível excluir a ficha.');
+    } finally {
+      setDeleteBusy(false);
+    }
   };
 
   const handleImport = async (e) => {
@@ -51,7 +73,19 @@ export default function Characters({ player, characters, gameData, customClasses
         </div>
       </header>
 
-      <nav className="subnav" aria-label="Atalhos do jogo">
+      <button
+        type="button"
+        className="nav-toggle"
+        aria-expanded={menuOpen}
+        onClick={() => setMenuOpen((v) => !v)}
+      >
+        ☰ {menuOpen ? 'Fechar menu' : 'Navegação'}
+      </button>
+      <nav
+        className={menuOpen ? 'subnav subnav-collapsible is-open' : 'subnav subnav-collapsible'}
+        aria-label="Atalhos do jogo"
+        onClick={(e) => { if (e.target.closest('button')) setMenuOpen(false); }}
+      >
         <button className="primary-link" onClick={onOpenRegistry}>📜 Registro do Mundo</button>
         <button className="primary-link" onClick={onOpenCharacterManager}>🗂️ Gerenciar fichas e golpes</button>
         <button className="primary-link" onClick={onOpenGemForge}>🔮 Forja de Gemas</button>
@@ -148,6 +182,7 @@ export default function Characters({ player, characters, gameData, customClasses
                 <button className="mine-action" onClick={() => onOpenMining?.(c.id)}>⛏️ Minerar</button>
                 <button className="ghost" onClick={() => onOpenEquipmentShop?.(c.id)}>🛒 Equipamentos</button>
                 <button className="ghost" onClick={() => exportarFicha(c)}>⬇️ Exportar ficha</button>
+                <button className="danger" onClick={() => { setDeleteTarget(c); setDeleteError(''); }}>🗑️ Excluir</button>
                 <button className="ghost" onClick={async () => {
                   try {
                     const res = await shareCharacter(c);
@@ -189,7 +224,7 @@ export default function Characters({ player, characters, gameData, customClasses
               </p>
             )}
             {shareResult.url && (
-              <input value={shareResult.url} readOnly style={{ width: '100%', fontSize: 12, padding: 6 }} />
+              <input value={shareResult.url} readOnly style={{ width: '100%', fontSize: 16, padding: 8 }} />
             )}
             {shareResult.url && (
               <button
@@ -203,7 +238,7 @@ export default function Characters({ player, characters, gameData, customClasses
             <textarea
               value={shareResult.json}
               readOnly
-              style={{ width: '100%', height: 220, fontSize: 11, fontFamily: 'monospace', marginTop: 8 }}
+              style={{ width: '100%', height: 220, fontSize: 16, fontFamily: 'monospace', marginTop: 8 }}
             />
             <div className="modal-actions">
               {shareResult.url && (
@@ -226,7 +261,7 @@ export default function Characters({ player, characters, gameData, customClasses
             <textarea
               value={pasteText}
               onChange={(e) => { setPasteText(e.target.value); setPasteError(''); }}
-              style={{ width: '100%', height: 180, fontSize: 11, fontFamily: 'monospace' }}
+              style={{ width: '100%', height: 180, fontSize: 16, fontFamily: 'monospace' }}
             />
             {pasteError && <p className="error">{pasteError}</p>}
             <div className="modal-actions">
@@ -261,6 +296,31 @@ export default function Characters({ player, characters, gameData, customClasses
                 }
               }}>{pasteBusy ? 'Importando…' : 'Importar ficha'}</button>
               <button className="ghost" onClick={() => { setPasteModal(false); setPasteText(''); setPasteError(''); }}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="modal-backdrop" onClick={() => !deleteBusy && setDeleteTarget(null)}>
+          <div className="modal" role="alertdialog" aria-label="Excluir ficha" onClick={(e) => e.stopPropagation()}>
+            <h2>🗑️ Excluir ficha?</h2>
+            <p>
+              A ficha <strong>{deleteTarget.name}</strong> será removida da sua conta.
+              Equipamentos, gemas e histórico vinculados a ela também são removidos.
+            </p>
+            <p className="muted small">
+              Links públicos já gerados continuam acessíveis até expirarem. Exporte a ficha
+              antes se quiser guardar uma cópia. Esta ação não pode ser desfeita.
+            </p>
+            {deleteError && <div className="error">{deleteError}</div>}
+            <div className="modal-actions">
+              <button className="danger" disabled={deleteBusy} onClick={confirmarExclusao}>
+                {deleteBusy ? 'Excluindo…' : 'Sim, excluir ficha'}
+              </button>
+              <button className="ghost" disabled={deleteBusy} onClick={() => { setDeleteTarget(null); setDeleteError(''); }}>
+                Cancelar
+              </button>
             </div>
           </div>
         </div>

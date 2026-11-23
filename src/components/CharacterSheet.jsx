@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
-import { ATTRIBUTES, ATTRIBUTE_NAMES } from '../config.js';
+import { ATTRIBUTES, ATTRIBUTE_NAMES, resumoPoder } from '../config.js';
 import { GEM_RARITY, getGemaById } from '../game/gems.js';
 import { cargaMaxima, VOO, armasDeEquipamento, categoriaDeArma, ARMAS_SLOTS, ARMA_CATEGORIA_INFO, ALVO_LABEL } from '../game/sistema.js';
 import { deriveStats, skillFromSpell } from '../game/data.js';
@@ -21,6 +21,7 @@ const CLASS_ICONS = {
 };
 
 const SKILL_TYPE_ICONS = { fisico: '⚔️', magia: '✨', cura: '💚', buff: '🔮', defesa: '🛡️' };
+const sinal = (v) => (!v ? '—' : v > 0 ? `+${v}` : String(v));
 
 export default function CharacterSheet({ character, gameData, onChanged, statuses, onOpenShop }) {
   const [busy, setBusy] = useState(null);
@@ -288,6 +289,7 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
         <span className="class-icon">{CLASS_ICONS[classes[0]?.archetype || character.class]}</span>
         <div>
           <h3>{character.name}</h3>
+          {character.desc && <p className="muted small">{character.desc}</p>}
           <span className="tag">{character.custom_class_name || cls?.nome}</span>
           {races.map((r) => (
             <span className="tag" key={r.id}>{r.nome}</span>
@@ -386,13 +388,26 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
         </div>
       )}
 
-      <div className="attr-grid">
-        {ATTRIBUTES.map((k) => (          <div className="attr-chip" key={k}>
-            <span>{ATTRIBUTE_NAMES[k]}</span>
-            <strong>{character.attributes[k]}</strong>
-          </div>
-        ))}
+      <div className="attr-head">
+        <span>Atributo</span><span>Base</span><span>BR</span><span>BC</span><span>Final</span>
       </div>
+      <div className="attrs">
+        {ATTRIBUTES.map((k) => {
+          const br = derivados.attributeBreakdown;
+          return (
+            <div className="attr-row attr-detailed" key={k}>
+              <span className="attr-name">{ATTRIBUTE_NAMES[k]}</span>
+              <span className="attr-value static" title="Pontos distribuídos na ficha">{br?.base?.[k] ?? character.attributes[k]}</span>
+              <span className="attr-bonus" title="Bônus da raça">{sinal(br?.race?.[k])}</span>
+              <span className="attr-bonus" title="Bônus da classe">{sinal(br?.class?.[k])}</span>
+              <span className="attr-total" title="Atributo final usado em dano, vida e mana">{br?.final?.[k] ?? character.attributes[k]}</span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="muted small">
+        Base = pontos da ficha · BR = bônus racial · BC = bônus de classe · Final = base + BR + BC + equipamento + gemas.
+      </p>
 
       <div className="sheet-section">
         <h4>☣️ Corrupção do Ruidium</h4>
@@ -565,7 +580,7 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
             <div className="spell-chip" key={s.id} title={s.desc}>
               <span>{SKILL_TYPE_ICONS[s.tipo] || '✨'} {s.nome}</span>
               <small>
-                MP {s.custo} · {s.poder}%
+                MP {s.custo} · {resumoPoder(s)}
                 {s.alvo && s.alvo !== 'unico' ? ` · ◎ ${ALVO_LABEL[s.alvo] || s.alvo}` : ''}
               </small>
             </div>
@@ -582,14 +597,14 @@ export default function CharacterSheet({ character, gameData, onChanged, statuse
               <div className="spell-chip mega" title={character.ultimate.desc}>
                 <span>🔥 {character.ultimate.nome}</span>
                 <small>
-                  {character.ultimate.poder}%{character.ultimate.modo ? ` · ${character.ultimate.modo.turnos}t +${character.ultimate.modo.danoMultPct}%` : ''}
+                  {resumoPoder(character.ultimate)}{character.ultimate.modo ? ` · ${character.ultimate.modo.turnos}t +${character.ultimate.modo.danoMultPct}%` : ''}
                 </small>
               </div>
             )}
             {character.especial && (
               <div className="spell-chip mega" title={character.especial.desc}>
                 <span>💫 {character.especial.nome}</span>
-                <small>{character.especial.poder}%</small>
+                <small>{resumoPoder(character.especial)}</small>
               </div>
             )}
           </div>

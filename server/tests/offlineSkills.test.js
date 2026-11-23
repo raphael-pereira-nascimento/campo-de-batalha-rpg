@@ -33,6 +33,7 @@ describe('Registro do Mundo offline — validação de golpes', () => {
       nome: 'Raio', elemento: 'ar', nivel: 8, desbloqueado: false, custo: 6,
     });
     expect(golpe).toMatchObject({ elemento: 'ar', nivel: 8, desbloqueado: false, custo: 6 });
+    expect(validateOfflineSkill({ nome: 'Sangue', elemento: 'sangue' }).elemento).toBe('sangue');
     expect(normalizarMetadadosGolpe({ elemento: 'gelo', nivel: 99 })).toMatchObject({
       elemento: 'fisico', nivel: 30, desbloqueado: true,
     });

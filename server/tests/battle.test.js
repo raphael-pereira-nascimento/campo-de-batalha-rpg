@@ -8,6 +8,8 @@ import {
   FUMACA,
   fumacaDoDisparo,
   rajadaDaArma,
+  exigenciaD20,
+  nivelDificuldadeD20,
 } from '../src/game/sistema.js';
 import { SPELLS, skillFromSpell } from '../src/game/data.js';
 
@@ -272,7 +274,7 @@ describe('BattleManager — efeitos de status', () => {
 
     acao(other, { type: 'defend' });
     const antes = battle.log.length;
-    manager._rollToHit = () => ({ hit: true, crit: false, roll: 5, chance: 90, dificuldade: 0 });
+    manager._rollToHit = () => ({ hit: true, crit: false, roll: 15, chance: 0.9, exigencia: 5, dificuldade: 0 });
     acao(current, { type: 'attack', targetId: other.characterId });
     const novos = battle.log.slice(antes).map((l) => l.text).join('\n');
     expect(novos).toContain('ataca');
@@ -301,11 +303,13 @@ describe('BattleManager — efeitos de status', () => {
     const comum = manager._rollToHit(atk, def, 'physical');
     const forte = manager._rollToHit(atk, def, 'physical', { poder: 300, status: { turnos: 2, dano: 60 } });
     expect(forte.dificuldade).toBeGreaterThan(0);
-    expect(forte.chance).toBeLessThan(comum.chance);
+    // chance continua sendo probabilidade (0..1); quem muda é a exigência.
+    expect(forte.chance).toBeCloseTo(comum.chance);
+    expect(forte.exigencia).toBeGreaterThan(comum.exigencia);
   });
 
   it('monstro com ataqueStatus aplica o status ao acertar', () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.1);
+    vi.spyOn(Math, 'random').mockReturnValue(0.9); // d20 = 19: acerto garantido, sem crítico
     const { manager } = makeManager();
     const battle = manager.createBattle({
       name: 'T',
@@ -345,10 +349,9 @@ describe('BattleManager — efeitos de status', () => {
 
 describe('BattleManager — fluxo completo de ultimate/especial', () => {
   beforeEach(() => {
-    // d20 = 5: o herói acerta os golpes fortes (alvo >= 6 com a dificuldade
-    // nova) e o chefe (fraco, só acerta com <= 3) erra — assim o fluxo
-    // ultimate/especial roda sem a batalha terminar por morte do herói.
-    vi.spyOn(Math, 'random').mockReturnValue(0.2);
+    // d20 = 15: o herói acerta os golpes fortes e o chefe (exigência 17) erra,
+    // sem crítico — o fluxo ultimate/especial roda sem matar o herói.
+    vi.spyOn(Math, 'random').mockReturnValue(0.7);
   });
   afterEach(() => {
     vi.restoreAllMocks();
@@ -818,9 +821,9 @@ describe('BattleManager — bebidas da taverna em combate', () => {
 
 // ── Golpes multi-alvo (área / cone / explosão) ─────────────────────────────
 describe('BattleManager — golpes multi-alvo', () => {
-  // d20 = 5: acerta sempre, nunca desvia para aliados e nunca é crítico.
+  // d20 = 15: acerta, nunca desvia para aliados e nunca é crítico.
   function setupMulti() {
-    vi.spyOn(Math, 'random').mockReturnValue(0.2);
+    vi.spyOn(Math, 'random').mockReturnValue(0.7);
     const { manager } = makeManager();
     const battle = manager.createBattle({
       name: 'Multi',
@@ -886,22 +889,22 @@ describe('BattleManager — golpes multi-alvo', () => {
   });
 
   it('área/cone reduzem o dano por alvo em relação ao alvo único', () => {
-    // Rolagem fixa (d20 = 2) garante acerto nos dois casos, sem crítico.
+    // Rolagem fixa (d20 = 19) garante acerto nos dois casos, sem crítico.
     const unico = setupMulti();
-    vi.spyOn(Math, 'random').mockReturnValue(0.06);
+    vi.spyOn(Math, 'random').mockReturnValue(0.9);
     const antesU = unico.monstros[0].hp;
     unico.manager._resolveSkill(unico.battle, unico.hero, unico.monstros[0], golpe({}));
     const danoUnico = antesU - unico.monstros[0].hp;
     vi.restoreAllMocks();
 
     const area = setupMulti();
-    vi.spyOn(Math, 'random').mockReturnValue(0.06);
+    vi.spyOn(Math, 'random').mockReturnValue(0.9);
     const antesA = area.monstros[0].hp;
     area.manager._resolveSkill(area.battle, area.hero, area.monstros[0], golpe({ alvo: 'area' }));
     const danoArea = antesA - area.monstros[0].hp;
 
     const cone = setupMulti();
-    vi.spyOn(Math, 'random').mockReturnValue(0.06);
+    vi.spyOn(Math, 'random').mockReturnValue(0.9);
     const antesC = cone.monstros[0].hp;
     cone.manager._resolveSkill(cone.battle, cone.hero, cone.monstros[0], golpe({ alvo: 'cone', alvos: 2 }), [cone.monstros[1]]);
     const danoCone = antesC - cone.monstros[0].hp;
@@ -1036,7 +1039,7 @@ describe('BattleManager — escolha da arma no ataque', () => {
   const BACAMARTE = { id: 'bacamarte', nome: 'Bacamarte', categoria: 'distancia', danoBase: 7, elemento: 'fogo', alvo: 'cone', alvos: 3, bonus: {}, penalidade: {} };
 
   function setup() {
-    vi.spyOn(Math, 'random').mockReturnValue(0.2); // d20 = 5: acerta, sem crítico
+    vi.spyOn(Math, 'random').mockReturnValue(0.9); // d20 = 19: acerta, sem crítico
     const { manager } = makeManager();
     const battle = manager.createBattle({
       name: 'Armas',
@@ -1123,7 +1126,7 @@ describe('BattleManager — recarga das armas de fogo', () => {
   const ESPADA = { id: 'espada_curta', nome: 'Espada Curta', categoria: 'perto', danoBase: 4, recarga: 0, bonus: {}, penalidade: {} };
 
   function setup() {
-    vi.spyOn(Math, 'random').mockReturnValue(0.2); // d20 = 5: acerta, sem crítico
+    vi.spyOn(Math, 'random').mockReturnValue(0.9); // d20 = 19: acerta, sem crítico
     const { manager } = makeManager();
     const battle = manager.createBattle({
       name: 'Recarga',
@@ -1393,7 +1396,7 @@ describe('BattleManager — superaquecimento das armas de fogo', () => {
   });
 
   it('bloqueia o disparo de uma arma superaquecida', () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.2);
+    vi.spyOn(Math, 'random').mockReturnValue(0.9);
     const { manager, battle, hero, boss } = criarBatalha(PISTOLA);
     hero.wpnSuperaquecido = { [PISTOLA.id]: 2 };
     const hpAntes = boss.hp;
@@ -1403,7 +1406,7 @@ describe('BattleManager — superaquecimento das armas de fogo', () => {
   });
 
   it('o disparo levanta fumaça ao redor do atirador (rajada conta)', () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.2);
+    vi.spyOn(Math, 'random').mockReturnValue(0.9);
     const { manager, battle, hero, boss } = criarBatalha(ESPINGARDA);
     manager._resolveAttack(battle, hero, boss, ESPINGARDA);
     expect(hero.fumaca).toBe(fumacaDoDisparo(ESPINGARDA, rajadaDaArma(ESPINGARDA)));
@@ -1436,14 +1439,18 @@ describe('BattleManager — fumaça e dificuldade do d20', () => {
     expect(p.fumaca).toBe(50 - FUMACA.dissipacaoPorTurno);
   });
 
-  it('classifica a rolagem do d20 e devolve a faixa no resultado', () => {
+  it('D-68: classifica a exigência do d20, não a rolagem, e devolve a faixa', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.7); // d20 = 15
     const { manager } = makeManager();
-    const atk = { attributes: { destreza: 5, reflexos: 5, forca: 8, inteligencia: 4 }, statuses: [] };
+    // Mira altíssima: exigência 2 (Fácil), enquanto o d20 15 seria Difícil.
+    const atk = { attributes: { destreza: 20, reflexos: 20, forca: 20, inteligencia: 4 }, statuses: [] };
     const def = { attributes: { destreza: 5, reflexos: 5, inteligencia: 4 }, dodge: false, statuses: [] };
     const mira = manager._rollToHit(atk, def, 'physical');
     expect(mira.roll).toBe(15);
-    expect(mira.nivel).toMatchObject({ id: 'dificil', nome: 'Difícil' });
+    expect(mira.exigencia).toBe(2);
+    expect(mira.exigencia).toBe(exigenciaD20(mira.chance, mira.dificuldade));
+    expect(mira.nivel).toMatchObject(nivelDificuldadeD20(mira.exigencia));
+    expect(mira.nivel).not.toMatchObject(nivelDificuldadeD20(mira.roll));
   });
 });
 

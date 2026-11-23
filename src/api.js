@@ -381,6 +381,8 @@ export const api = {
         efeitosDaFicha(payload),
       );
       const skills = [...(payload.skills || [])];
+      // Mesma regra do servidor: golpes bloqueados/acima do nível ficam só na árvore.
+      const spells = golpesDisponiveis(skills, 1).map((s) => s.id);
       const character = {
         id,
         ...payload,
@@ -397,7 +399,7 @@ export const api = {
           potionItem('pocao_cura'),
           potionItem('elixir_mana'),
         ],
-        spells: skills.map((s) => s.id),
+        spells,
       };
       chars.push(character);
       localStorage.setItem('cbr_offline_chars', JSON.stringify(chars));
@@ -490,6 +492,7 @@ export const api = {
       c.level = level + 1;
       c.xp = (c.xp || 0) - cost;
       c.attributes = attributes;
+      c.spells = golpesDisponiveis(c.skills || [], c.level).map((s) => s.id);
       c.hp_max = stats.hpMax;
       c.mp_max = stats.mpMax;
       c.hp_current = Math.min(c.hp_current ?? stats.hpMax, stats.hpMax);
@@ -518,6 +521,7 @@ export const api = {
       c.level = alvo;
       if (diff < 0) c.xp = 0;
       c.attributes = attributes;
+      c.spells = golpesDisponiveis(c.skills || [], alvo).map((s) => s.id);
       c.hp_max = stats.hpMax;
       c.mp_max = stats.mpMax;
       c.hp_current = Math.min(c.hp_current ?? stats.hpMax, stats.hpMax);

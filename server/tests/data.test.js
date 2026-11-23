@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   raceBonusTotal,
   classBonusTotal,
+  attributeBreakdown,
   effectiveAttributes,
   deriveStats,
   gemsAttrs,
@@ -97,6 +98,39 @@ describe('effectiveAttributes', () => {
   });
 });
 
+describe('attributeBreakdown — Base / BR / BC / Final', () => {
+  const attrs = { forca: 5, inteligencia: 3, resistencia: 7, destreza: 3, reflexos: 3 };
+  const races = [anao, rockman];
+  const classes = [{ id: 'mago', bonus: { inteligencia: 3, resistencia: 1, reflexos: 2 } }];
+  const equipment = {
+    arma: { id: 'x', bonus: { forca: 2 }, penalidade: {} },
+    armadura: { penalidade: { destreza: -2 } },
+  };
+
+  it('separa cada origem sem alterar a base distribuída', () => {
+    const br = attributeBreakdown(attrs, equipment, races, classes);
+    expect(br.base).toEqual(attrs);
+    expect(br.race).toEqual({ forca: 1, resistencia: 1 }); // 2 × 0,7 arredondado
+    expect(br.class).toEqual({ inteligencia: 3, resistencia: 1, reflexos: 2 });
+    expect(br.equipment.forca).toBe(2);
+    expect(br.penalties.destreza).toBe(2);
+    expect(br.final.forca).toBe(8);
+    expect(br.final.inteligencia).toBe(6);
+    expect(br.final.destreza).toBe(1); // 3 − |−2| = 1
+  });
+
+  it('produz exatamente o mesmo resultado de effectiveAttributes', () => {
+    const br = attributeBreakdown(attrs, equipment, races, classes);
+    expect(br.final).toEqual(effectiveAttributes(attrs, equipment, races, classes));
+  });
+
+  it('expõe o detalhamento em deriveStats para a ficha', () => {
+    const stats = deriveStats(classes, 1, attrs, equipment, races);
+    expect(stats.attributeBreakdown.final).toEqual(stats.effectiveAttributes);
+    expect(stats.attributeBreakdown.base).toEqual(attrs);
+  });
+});
+
 describe('catálogo de equipamentos da loja', () => {
   it('armas, armaduras e acessórios têm preço em cobre', () => {
     for (const grupo of ['armas', 'armaduras', 'acessorios']) {
@@ -114,6 +148,69 @@ describe('catálogo de equipamentos da loja', () => {
       expect(Object.keys(item.bonus || {}).length).toBeGreaterThan(0);
       expect(item.socketSlots).toBeGreaterThanOrEqual(1);
     }
+  });
+});
+
+describe('catálogo de canhões — regras provisórias D-62 a D-67', () => {
+  const ARTILHARIA = [
+    'canhao_leve',
+    'canhao_cerco',
+    'canhao_ferro',
+    'canhao_de_salto',
+    'canhao_morteiro',
+    'canhao_bombasta',
+    'canhao_dragoes',
+    'canhao_abismo',
+  ];
+  const UTILITARIOS = [
+    'canhao_de_mao',
+    'canhao_de_explosao',
+    'canhao_de_gelo',
+    'canhao_de_relampago',
+    'canhao_pesado',
+  ];
+
+  it('mantém os dois conjuntos oficiais com papéis distintos', () => {
+    expect(Object.keys(EQUIPMENT.canoes)).toHaveLength(8);
+    for (const id of ARTILHARIA) {
+      expect(EQUIPMENT.canoes[id], id).toBeDefined();
+      expect(EQUIPMENT.canoes[id].categoria).toBe('distancia');
+    }
+    for (const id of UTILITARIOS) {
+      expect(EQUIPMENT.armas[id], id).toBeDefined();
+      expect(EQUIPMENT.armas[id].categoria).toBe('utilitaria');
+    }
+    expect(EQUIPMENT.armas.besta_pesada.ignoraDefesaPct).toBe(25);
+  });
+
+  it('toda artilharia exige tripulação mínima de 2 (atirador + ajudante)', () => {
+    for (const id of ARTILHARIA) {
+      expect(EQUIPMENT.canoes[id].tripulacaoMinima, id).toBe(2);
+    }
+  });
+
+  it('descrições mecânicas viram campos provisórios', () => {
+    expect(EQUIPMENT.canoes.canhao_cerco.recarga).toBe(5); // tripé: +1 turno
+    expect(EQUIPMENT.canoes.canhao_ferro.fumacaExtra).toBe(1); // pólvora negra
+    expect(EQUIPMENT.canoes.canhao_bombasta.penalidade).toEqual({ destreza: -1, reflexos: -1 });
+    expect(EQUIPMENT.canoes.canhao_dragoes.ignoraDefesaPct).toBe(25);
+  });
+
+  it('utilitários mantêm usos por combate + recarga, sem recurso de munição', () => {
+    for (const id of UTILITARIOS) {
+      const arma = EQUIPMENT.armas[id];
+      expect(arma.usosMax, id).toBe(1);
+      expect(arma.recargaTurnos, id).toBe(arma.recarga);
+      expect(arma.recargaTurnos, id).toBeGreaterThan(0);
+      expect(arma.municao, id).toBeUndefined();
+    }
+  });
+
+  it('o peso do bombasta reduz DEX e REF pela effectiveAttributes', () => {
+    const attrs = { forca: 5, inteligencia: 3, resistencia: 5, destreza: 5, reflexos: 5 };
+    const eff = effectiveAttributes(attrs, { arma: EQUIPMENT.canoes.canhao_bombasta });
+    expect(eff.destreza).toBe(4);
+    expect(eff.reflexos).toBe(4);
   });
 });
 
@@ -454,12 +551,12 @@ describe('armas de fogo novas + escolha da arma no ataque', () => {
 });
 
 describe('STATUS_DEFS — catálogo central de status', () => {
-  it('os 10 status têm os campos do catálogo', () => {
-    // 8 status básicos + 2 condições próprias de material acrescentadas depois:
-    // Podridão (Tenebrium) e Contaminação Pandemônica (Prata Pandemônica).
+  it('os 13 status têm os campos do catálogo', () => {
+    // 8 status básicos + 2 condições próprias de material acrescentadas depois
+    // (Podridão e Contaminação Pandemônica) + 3 condições do Kraken (D-57).
     const ids = [
       'queimadura', 'sangramento', 'veneno', 'regeneracao', 'lentidao', 'cegueira', 'fraqueza', 'congelamento',
-      'podridao', 'contaminacaoPandemonica',
+      'podridao', 'contaminacaoPandemonica', 'confusao', 'medo', 'respiracao_aquatica',
     ];
     expect(Object.keys(STATUS_DEFS).sort()).toEqual(ids.sort());
     for (const id of ids) {

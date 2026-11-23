@@ -101,7 +101,8 @@ export async function deleteCustomClass(id, creatorId) {
 
 // ---------- Monstros customizados ----------
 
-const ELEMENTOS = ['fisico', 'fogo', 'agua', 'terra', 'ar', 'luz', 'trevas'];
+// Deve acompanhar ELEMENTOS em src/game/data.js e server/src/game/data.js.
+const ELEMENTOS = ['fisico', 'fogo', 'agua', 'terra', 'ar', 'luz', 'trevas', 'sangue'];
 
 function sanitizeElementList(list) {
   if (!Array.isArray(list)) return [];

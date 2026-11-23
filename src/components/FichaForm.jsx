@@ -16,6 +16,10 @@ import {
   IDIOMAS,
   ESPECIALIZACOES_ARMAS,
   PASSIVAS_EXTRAS,
+  rotuloPoder,
+  ajudaPoder,
+  resumoPoder,
+  rotuloElemento,
 } from '../config.js';
 import { applyGenderToRace } from '../game/races.js';
 import AlvoSelect from './AlvoSelect.jsx';
@@ -30,7 +34,7 @@ import {
   ARMA_CATEGORIA_INFO,
   ALVO_LABEL,
 } from '../game/sistema.js';
-import { CLASSES, STATUS_DEFS, STATUS_KEYS, ELEMENTOS } from '../game/data.js';
+import { CLASSES, STATUS_DEFS, STATUS_KEYS, ELEMENTOS, attributeBreakdown, raceBonusTotal, classBonusTotal } from '../game/data.js';
 import { NIVEL_GOLPE_MIN, NIVEL_GOLPE_MAX } from '../game/skillValidation.js';
 
 const STEP_NAMES = [
@@ -52,46 +56,9 @@ function emptyAttrs() {
   return { forca: 6, inteligencia: 6, resistencia: 6, destreza: 6, reflexos: 6 };
 }
 
-export function raceBonusTotal(races) {
-  const bonus = {};
-  for (const r of races || []) {
-    for (const [k, v] of Object.entries(r.bonus || {})) {
-      if (k === 'escolha') {
-        const c = r.choice || 'forca';
-        bonus[c] = (bonus[c] || 0) + v;
-      } else {
-        bonus[k] = (bonus[k] || 0) + v;
-      }
-    }
-  }
-  const f = RACE_PENALTY[(races || []).length] ?? 1;
-  if (f !== 1) {
-    for (const k of Object.keys(bonus)) bonus[k] = Math.round(bonus[k] * f);
-  }
-  return bonus;
-}
-
-export function classBonusTotal(classes) {
-  const bonus = {};
-  for (const c of classes || []) {
-    for (const [k, v] of Object.entries(c.bonus || {})) bonus[k] = (bonus[k] || 0) + v;
-  }
-  return bonus;
-}
-
-function effFor(attrs, races, classes, equipment) {
-  const eff = { ...attrs };
-  for (const [k, v] of Object.entries(raceBonusTotal(races))) eff[k] = (eff[k] || 0) + v;
-  for (const [k, v] of Object.entries(classBonusTotal(classes))) eff[k] = (eff[k] || 0) + v;
-  // Equipamento: todas as armas do arsenal (até 3) + armadura + acessório.
-  const itens = [...armasDeEquipamento(equipment).map((e) => e.arma), equipment.armadura, equipment.acessorio].filter(Boolean);
-  for (const item of itens) {
-    for (const [k, v] of Object.entries(item.bonus || {})) eff[k] = (eff[k] || 0) + v;
-    for (const [k, v] of Object.entries(item.penalidade || {})) eff[k] = (eff[k] || 0) - Math.abs(v);
-  }
-  for (const k of ATTRIBUTES) eff[k] = Math.max(1, eff[k] || 1);
-  return eff;
-}
+// Base/BR/BC/Final usam o mesmo cálculo do servidor; nada é somado dentro de
+// `attrs`, então escolher raça ou classe nunca altera os pontos distribuídos.
+const sinal = (v) => (!v ? '—' : v > 0 ? `+${v}` : String(v));
 
 export default function FichaForm({ player, gameData, customClasses = [], onCreated, onCancel }) {
   const [step, setStep] = useState(0);
@@ -128,13 +95,14 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
   const remaining = POINTS - used - abilityCost;
 
   const stats = useMemo(() => {
-    const eff = effFor(attrs, races, classes, equipment);
+    const br = attributeBreakdown(attrs, equipment, races, classes);
+    const eff = br.final;
     const hpMax = 500 + eff.resistencia * 10;
     // Regra confirmada: Mana = INT × 2 + BR + BC (não cresce por nível).
     const mpMax = manaMaxFrom(attrs.inteligencia, eff.inteligencia);
     // Dano do ataque básico = (FOR Final + danoBase da melhor arma) × 10 (provisório).
     const dano = danoFisicoAtaque(eff.forca, danoBaseDaArma(melhorArma(equipment)));
-    return { hpMax, mpMax, dano, eff };
+    return { hpMax, mpMax, dano, eff, br };
   }, [attrs, races, classes, equipment]);
 
   const penaltyPct = Math.round((1 - (RACE_PENALTY[races.length] ?? 1)) * 100);
@@ -183,6 +151,7 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
         races,
         classes,
         passiva,
+        desc,
         skills,
         ultimate,
         especial,
@@ -337,12 +306,15 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
           {step === 9 && (
             <div className="stack">
               <p className="muted small">
-                Distribua até {POINTS} pontos entre atributos (1 a {MAX} por atributo). O que
-                sobrar pode virar habilidades no próximo passo.
+                Distribua até {POINTS} pontos entre atributos (1 a {MAX} por atributo). Base é o
+                que você escolhe aqui; BR/BC e o total aparecem ao lado, estilo Pokémon/Evocreo.
               </p>
+              <div className="attr-head">
+                <span>Atributo</span><span>Base</span><span>BR</span><span>BC</span><span>Final</span>
+              </div>
               <div className="attrs">
                 {ATTRIBUTES.map((key) => (
-                  <div className="attr-row" key={key}>
+                  <div className="attr-row attr-detailed" key={key}>
                     <span className="attr-name">{ATTRIBUTE_NAMES[key]}</span>
                     <div className="attr-controls">
                       <button type="button" onClick={() => change(key, -1)} disabled={attrs[key] <= MIN}>
@@ -353,7 +325,9 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
                         +
                       </button>
                     </div>
-                    <span className="attr-total">{stats.eff[key]}</span>
+                    <span className="attr-bonus" title="Bônus da raça (já com a penalidade de múltiplas raças)">{sinal(stats.br.race[key])}</span>
+                    <span className="attr-bonus" title="Bônus da classe">{sinal(stats.br.class[key])}</span>
+                    <span className="attr-total" title="Atributo final = base + BR + BC + equipamento + gemas">{stats.br.final[key]}</span>
                   </div>
                 ))}
               </div>
@@ -365,7 +339,10 @@ export default function FichaForm({ player, gameData, customClasses = [], onCrea
                   Vida máx: <strong>{stats.hpMax}</strong> · Mana máx: <strong>{stats.mpMax}</strong> · Dano: <strong>{stats.dano}</strong>
                 </span>
               </div>
-              <p className="muted small">Os números à direita são os atributos efetivos (base + raças + classes + equipamento).</p>
+              <p className="muted small">
+                Base = pontos distribuídos (não mudam ao adicionar raça ou classe) · BR = bônus
+                racial · BC = bônus de classe · Final = base + BR + BC + equipamento + gemas (mín. 1).
+              </p>
             </div>
           )}
 
@@ -582,9 +559,11 @@ function ClassesStep({ gameData, customClasses, classes, onAdd, onRemove, onPrim
   const doAdd = () => {
     if (!pick) return;
     const isCustom = customClasses.some((c) => c.id === pick);
+    // `bonus` precisa acompanhar a classe escolhida: sem ele a coluna BC da
+    // tabela de atributos ficaria vazia na criação, mesmo com a classe no wizard.
     const def = isCustom
-      ? { id: pick, nome: picked.name, archetype: picked.archetype, primary: false }
-      : { id: pick, nome: picked.nome, archetype: pick, primary: false };
+      ? { id: pick, nome: picked.name, archetype: picked.archetype, bonus: picked.bonus, primary: false }
+      : { id: pick, nome: picked.nome, archetype: pick, bonus: picked?.bonus, primary: false };
     onAdd(def);
     setPick('');
   };
@@ -750,6 +729,19 @@ const clampNum = (v, min, max, padrao) => {
   return Math.max(min, Math.min(max, Math.round(Number.isFinite(n) ? n : padrao)));
 };
 
+// Ao trocar o tipo, um status escolhido antes pode deixar de fazer sentido
+// (cura não recebe DOT; ataque não recebe HoT; buff/defesa não aplicam status).
+// Limpar aqui evita salvar um status que o seletor nem mostra mais.
+function aoTrocarTipo(form, tipo) {
+  const def = STATUS_DEFS[form.statusTipo];
+  let compativel = !def;
+  if (def) {
+    if (tipo === 'cura') compativel = def.tipo === 'hot';
+    else if (tipo === 'fisico' || tipo === 'magia') compativel = def.tipo !== 'hot';
+  }
+  return { ...form, tipo, statusTipo: compativel ? form.statusTipo : '' };
+}
+
 // Monta o golpe no formato persistido (normalizeSkill do servidor). Só inclui
 // campos que fazem sentido para o tipo escolhido, para não criar lixo.
 function montarGolpe(form, id) {
@@ -911,15 +903,16 @@ function SkillsStep({ skills, setSkills, customSkills, player }) {
           </label>
           <label>
             Tipo
-            <select value={form.tipo} onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value }))}>
+            <select value={form.tipo} onChange={(e) => setForm((f) => aoTrocarTipo(f, e.target.value))}>
               {Object.entries(SKILL_TYPES).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}
             </select>
           </label>
           <label>
-            Poder (%)
-            <input type="number" min={10} max={1000} value={form.poder} onChange={(e) => setForm((f) => ({ ...f, poder: Number(e.target.value) }))} />
+            {rotuloPoder(form.tipo)}
+            <input type="number" min={10} max={1000} value={form.poder} disabled={form.tipo === 'defesa'} title={ajudaPoder(form.tipo)} onChange={(e) => setForm((f) => ({ ...f, poder: Number(e.target.value) }))} />
+            <small className="muted small field-help">{ajudaPoder(form.tipo)}</small>
           </label>
         </div>
         <div className="form-row">
@@ -936,7 +929,7 @@ function SkillsStep({ skills, setSkills, customSkills, player }) {
           <label>
             Elemento mágico
             <select value={form.elemento} onChange={(e) => setForm((f) => ({ ...f, elemento: e.target.value }))}>
-              {ELEMENTOS.map((el) => (<option key={el} value={el}>{el}</option>))}
+              {ELEMENTOS.map((el) => (<option key={el} value={el}>{rotuloElemento(el)}</option>))}
             </select>
           </label>
           <label>
@@ -1030,9 +1023,9 @@ function SkillsStep({ skills, setSkills, customSkills, player }) {
           <div className="chosen-chip" key={s.id || i}>
             <strong>{s.nome}</strong>
             <span className="tag">{SKILL_TYPES[s.tipo]}</span>
-            <span className="tag">{s.poder}%</span>
+            <span className="tag">{resumoPoder(s)}</span>
             <span className="tag">MP {s.custo}</span>
-            {s.elemento && <span className="tag">✦ {s.elemento}</span>}
+            {s.elemento && <span className="tag">✦ {rotuloElemento(s.elemento)}</span>}
             <span className="tag">Nv {s.nivel || 1}</span>
             {s.desbloqueado === false && <span className="tag">🔒 Bloqueado</span>}
             {s.cooldown > 0 && <span className="tag">⏳ {s.cooldown}t</span>}
@@ -1075,14 +1068,23 @@ function megaFormInicial(allowModo) {
 }
 
 function MegaSkillStep({ title, value, onChange, allowModo }) {
-  const [form, setForm] = useState(() => ({
-    ...megaFormInicial(allowModo),
+  const [form, setForm] = useState(() => {
+    const inicial = megaFormInicial(allowModo);
+    if (!value) return inicial;
     // O golpe salvo guarda `status` como objeto; o formulário usa
-    // statusTipo/statusTurnos/statusDano. `golpeParaForm` faz a conversão.
-    ...golpeParaForm(value || {}),
-    // `modo` antigo podia vir nulo mesmo em ultimate: o editor sempre tem um.
-    modo: allowModo ? { ...MODO_PADRAO, ...(value?.modo || {}) } : null,
-  }));
+    // statusTipo/statusTurnos/statusDano. `golpeParaForm` faz a conversão,
+    // mas traz defaults de golpe comum (poder 100 / status 0) — aqui os
+    // valores de especial/ultimate só são substituídos quando realmente salvos.
+    const salvo = golpeParaForm(value);
+    return {
+      ...inicial,
+      ...salvo,
+      poder: Number(value.poder) || inicial.poder,
+      statusDano: value.status?.dano == null ? inicial.statusDano : salvo.statusDano,
+      // `modo` antigo podia vir nulo mesmo em ultimate: o editor sempre tem um.
+      modo: allowModo ? { ...MODO_PADRAO, ...(value.modo || {}) } : null,
+    };
+  });
   const [hasCond, setHasCond] = useState(!!value?.condicao);
   const [condTipo, setCondTipo] = useState(value?.condicao?.tipo || 'danoRecebido');
   const [condValor, setCondValor] = useState(value?.condicao?.valor ?? 50);
@@ -1132,7 +1134,7 @@ function MegaSkillStep({ title, value, onChange, allowModo }) {
           </label>
           <label>
             Tipo do golpe
-            <select value={form.tipo} onChange={set('tipo')}>
+            <select value={form.tipo} onChange={(e) => setForm((f) => aoTrocarTipo(f, e.target.value))}>
               {Object.entries(SKILL_TYPES).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}
@@ -1141,8 +1143,9 @@ function MegaSkillStep({ title, value, onChange, allowModo }) {
         </div>
         <div className="form-row">
           <label>
-            Poder (%)
-            <input type="number" min={10} max={1000} value={form.poder} onChange={(e) => setForm((f) => ({ ...f, poder: Number(e.target.value) }))} />
+            {rotuloPoder(form.tipo)}
+            <input type="number" min={10} max={1000} value={form.poder} disabled={form.tipo === 'defesa'} title={ajudaPoder(form.tipo)} onChange={(e) => setForm((f) => ({ ...f, poder: Number(e.target.value) }))} />
+            <small className="muted small field-help">{ajudaPoder(form.tipo)}</small>
           </label>
           <label>
             Custo de MP
@@ -1262,7 +1265,7 @@ function MegaSkillStep({ title, value, onChange, allowModo }) {
         <div className="chosen-chip">
           <strong>{value.nome}</strong>
           <span className="tag">{SKILL_TYPES[value.tipo]}</span>
-          <span className="tag">{value.poder}%</span>
+          <span className="tag">{resumoPoder(value)}</span>
           {value.custo > 0 && <span className="tag">MP {value.custo}</span>}
           {value.todos && <span className="tag">✦ Todos</span>}
           {value.afetaAliados && <span className="tag">✦ Aliados</span>}
@@ -1818,6 +1821,7 @@ function AbilitiesStep({ pontosDisponiveis, habilidades, setHabilidades }) {
 
 function Summary({ name, gender, races, classes, passiva, skills, ultimate, especial, equipment, habilidades, stats }) {
   const raceBonus = raceBonusTotal(races);
+  const classBonus = classBonusTotal(classes);
   const g = GENDER_OPTIONS.find((x) => x.id === gender);
   return (
     <div className="stack summary">
@@ -1834,8 +1838,12 @@ function Summary({ name, gender, races, classes, passiva, skills, ultimate, espe
         {classes.map((c) => `${c.nome}${c.primary ? ' ★' : ''}`).join(' + ') || '—'}
       </p>
       <p className="muted small">
-        Bônus raciais efetivos:{' '}
-        {ATTRIBUTES.filter((k) => raceBonus[k]).map((k) => `${ATTRIBUTE_NAMES[k]} ${raceBonus[k] > 0 ? '+' : ''}${raceBonus[k]}`).join(' · ') || 'nenhum'}
+        Bônus raciais efetivos (BR):{' '}
+        {ATTRIBUTES.filter((k) => raceBonus[k]).map((k) => `${ATTRIBUTE_NAMES[k]} ${sinal(raceBonus[k])}`).join(' · ') || 'nenhum'}
+      </p>
+      <p className="muted small">
+        Bônus de classe (BC):{' '}
+        {ATTRIBUTES.filter((k) => classBonus[k]).map((k) => `${ATTRIBUTE_NAMES[k]} ${sinal(classBonus[k])}`).join(' · ') || 'nenhum'}
       </p>
       {passiva && <p><strong>Passiva:</strong> {passiva}</p>}
       {habilidades.length > 0 && (
@@ -1846,8 +1854,8 @@ function Summary({ name, gender, races, classes, passiva, skills, ultimate, espe
       {skills.length > 0 && (
         <p className="muted small">Golpes próprios: {skills.map((s) => s.nome).join(', ')}</p>
       )}
-      {ultimate && <p><strong>Ultimate:</strong> {ultimate.nome} ({ultimate.poder}%) {ultimate.modo ? `· ${ultimate.modo.turnos}t +${ultimate.modo.danoMultPct}%` : ''}</p>}
-      {especial && <p><strong>Especial:</strong> {especial.nome} ({especial.poder}%)</p>}
+      {ultimate && <p><strong>Ultimate:</strong> {ultimate.nome} ({resumoPoder(ultimate)}) {ultimate.modo ? `· ${ultimate.modo.turnos}t +${ultimate.modo.danoMultPct}%` : ''}</p>}
+      {especial && <p><strong>Especial:</strong> {especial.nome} ({resumoPoder(especial)})</p>}
       {armasDeEquipamento(equipment).map(({ slot, arma }) => (
         <p className="muted small" key={slot}>
           {ARMA_CATEGORIA_INFO[slot].icon} {arma.nome}

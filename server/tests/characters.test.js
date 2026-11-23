@@ -435,6 +435,7 @@ describe('sanitizarItemCraftado — forja online', () => {
     expect(salvo.defesa).toBe(6);
     expect(salvo.alcance).toBe('longo');
     expect(salvo.elemento).toBe('fogo');
+    expect(sanitizarItemCraftado({ ...base, elemento: 'sangue' }, []).elemento).toBe('sangue');
     expect(salvo.efeito).toEqual({ tipo: 'queimadura', dano: 50, turnos: 3 });
     expect(salvo.alvo).toBe('explosao');
     expect(salvo.alvos).toBe(3);

@@ -1,8 +1,19 @@
 # Pendências — Materiais, Metais e Podridão
 
-Atualizado em 17/11/2026 — Etapa 9 (runas na forja, Corrupção com API/UI,
-imunidade do Tenebrium e preparação de Contaminação Profana/Núcleo Pandemônico)
-e rodada de buffs, cura, Ações Rápidas e canhões (D-44 a D-47).
+Atualizado em 21/11/2026 — Etapa 9 (runas na forja, Corrupção com API/UI,
+imunidade do Tenebrium e preparação de Contaminação Profana/Núcleo Pandemônico),
+rodada de buffs, cura, Ações Rápidas e canhões (D-44 a D-47), auditoria de
+correções de comportamento em fichas, motores e Batalha de Mesa (1.9) e
+implementação do Kraken do Abismo Eclipse com passiva, habilidades, horda e
+arena espelhadas nos motores cliente/servidor (D-54 a D-61, seções 1.10, 3.14 e
+3.15), regras provisórias de canhões com tripulação mínima e descrições
+mecânicas (D-62 a D-67, seções 1.11 e 3.16), a revisão D-68: painel 🧰 de
+artilharia na Batalha de Mesa e D20 “rolar-maior” com números de
+exigência em mesa, Campo e servidor (seções 1.11 e 3.18) e a revisão de
+interface de 21/11: rótulos dinâmicos de `poder`, elemento mágico Sangue como
+elemento comum de combate e detalhamento Base/BR/BC/Final na criação e na
+ficha (seção 3.19). Nenhuma regra oficial foi inventada: D-01 a D-61 continuam
+válidos e D-62 em diante seguem provisórios.
 
 Este arquivo separa o que já foi **aprovado**, o que foi implementado como
 **provisório**, o que continua **pendente** e o que é apenas **sugestão**.
@@ -26,7 +37,7 @@ Legenda:
 
 ---
 
-## Índice das decisões D-01 a D-47
+## Índice das decisões D-01 a D-68
 
 | Código | Assunto | Status |
 | --- | --- | --- |
@@ -83,6 +94,21 @@ Legenda:
 | D-51 | Congelamento consome o turno depois de aplicar o pulo | Implementado |
 | D-52 | Gemas com comportamento idêntico offline/online; regen respeita redução de cura | Implementado |
 | D-53 | Gestão de fichas (editar/excluir) e árvore técnica de golpes por nível/elemento/desbloqueio | Implementado; regras oficiais (P-15/P-01) pendentes |
+| D-54 | Kraken do Abismo Eclipse como chefe autônomo de Eclipse | Provisório; `isEclipse` força o estado do dia 30 na batalha |
+| D-55 | Coração da Tempestade: cura de 5% e bloqueio por Luz/Sagrado | Provisório; aliases `luz`/`sagrado` normalizados |
+| D-56 | Água Profunda Corrompida: −2 DEX/REF sem Respiração Aquática | Provisório; imunidade por status, acessório ou poção |
+| D-57 | Confusão e Medo no Kraken; Cegueira e Veneno na Maré Negra | Provisório; −20% acerto e −10% acerto/esquiva |
+| D-58 | Horda de Marinheiros Afogados (1d4+2, pool de HP e Moral) | Provisório; Moral e dano escalável |
+| D-59 | Tentáculos/Maré Negra (CD 16/18) e Chamado do Abismo (recarga 4) | Provisório; CD 16/18 e durações dos status vêm da especificação do chefe |
+| D-60 | UI da Batalha e regressões do Kraken em cliente/servidor | Implementado; 13 testes novos no harness |
+| D-61 | Renderização da horda invocada pelo Kraken na arena | Corrigido; memos de combatentes passam a depender também de `battle` |
+| D-62 | `artilharia` como filtro/grupo, não como slot | Mantido; slots continuam `perto`, `distancia` e `utilitaria` |
+| D-63 | Canhões sem recurso de munição separado | Provisório; usos por combate + recarga continuam como "munição" |
+| D-64 | Tripulação mínima de 2 (atirador + 1 ajudante vivo do mesmo lado) | Provisório; sem ajudante: −20% de acerto e +1 turno de recarga |
+| D-65 | "Ignora parte da defesa" vira `ignoraDefesaPct: 25` | Provisório; também em `besta_pesada` |
+| D-66 | "Peso quase proibitivo" e "precisa de tripé" viram mecânica | Provisório; bombasta −1 DEX/REF, canhão de cerco `recarga: 5` |
+| D-67 | "Pólvora negra" vira `fumacaExtra: 1` | Provisório; +1 fumaça por disparo do Canhão de Ferro |
+| D-68 | Painel 🧰 de artilharia na mesa e D20 “rolar-maior” | Provisório; acerto se `d20 ≥ exigência`, 20 crítico e 1 falha; faixas 1–4/5–10/11–16/17–20 agora classificam a exigência |
 
 ---
 
@@ -411,7 +437,7 @@ Campo de Batalha.
   “(atual)”.
 - **Testes:** `battle.test.js` ganhou cinco casos de magia/buff/cura e um de
   redução de cura recebida; nessa rodada o harness passou **336/336**. O total
-  atual está em 1.8.
+  daquele ponto era 1.8; o total atual está em 1.9.
 
 ### 1.8 Consolidação da criação de golpes e paridade motor/mesa (D-48 a D-52)
 
@@ -448,8 +474,62 @@ Mundo e modo offline concordem.
   demais fontes.
 - **Testes:** novos `customSkills.test.js` (7 casos) e `offlineSkills.test.js`
   (3 casos), `battle.test.js` estendido com duração do congelamento e
-  `weaponId` utilitário. Harness de navegador: **347/347**, sem erros de
-  console.
+  `weaponId` utilitário. Harness daquele ponto: **347/347**, sem erros de
+  console; total atual: **439/439** (1.9).
+
+### 1.9 Auditoria de regressões em fichas, motores e Batalha de Mesa
+
+Rodada de correções feitas apenas sobre comportamentos confirmados por leitura
+e teste. As decisões D-01 a D-53 continuam válidas; nenhuma regra, nome, valor
+ou fórmula oficial foi inventada.
+
+| ID | Área | Correção confirmada |
+| --- | --- | --- |
+| F1 | Golpes — alvo | `normalizeSkill` preserva a **chave** (`unico`, `area`, `cone`, `explosao`) em vez de gravar o rótulo de `ALVO_TIPOS`. Valor inválido continua sendo rejeitado |
+| F2 | Wizard — especial/ultimate | `MegaSkillStep` mantém os defaults próprios (poder `300`, status `2/50`, modo do ultimate) e só substitui por valores realmente salvos. Especial `420/2/77` e ultimate `300/3/50` sobreviveram ao ciclo editar → voltar |
+| F3 | Wizard — tipo × status | `aoTrocarTipo` limpa status incompatível: `queimadura` some ao trocar para cura; `regeneracao` some ao voltar para magia/físico; buff/defesa não guardam status |
+| F4 | Descrição da ficha | O campo “Descrição (opcional)” do wizard agora entra no payload; `CharacterManager.jsx` carrega/edita/envia `desc`; `decorateCharacter` devolve `desc` a partir da coluna `descricao`; `CharacterSheet.jsx` exibe o texto |
+| F4 | Migração | `server/src/db/migrations/0014_character_descricao.sql` adiciona `descricao TEXT NOT NULL DEFAULT ''`, preservando fichas antigas. Edição sem `desc` não apaga descrição já salva |
+| M1 | IA — congelamento | `_pularTurnoSeCongelado` é usado por `handleAction` e por `_aiAction` nos dois motores (servidor e cliente): monstro congelado não ataca e consome uma duração por turno |
+| M2 | Buffs — duração | `buffPhysicalTurns` e `buffMagicTurns` são independentes; magia/item atualizam só o eixo correspondente; `buffTurns` permanece como compatibilidade para participantes/batalhas antigas |
+| T1 | Mesa — Ações Rápidas | Trocar o atacante limpa magia e item selecionados, evitando botão habilitado para ação que não existe no novo lutador |
+| T2 | Mesa — iniciativa | `rollInitiative` usa os participantes recém-atualizados para ordenar e para o log; combatentes adicionados depois entram uma única vez na ordem |
+| T3 | Mesa — StrictMode | `addFighter`, `importCharacter`, `removeFighter` e chefe de bioma não chamam `setState` dentro de updaters; ordem e índice de turno deixaram de duplicar |
+| T4 | Mesa — itens | Consome apenas **uma** entrada do inventário por id (duas poções idênticas caem para uma). A chave do `<select>` usa `${it.id}-${idx}` para eliminar aviso de children com mesma chave |
+| T5 | Mesa — Ataque com Dado | `prepararDisparo` é compartilhado com Ações Rápidas: munição, recarga, calor, superaquecimento e fumaça são validados e consumidos uma vez por disparo, inclusive quando o D20 erra |
+
+Regressões adicionadas em `server/tests/auditoria.test.js` e importadas pelo
+harness: F1, M1 (dois casos) e M2 (dois casos). Bundle do cliente, do harness e
+das páginas de smoke recompilados sem avisos novos.
+
+Validação visual no navegador: descrição carregada/salva exatamente e exibida
+na ficha; wizard com poder `300` e limpeza de status; pistola em “Ataque com
+Dado” com `⏳ 2t`, calor `41%` e fumaça `22%`, segundo tiro bloqueado por
+recarga; duas poções idênticas reduzidas a uma; troca de atacante limpando
+item; iniciativa `Atirador → Alvo`, combatente novo entrando uma vez
+(`1/3`) e ciclo `Alvo → Novo → Atirador`. Harness ao fim daquela rodada: **356/356** testes,
+0 falhas, 0 erros de console e 0 avisos de chave duplicada. Nos smoke tests
+offline, o único erro de console é o 404 esperado de `/api/health`.
+
+### 1.10 Kraken do Abismo Eclipse (D-54 a D-60)
+
+Implementação publicável do chefe de Eclipse em `src/game/` e
+`server/src/game/`. Nenhuma regra oficial de D-01 a D-53 foi alterada; os
+valores novos que não vieram da especificação do chefe ficam marcados como
+provisórios em D-54–D-59.
+
+| Elemento | Comportamento implementado |
+| --- | --- |
+| Ativação | `kraken_abismo_eclipse` tem `isEclipse: true`. Ao entrar na batalha, o motor força `estadoEclipse(30, tipo)` mesmo que o calendário esteja no dia 1, ativando passiva, habilidades, horda e arena |
+| Coração da Tempestade | No início do turno do Kraken, cura `5%` do HP máximo. Dano de `Luz`/`Sagrado` (e `Luz Sagrada`) no turno anterior anula a cura; os aliases são normalizados sem criar elemento novo |
+| Arena | `Água Profunda Corrompida` reduz Destreza e Reflexos em `2` para heróis sem Respiração Aquática (provisório). A proteção vem de status `respiracao_aquatica`, `respirador_abissal` ou `pocao_respiracao_aquatica` |
+| Tentáculos da Loucura | Até 3 alvos testam `D20 + Reflexo` contra **CD 16**; falha causa dano físico e Confusão ou Medo por 2 turnos |
+| Maré Negra | Todos os heróis vivos testam `D20 + Reflexo` contra **CD 18**; falha causa dano mágico, Cegueira e Veneno por 3 turnos |
+| Chamado do Abismo | Invoca `1d4 + 2` Marinheiros Afogados com a definição de horda existente; recarga provisória de 4 turnos |
+| Horda | HP é um pool por unidade (`HP individual × corpos`), Moral começa em 100 e cai com abates/dano; o dano escala com corpos e Moral, com barra própria na Batalha |
+| Status | `cegueira`, `veneno`, `confusao` (−20% acerto, provisório), `medo` (−10% acerto/esquiva, provisório) e `respiracao_aquatica` passaram a existir no catálogo e na UI |
+| Interface | Banner mostra a arena e quantos heróis estão penalizados; o combatente do Kraken mostra passiva, habilidades e arena; a horda mostra Moral; heróis sem respiração exibem o aviso |
+| Paridade | `kraken.test.js` com 13 casos cobre ativação, CDs, passiva, aliases de Luz, status, invocação, Moral e arena. Harness local: **426/426**, 0 falhas e 0 erros de console, após incluir `data.test.js` no harness para cobrir também o catálogo de status |
 
 ---
 
@@ -555,6 +635,59 @@ criador antes de virarem regra definitiva.
   **não inclui** o preço-base do equipamento.
 - **Interface:** catálogo único com abas “Catálogo” e “Composição”; não foram
   criadas telas separadas por categoria.
+
+### 1.11 Canhões — tripulação, descrições mecânicas e D20 (D-62 a D-68)
+
+Decisões do criador sobre os canhões, aplicadas nos dois motores e nos dois
+catálogos. As regras D-01 a D-61 continuam válidas; os números abaixo são
+provisórios porque o texto oficial das armas não foi fornecido.
+
+| Decisão | Comportamento implementado |
+| --- | --- |
+| D-62 | `artilharia` continua sendo apenas filtro/grupo (`WEAPON_CATEGORIES.artilharia` e `CANOES_IDS`). `ARMAS_SLOTS` permanece `perto`, `distancia`, `utilitaria` |
+| D-63 | Não existe recurso de munição. A "munição" dos canhões é a carga atual: `usosMax`/`recargaTurnos` nos utilitários e `recarga` em turnos na artilharia |
+| D-64 | Artilharia exige tripulação mínima de 2: o atirador e mais 1 aliado vivo do mesmo lado. Sem ajudante, o disparo continua, mas com `acertoPenalidade: 0.2` (log: "sem tripulação mínima") e `+1` turno de `wpnRecarga` |
+| D-64 | Não há persistência de papéis de tripulação: qualquer combatente vivo do mesmo lado conta como ajudante, inclusive em modo livre (`team` nulo, comparando `isMonster`) |
+| D-65 | "Ignora parte da defesa" virou `ignoraDefesaPct: 25` no Canhão de Dragões e na Besta Pesada. `_applyDamage` reduz a defesa em 25% antes de descontá-la do dano |
+| D-66 | "Peso quase proibitivo" virou `penalidade: { destreza: -1, reflexos: -1 }` no Canhão Bombasta, aplicada por `effectiveAttributes`. "Precisa de tripé" virou `recarga: 5` no Canhão de Cerco (4 + 1 turno) |
+| D-67 | "Pólvora negra" virou `fumacaExtra: 1` no Canhão de Ferro, somado à fumaça padrão do disparo por `_emitirFumaca` |
+| D-68 | Batalha de Mesa com painel **💣 Artilharia — Canhões (🧰)**: atirador, peça, alvos, recarga/carga e tripulação. Acerto “rolar-maior” em mesa, Campo e servidor: `d20 ≥ exigência`, com `exigência = 21 − alvo + dificuldade`; 1 = falha natural e 20 = crítico natural |
+| D-68 | `exigenciaD20(chance, dificuldade)` espelha a probabilidade antiga (0,35 → 14, 0,5 → 11, 0,95 → 2; limites 0 → 20 e 1 → 2) e limita a exigência a `2..20`. `_rollToHit` devolve `chance`, `exigencia`, `dificuldade` e `nivel`; o `nivel` vem da exigência, nunca da rolagem |
+| D-68 | As faixas 🟢 Fácil 1–4 / 🟡 Médio 5–10 / 🟠 Difícil 11–16 / 🔴 Muito Difícil 17–20 mantêm os números, mas agora descrevem a **exigência da ação**; um d20 alto é mais fácil de conseguir. A direção “rolar-menor” anterior fica superada |
+| Catálogo | Os dois conjuntos oficiais convivem com papéis distintos: 8 peças em `EQUIPMENT.canoes` (artilharia/distância) e 5 canhões em `EQUIPMENT.armas` com `categoria: 'utilitaria'`, `usosMax` e `recargaTurnos` |
+| Compatibilidade | Os campos novos (`tripulacaoMinima`, `ignoraDefesaPct`, `fumacaExtra` e `penalidade`) são opcionais e foram espelhados em `src/game/data.js`, `server/src/game/data.js` e nos dois `battleManager.js`. Armas sem esses campos mantêm o comportamento anterior |
+| Não inventado | Os números 25%, −1 DEX/REF, +1 turno de tripé, +1 fumaça e a penalidade de −20%/+1 recarga são provisórios e não foram apresentados como regra oficial. "Munição" não virou recurso persistente; P-14 fica em aberto apenas para escudos e itens mágicos |
+
+#### Correções da revisão (D-62 a D-67)
+
+- **`Rules.jsx`:** criada a seção 14.1 com D-62 a D-67 e corrigidas as passagens antigas que
+  contradiziam a implementação (slot utilitário, `usosMax` para toda artilharia, "munição
+  relevante", fumaça e `ignoraDefesaPct` omitidos).
+- **Batalha de Mesa:** `TableBattle.jsx` passou a aplicar tripulação mínima (−20% de acerto e
+  +1 recarga), `ignoraDefesaPct`, `fumacaExtra` e penalidades de equipamento na mira, antes
+  isso só acontecia nos dois `battleManager.js`. A mesa não usa `BattleManager`.
+- **Penalidade do Bombasta (D-66):** `penalidade` era contabilizada em `effectiveAttributes`,
+  mas a mira usava os atributos-base, então −1 DEX/REF não tinha efeito em combate. Novo helper
+  `penalidadesEquipamento` (nos dois `data.js`) aplica apenas malefícios a atirador e alvo em
+  `_rollToHit` e em `effectiveStat` da mesa; bônus de equipamento continuam fora da rolagem.
+- **Redação do tripé (D-66):** a descrição do Canhão de Cerco dizia "Precisa de tripé
+  (+1 turno)", sugerindo um custo extra que não existe. Agora diz "Tripé embutido: recarga de
+  5 turnos (+1 sem ajudante)", espelhada nos dois catálogos.
+- **Modo livre (D-64):** `_aliadosDe` continua vazio em `'todos'` para fogo amigo, mas a
+  tripulação usa verificação própria (`isMonster`) e humanos contam como ajudantes entre si —
+  comportamento intencional, não bug.
+
+#### Revisão D-68 — painel 🧰 e exigência do D20
+
+- **Batalha de Mesa:** novo painel **💣 Artilharia — Canhões (🧰)**, com atirador, peça,
+  alvos, recarga/carga, tripulação e fumaça; `artilharia` continua apenas filtro/grupo.
+- **D20:** `exigenciaD20` em `src/game/sistema.js` e `server/src/game/sistema.js` converte a
+  chance antiga na exigência mínima (`d20 ≥ exigência`) sem mudar probabilidades. 20 é crítico e
+  1 é falha natural; golpes mais fortes/pesados aumentam a exigência e as faixas classificam a
+  exigência, não a rolagem.
+- **Paridade:** a conversão e o log (`exigia N no d20` / `Médio (≥N)`) estão espelhados nos dois
+  `battleManager.js`; ataque rápido, magias multi-alvo e rolagem manual da mesa usam a mesma
+  regra. `Battle.jsx` e `Rules.jsx` trocaram a descrição “rolar-menor” pela de D-68.
 
 ---
 
@@ -785,11 +918,12 @@ O que falta preencher com o criador/documentação:
   erros no console, incluindo fichas de runas, validação/persistência de runas na
   forja, imunidade do Tenebrium, Contaminação Profana/Núcleo Pandemônico e
   Ruptura Profana em crítico.
-- Resultado do harness nesta rodada (buff/cura/Ações Rápidas/canhões):
-  **347/347 testes passam**, sem falhas e sem erros no console, incluindo os
+- Resultado do harness na rodada de buff/cura/Ações Rápidas/canhões:
+  **347/347 testes passaram**, sem falhas e sem erros no console, incluindo os
   casos de Cura em Massa, Grito de Guerra, Benção, item com redução de cura,
   cura de magia em aliado com Contaminação Pandemônica, persistência de
-  metadados de golpes, duração do congelamento e `weaponId` utilitário.
+  metadados de golpes, duração do congelamento e `weaponId` utilitário. Total
+  atual, após a auditoria 1.9 e a rodada de canhões: **439/439**.
 - Nesta rodada, `npm run test:unit`, `npm run test:e2e` e `npm run build` não
   puderam ser executados porque `node`/`npm` continuam fora do `PATH`; a
   validação foi feita pelo bundle do esbuild e pelo harness de navegador.
@@ -843,7 +977,7 @@ Foram mantidas aqui para não se perderem.
 | P-11 | Fome e saciedade | Não existe | Como sobe, penalidades, comida, raças e se afeta combate |
 | P-12 | Golems | Só existe o slot visual nos efeitos de gema | Golem é personagem, equipamento ou aliado? Como entra na ficha? |
 | P-13 | Veículos | Não existe | Inventário, mapa ou flavor? Capacidade, velocidade e destruição |
-| P-14 | Munição, escudos e itens mágicos | Recarga existe; munição, escudos e itens mágicos não | Munição por tiro ou combate? Escudo é slot separado? Capacidades? |
+| P-14 | Munição, escudos e itens mágicos | **Munição resolvida (D-63):** sem recurso separado — usos por combate + recarga, com tripulação provisória em D-64. Escudos e itens mágicos continuam sem implementação | Escudo é slot separado? Quais capacidades e regras oficiais para escudos/itens mágicos? |
 | P-15 | Especializações de classe | Só existe especialização em arma (+10% corpo a corpo/distância) | Cada classe terá árvore? Quais especializações e custos? |
 | P-16 | Paridade offline/online das gemas | Servidor aplica regeneração/bônus/status; offline só bônus de atributo | Unificar lógica ou manter cópias com teste de paridade? |
 | P-17 | Efeitos raciais e de equipamento no Eclipse | `buffsEclipseRaca` definido, mas não usado; equipamentos melhores não aparecem | Quais buffs entram? Como e quando surgem equipamentos melhores? |
@@ -951,7 +1085,7 @@ golpes.
 | Mesa — Ações Rápidas | Ataque, magia e item com cooldown, MP, alvos, cura/buff/defesa; alvo vazio deixou de bloquear ações em si; área automática dispensa alvo |
 | Mesa — cura | `statusParaEfeito` carrega `reducaoCuraPct`; `reducaoDeCuraRecebida`/`curaRecebida` aplicam a redução com o arredondamento do motor; item cura a si mesmo, como `_resolveItem` |
 | Mesa — equipar | Equipar arma grava `id`; arsenal aceita arma fora do catálogo |
-| Testes | `battle.test.js` com 70 casos (6 novos de magia/buff/cura); harness **347/347**, sem erros de console |
+| Testes | `battle.test.js` com 70 casos (6 novos de magia/buff/cura); harness da rodada **347/347**, sem erros de console; total atual **439/439** |
 | Limpeza | `smoke-tb-ficha.jsx` e bundles temporários de smoke removidos |
 
 ### 3.11 Auditorias e correções finais de golpes e paridade
@@ -964,7 +1098,7 @@ golpes.
 | Mesa — efeitos | HoT/DOT sequenciais, `danoDeStatus` (Podridão incluída), chances/somente-crítico/renovação por `statusId`, controle ativo, defesa em três camadas, itens no próprio usuário com `drunk`, suporte com critérios do motor, recarga por turno do dono, arma da UI no Ataque com Dado, proteção sem mutação e cleanup dos timers |
 | Motor — API/paridade | `attackUtility` aceita `weaponId`; congelamento não sofre mais off-by-one; gemas com o mesmo efeito nos dois motores e regen de gema com redução de cura |
 | Verificado, sem alteração | `condicao`/`modo` são campos de especial/ultimate e já passam por `normalizeMegaSkill`; golpes comuns não os usam no motor. Não existe limite oficial de golpes por ficha — criar um seria inventar regra; aguarda decisão do criador. Canhões de artilharia permanecem como distância (`categoriaDeArma`), os utilitários seguem em `attackUtility` |
-| Testes | `customSkills.test.js`, `offlineSkills.test.js` e `battle.test.js` estendidos; harness **347/347**, sem erros de console; bundle do cliente sem avisos |
+| Testes | `customSkills.test.js`, `offlineSkills.test.js` e `battle.test.js` estendidos; harness da rodada **347/347**, sem erros de console; bundle do cliente sem avisos; total atual **439/439** |
 
 ### 3.12 Gestão de fichas e árvore técnica de golpes (D-53)
 
@@ -977,7 +1111,105 @@ golpes.
 | Combate | Filtro de golpes indisponíveis em `skillsOf` dos motores cliente/servidor e em `makeFighter` da Mesa, para golpes bloqueados ou acima do nível não serem usados |
 | Não inventado | Árvore é estrutura técnica/provisória: sem custo de XP, sem pré-requisitos entre nós e sem regra oficial de desbloqueio (P-15/P-01 seguem pendentes) |
 | Verificado | Smoke offline: desbloqueio persistiu e `spells` ficou `['golpe_a', 'golpe_b']` com ids válidos; golpe de nível 10 permaneceu fora da ficha nível 5. Os 404 de `/api/health` no servidor estático são esperados no modo offline |
-| Testes | `customSkills.test.js` e `offlineSkills.test.js` estendidos; harness **350/350**, sem erros de console; bundle do cliente compilado com `--jsx=automatic` |
+| Testes | `customSkills.test.js` e `offlineSkills.test.js` estendidos; harness da rodada **350/350**, sem erros de console; bundle do cliente compilado com `--jsx=automatic`; total atual **439/439** |
+
+### 3.13 Auditoria de correções de comportamento (1.9)
+
+| Área | Resultado |
+| --- | --- |
+| Criação de golpes | `alvo` volta a ser gravado como chave; defaults de especial/ultimate não são sobrescritos por defaults de golpe comum; trocar o tipo limpa status incompatível |
+| Fichas | Descrição do wizard salva, persistida online/offline, editável em `CharacterManager.jsx` e visível em `CharacterSheet.jsx`; migração 0014 idempotente; edição parcial não apaga `desc` |
+| Motores online/offline | IA respeita congelamento; buffs físico e mágico expiram em contadores próprios com compatibilidade para `buffTurns`; alterações espelhadas nos dois `battleManager.js` |
+| Batalha de Mesa | Limpeza de seleção ao trocar atacante; iniciativa com estado atual; sem `setState` em updaters; uma cópia por item consumida; `prepararDisparo` unifica o custo do tiro no Ataque com Dado e nas Ações Rápidas |
+| Interface | Smoke pages confirmaram descrição, wizard e mesa no navegador; aviso de `same key` das poções idênticas eliminado |
+| Testes | `auditoria.test.js` com 6 casos importado pelo harness; naquela rodada, **356/356**, 0 falhas, 0 erros de console e 0 avisos de chave duplicada |
+| Publicação | Bump do service worker para `cbrpg-v4`, invalidando `cbrpg-v3` e forçando o download dos bundles corrigidos |
+
+### 3.14 Kraken Eclipse — implementação e validação (1.10)
+
+| Área | Resultado |
+| --- | --- |
+| Dados | `SPELLS` e `STATUS_DEFS` do Kraken, `respirador_abissal` e `pocao_respiracao_aquatica` espelhados em cliente/servidor; metadados de golpe preservados por `skillFromSpell` |
+| Bestiário | `kraken_abismo_eclipse` e `horda_marinheiros_afogados` com `isEclipse`, `arenaEffect`, `passivaEclipse`, `habilidades`, `horda` e moral; `buildMonster` expõe esses campos ao participante |
+| Motores | Passiva, bloqueio por Luz/Sagrado, arena, testes de Reflexo CD 16/18, três habilidades, IA do Kraken, dano escalável e queda de Moral espelhados nos dois `battleManager.js` |
+| Compatibilidade | `_rollToHit` ganhou um 5º argumento opcional `battle` e repassa o contexto nas chamadas internas; testes antigos continuam válidos. Diferenças prévias entre cliente e servidor (`randomUUID`, `clamp`, gemas, imports) foram preservadas |
+| Interface | Banner da arena, selos de Kraken/habilidades/penalidade e barra de Moral adicionados à Batalha |
+| Testes | `server/tests/kraken.test.js` com 13 casos importado pelo harness; `data.test.js` atualizado para os 13 status e também importado pelo harness, evitando que o Vitest do CI veja uma regressão que o navegador não via; recompilação com aliases de `vitest`, `node:*`, `pg` e `@electric-sql/pglite`; **426/426**, 0 falhas e 0 erros de console |
+| Publicação | Service worker bumpado para `cbrpg-v5`, invalidando `cbrpg-v4`; build/publish via Actions e Pages, com verificação no site público |
+| Não inventado | Durações de 2/3 turnos, CDs 16/18, cura de 5% e invocação 1d4+2 vêm da especificação do chefe; penalidades numéricas da arena, Confusão/Medo, dano escalável e recarga do Chamado seguem provisórias (D-54 a D-59) |
+
+### 3.15 Correção da horda na arena (D-61)
+
+| Área | Resultado |
+| --- | --- |
+| Bug | Após `Chamado do Abismo`, a horda entrava em `participants`, aparecia na timeline, no seletor e no log, mas não renderizava como `.ff-fighter` na arena e não exibia a barra de Moral |
+| Causa | `_invocarHordaKraken` adiciona o participante mutando `battle.participants` no mesmo array; `emit` publica só uma cópia rasa de `battle`. Os memos de `heroes`, `enemies`, `teamA` e `teamB` em `src/pages/Battle.jsx` dependiam apenas de `participants` e ficavam presos à referência antiga |
+| Correção | `heroes`, `enemies`, `teamA` e `teamB` agora dependem também de `battle`; a formação e a arena passam a ver o novo combatente na mesma atualização que já atualizava timeline/log |
+| Validação | Smoke local com `Chamado do Abismo`: lado “👹 Inimigos” passou a conter `Marinheiros Afogados` com barras `HP 4458/4458` e `Moral 100/100`; arquivo temporário removido após a checagem |
+| Regras | Nenhuma regra nova. A horda, o pool de HP e a Moral continuam provisórios conforme D-58 |
+
+### 3.16 Canhões — implementação e validação (1.11)
+
+| Área | Resultado |
+| --- | --- |
+| Dados | `EQUIPMENT.canoes` e `EQUIPMENT.armas` espelhados com `tripulacaoMinima: 2`, `ignoraDefesaPct: 25`, `fumacaExtra: 1`, `penalidade` do bombasta e `recarga: 5` do tripé; utilitários mantêm `usosMax` + `recargaTurnos` |
+| Motores | `_tripulacaoIncompleta`, `acertoPenalidade` em `_rollToHit`, `opts.ignoraDefesaPct` em `_applyDamage`, +1 recarga sem ajudante, penalidade nos alvos extras e `fumacaExtra` em `_emitirFumaca`, nos dois `battleManager.js` |
+| Compatibilidade | Campos opcionais; armas sem tripulação ignoram a verificação. Durante o teste foi encontrado e corrigido um nome trocado (`ignorarDefesaPct` → `ignoraDefesaPct`) nos dois motores — sem essa correção o dano não mudava |
+| Testes | `server/tests/canhoes.test.js` com 8 casos e `server/tests/data.test.js` com 5 casos novos, ambos importados pelo harness; recompilação com aliases de `vitest`, `node:*`, `pg` e `@electric-sql/pglite`; **439/439**, 0 falhas, 0 erros de console e 0 avisos |
+| Não inventado | Nenhum número foi apresentado como regra oficial: os valores de D-62 a D-67 são provisórios e P-14 continua aberto para escudos e itens mágicos |
+| Publicação | Commit `fe331da` em `origin/main`, Actions #123 verde (build + deploy); site público servindo `cbrpg-v7`. Verificado no navegador: loja com “💣 Artilharia 8” e descrições mecânicas publicadas (tripé `Recarga 5`, pólvora negra `+1 fumaça`, bombasta `−1 DEX/REF`, Dragões `ignora 25% da defesa`); únicos erros de console: os dois `/api/health` offline conhecidos |
+
+### 3.17 Revisão dos canhões — paridade e regras 14.1 (1.12)
+
+| Área | Resultado |
+| --- | --- |
+| Batalha de Mesa | `TableBattle.jsx` passou a aplicar D-64, D-65 e D-67 e as penalidades de equipamento na mira; antes essas regras existiam só nos dois `battleManager.js`. A mesa não usa `BattleManager`, então a paridade foi implementada diretamente nela |
+| Mira (D-66) | Novo helper `penalidadesEquipamento` nos dois `data.js`, usado por `_attrsMira` nos motores e por `effectiveStat` na mesa. Só malefícios entram na rolagem; bônus de equipamento continuam fora. Sem isso, o `−1 DEX/REF` do Bombasta não tinha efeito em combate |
+| Regras | Seção **14.1 Canhões e Artilharia (PROVISÓRIO — D-62 a D-67)** publicada em `Rules.jsx`, com D-01 a D-61 mantidos. Corrigidas as passagens antigas que diziam que canhões ocupavam slot utilitário, que toda artilharia usava `usosMax`, que havia “munição relevante” e que o tripé somava +1 turno extra |
+| Catálogo | Descrição do Canhão de Cerco trocada para “Tripé embutido: recarga de 5 turnos (+1 sem ajudante)” nos dois `data.js`; o +1 provisório restante é apenas o de tripulação incompleta (D-64) |
+| Testes | Novo caso para a penalidade de mira do Bombasta em `server/tests/canhoes.test.js`; harness **440/440**, 0 falhas. Bundle do cliente compilado com esbuild; única compilação oficial permanece a do Actions |
+| Publicação | Commit `05dd717` em `origin/main`, Actions **#125** verde (build + deploy), deployment `7950273127` com status `success`. Site público servindo `cbrpg-v8` (`caches.keys()` confirmou o cache ativo). Verificado no navegador: seção 14.1 completa publicada; Bombasta com VEL/REF 7 e recarga 6t; Canhão de Ferro sem ajudante com aviso, recarga 6t e +1 fumaça; Canhão de Dragões com crítico e 520 dano contra defesa 100 (D-65) |
+| Follow-up | Divergência preexistente fora desta revisão: `_physMult` do cliente lê `g.efeitos?.[categoria]?.bonus?.forca`, enquanto o servidor lê `fx?.bonus?.forca`. Avaliar em separado antes de mexer, para não alterar equilíbrio sem decisão |
+
+### 3.18 Revisão D-68 — painel 🧰 e D20 rolar-maior (1.13)
+
+| Área | Resultado |
+| --- | --- |
+| Decisão | D-68 é **provisória**: acerto se `d20 ≥ exigência`; 20 = crítico natural e 1 = falha natural. A direção “rolar-menor” anterior fica superada; D-01 a D-67 continuam válidos |
+| Regras documentadas | `Rules.jsx`: combate, faixas do D20, seção 7 e título 14.1 atualizados para D-62 a D-68; painel da mesa e a equivalência `exigência = 21 − alvo + dificuldade` explicados. Nenhuma regra oficial foi inventada |
+| Motores | `exigenciaD20` nos dois `sistema.js`; `_rollToHit` nos dois `battleManager.js` devolve `chance`/`exigencia` e classifica o `nivel` pela exigência. Log de combate passa a mostrar `exigia N no d20` e `Faixa (≥N)` |
+| Interface | `TableBattle.jsx`: painel 💣 Artilharia (🧰), conversão no ataque rápido, magias multi-alvo e rolagem manual; `Battle.jsx`: título das faixas com D-68 |
+| Testes | `server/tests/sistema.test.js` com conversões 0,35 → 14, 0,5 → 11, 0,95 → 2, 0 → 20 e 1 → 2 e classificação pela exigência; `server/tests/battle.test.js` com rolagens altas equivalentes e exigência > para golpes fortes. Suíte completa: **623/623**, 0 falhas |
+| Validação local | `npm run build` OK (Vite 5.4.21; apenas aviso de tamanho de chunk). Smoke em `http://127.0.0.1:5173/mesa-de-batalha.html`: painel 🧰 com atirador/peça/alvos exibindo `exige 10 no D20`, tiro registrado `⚔️ Atirador erra Alvo com Canhão Leve → D20:7 · Médio (≥10)`, recarga `⏳ 4t` e ataque rápido `Chance: 53% (exige 10 ou mais no D20; 20 é crítico, 1 é falha)` com `Ajudante ataca Alvo → D20: 14 · Médio (≥10) → ACERTA → 100 dano` |
+| Publicação | Service worker bumpado para `cbrpg-v9`, invalidando `cbrpg-v8`. Commit `dca0333` em `origin/main`, Actions **#127** verde (build + testes + deploy), jobs `build` e `deploy` com `success`, deployment `7952442283` com status `success`. Verificado no navegador: `caches.keys()` passou a `cbrpg-v9`; regras com D-68, “rolar-maior”, `exigência = 21 − alvo + dificuldade`, seção 14.1 D-62 a D-68 e painel da mesa; mesa pública com o painel 💣 Artilharia (🧰) exibindo `exige 11 no D20`, tiro `⚔️ Atirador erra Alvo com Canhão Bombasta → D20:5 · Difícil (≥11)` e ataque rápido `Chance: 53% (exige 10 ou mais no D20; 20 é crítico, 1 é falha)` com `→ D20: 3 · Médio (≥10) → ERRA`. Únicos erros de console: os dois `/api/health` do Render offline, já conhecidos |
+
+### 3.19 Revisão de interface — Poder, Sangue e Atributos (21/11)
+
+| Área | Resultado |
+| --- | --- |
+| Decisões | Usuário escolheu **rótulos dinâmicos** para `poder`, **elemento comum** para Sangue, **Base/BR/BC/Final** para atributos e **publicar** após validar. Nenhuma regra oficial nova: D-01 a D-61 seguem válidos; D-62+ continuam provisórios |
+| `poder` — compatibilidade | Chave `poder`, escala 10–1000 e fórmulas do motor **inalteradas**. Mudaram só rótulos, ajuda, cartões, resumo e logs: “Poder do golpe/cura (%)” para ataque/cura, “Aumento de dano (%)” para buff, defesa com campo desativado e aviso de que o valor é ignorado. Logs passam a dizer `poder do golpe X%` e `aumento de dano aliado +X%` nos dois `battleManager.js` |
+| Auxiliares | `src/config.js`: `rotuloPoder`, `ajudaPoder`, `resumoPoder`, `ELEMENTOS_LABELS` e `rotuloElemento`, usados por `FichaForm`, `CharacterSheet`, `CharacterManager`, `Registry`, `ShareView` e `Battle` |
+| Sangue | `sangue` incluído nos catálogos canônicos (`src/game/data.js`, `server/src/game/data.js`) e na lista local de monstros customizados (`server/src/services/customContent.js`). Usa a regra genérica: fraqueza ×1,5, resistência ×0,5, sem efeito de status. A **Runa de Sangue** da Forja continua domínio separado (efeito de equipamento, sem alterar fraquezas/resistências) |
+| Atributos | `attributeBreakdown()` nos dois `data.js` expõe `base` (pontos distribuídos, já salvos em `attributes`), `race` (BR, com a penalidade de múltiplas raças), `class` (BC), equipamento/penalidades/gemas e `final`. `effectiveAttributes()` virou wrapper e `deriveStats()` também devolve `attributeBreakdown`; **nenhuma coluna, migração ou mudança de dados salvos** |
+| Interface | Etapa 9 do `FichaForm.jsx` e as fichas em `CharacterSheet.jsx`/`ShareView.jsx` mostram tabela Base / BR / BC / Final, estilo Pokémon/Evocreo. Escolher raça ou classe nunca altera a Base. O wizard agora preserva o `bonus` da classe selecionada — antes ele era descartado e a coluna BC ficava vazia na criação; o servidor continua normalizando pelo preset quando o bônus não vem no payload. `Rules.jsx` explica os dois usos de `poder`, o elemento Sangue e o detalhamento; `styles.css` ganhou `.attr-head`, `.attr-row.attr-detailed`, `.attr-bonus`, `.attr-total`, `.field-help` e `.elem-sangue` |
+| Testes | Novo `server/tests/elements.test.js` (catálogo, validadores online/offline, monstros customizados e `_elemMult` para sangue); casos em `data.test.js`, `customSkills.test.js`, `offlineSkills.test.js` e `characters.test.js`. Suíte completa: **630/630**, 0 falhas |
+| Validação local | `npm run build` OK (Vite 5.4.21; apenas aviso de tamanho de chunk). Smoke em `http://127.0.0.1:5173/` com conta offline: etapa 9 mostrando `Força 6 / BR +2 / BC +3 / Final 11`, `RES 6 / +2 / 8` e `DEX 6 / +1 / 7` com a Base inalterada; formulário de golpes com `🩸 Sangue` na lista de elementos e rótulos/ajuda alternando entre `Poder do golpe (%)`, `Poder da cura (%)`, `Aumento de dano (%)` e `Poder (não usado pela defesa)` (campo desativado), mantendo `min=10`/`max=1000`; `regras.html` com as seções 2 e 7 explicando Base/BR/BC/Final, os dois usos de `poder` e Sangue. Nenhum erro de console |
+| Publicação | Service worker bumpado para `cbrpg-v10`, invalidando `cbrpg-v9`. Commit `f9fad40` em `origin/main`, Actions **#129** (run `44926420496`) verde com jobs `build` e `deploy` em `success`, deployment Pages `7966327251` com status `success`. Verificação em `https://raphael-pereira-nascimento.github.io/campo-de-batalha-rpg/`: cache ativo `cbrpg-v10` e SW `activated`, ficha criada no site com `Força 6 / BR +2 / BC +3 / Final 11`, `RES 6 / +2 / 8` e `DEX 6 / +1 / 7`, formulário de golpes com `🩸 Sangue` e rótulos `Poder do golpe (%)`, `Poder da cura (%)`, `Aumento de dano (%)` e `Poder (não usado pela defesa)` (desativado, `min=10`/`max=1000`), `regras.html` com seções 2 e 7 atualizadas. Únicos erros de console: as duas chamadas conhecidas a `/api/health` do Render offline |
+
+### 3.20 Exclusão por cartão, temas, árvore e responsividade (21/11)
+
+| Área | Resultado |
+| --- | --- |
+| Decisões | Usuário escolheu **excluir nos cartões da tela principal**, **temas visuais**, **corrigir bugs + UX da árvore** e **responsividade completa**. D-01 a D-61 permanecem válidos; D-62+ seguem provisórios. Árvore continua sendo apenas estrutura técnica (D-53): sem custo de XP, pré-requisitos, limite de golpes ou regras novas de desbloqueio |
+| Excluir ficha | `Characters.jsx`: botão `🗑️ Excluir` em cada cartão, com modal `role="alertdialog"` (nome da ficha, aviso de dados vinculados, opção de exportar antes, erro tratado). A confirmação chama `api.deleteCharacter`, limpa a seleção se era a ficha aberta e recarrega a lista. O botão do `CharacterManager.jsx` foi mantido |
+| Temas | `src/theme.js` (chave `cbr_theme`) + `src/components/ThemeSwitcher.jsx` montado no `boot.jsx`: Escuro, Claro, Pergaminho e Alto contraste nas 13 páginas. `data-theme` é aplicado antes do React montar; troca em uma aba propaga para as outras via evento `storage`. Só tokens CSS mudam — nenhum dado, regra ou mecânica é afetada |
+| Árvore — correções | `TableBattle.jsx`: `makeFighter()` agora aplica `golpesDisponiveis()` **depois** do spread e filtra `spells` pelos ids disponíveis, preservando magias do catálogo e chefes sem árvore. Servidor e cliente recalculam `spells` em recompensa, level up, nível manual, criação e edição; `desbloqueado === null` passou a valer como bloqueado nos dois validadores, mantendo `undefined` como legado disponível. Golpes de classe já nascem com metadados da árvore |
+| Árvore — UX | `CharacterManager.jsx`: contadores, busca por nome/descrição, filtros por tipo e estado, motivo separado para “bloqueado” e “requer nível N”, destaque do nó em edição com rolagem até o formulário, duplicar, remover com confirmação e mover entre níveis 1–30. Sem alteração de dados além dos metadados já existentes |
+| Responsividade | Menu de atalhos colapsável na tela de fichas; grids em uma coluna, alvos de toque ≥44px, campos com 16px (evita zoom do iOS), tabelas com `overflow-x:auto`, tabela Base/BR/BC/Final reformatada como cartão no mobile, layout da Forja sem grid inline fixo, `100dvh`, `env(safe-area-inset-*)` e `viewport-fit=cover` nos 13 HTMLs |
+| Testes | Novo `server/tests/skillTree.test.js` (semântica de `null`, paridade cliente/servidor, `spells` derivado na criação e recalculado ao subir/descer de nível). Suíte completa: **636/636**, 0 falhas |
+| Validação local | `npm run build` OK (Vite 5.4.21; apenas aviso de tamanho de chunk). Smoke em `http://127.0.0.1:5173/` com conta offline: seletor 🎨 aplicou `data-theme="claro"` e persistiu `cbr_theme`; botão de exclusão abriu o modal e, ao confirmar, removeu a ficha da lista e do `localStorage` sem erros de console; gerenciador mostrou `3 golpes na árvore / 1 disponíveis / 2 níveis ocupados`, nós `🔒 Bloqueado` e `⏳ Requer nível 9` distintos, e a busca por “gelo” filtrou para um único nó. Nenhum erro de console |
+| Publicação | Service worker bumpado para `cbrpg-v11`, invalidando `cbrpg-v10`. Commit `d2672c6` em `origin/main`, Actions **#131** (run `44934980160`) verde com jobs `build` e `deploy` em `success`, deployment Pages `7967455489` com status `success`. Verificação em `https://raphael-pereira-nascimento.github.io/campo-de-batalha-rpg/`: cache ativo `cbrpg-v11`, SW `activated`, seletor 🎨 visível, menu mobile `☰ Navegação` presente, tema `📜 Pergaminho` aplicado/persistido e botão `🗑️ Excluir` no cartão abrindo o modal e removendo a ficha após confirmação. Únicos erros de console: as duas chamadas conhecidas a `/api/health` do Render offline |
 
 ---
 

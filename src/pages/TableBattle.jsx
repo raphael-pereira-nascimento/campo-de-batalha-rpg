@@ -23,14 +23,24 @@ import {
   NIVEIS_DIFICULDADE_D20,
   nivelDificuldadeD20,
   dificuldadeDoGolpe,
+  exigenciaD20,
 } from '../game/sistema.js';
 import { MONSTERS } from '../game/monsters.js';
-import { SPELLS, STATUS_DEFS, EQUIPMENT, armasDeEquipamento, skillFromSpell } from '../game/data.js';
+import { SPELLS, STATUS_DEFS, EQUIPMENT, armasDeEquipamento, skillFromSpell, penalidadesEquipamento } from '../game/data.js';
 import { danoDeStatus, normalizarChance } from '../game/combatEffects.js';
 import { golpesDisponiveis } from '../game/skillValidation.js';
 
 // Catálogo de armas para o painel de Arsenais: armas gerais + peças de artilharia.
 const CATALOGO_ARMAS = { ...EQUIPMENT.armas, ...EQUIPMENT.canoes };
+
+// 💣 Canhões = 8 peças de artilharia + 5 modelos utilitários. O grupo
+// "artilharia" continua sendo apenas filtro (D-62), nunca um slot.
+const CANHOES_IDS = new Set(Object.keys(EQUIPMENT.canoes || {}));
+const ehCanhao = (arma) => !!arma && (
+  CANHOES_IDS.has(arma.id)
+  || (arma.categoria === 'utilitaria' && arma.tipo === 'arma_fogo')
+  || /canhão/i.test(arma.nome || '')
+);
 
 
 // Recarga efetiva de uma arma (canhões usam `recargaTurnos`; dados antigos usam `recarga`).
@@ -290,7 +300,7 @@ function multiplicadorDano(f, tipo) {
 // Camadas de defesa do combate principal: defesa total reduce pela metade,
 // reduções percentuais por efeito e, por fim, a defesa numérica da armadura.
 // `stat: 'defesa'` é mantido como legado percentual de efeitos antigos da mesa.
-function danoComDefesa(alvo, danoBruto, tipo) {
+function danoComDefesa(alvo, danoBruto, tipo, ignoraDefesaPct = 0) {
   const bruto = Math.max(0, Math.round(danoBruto));
   let valor = bruto;
   const defesaTotal = !!alvo?.defense || (alvo?.statusEffects || []).some((e) => e.stat === 'defense');
@@ -302,7 +312,11 @@ function danoComDefesa(alvo, danoBruto, tipo) {
     if (tipo === 'magia' && e.stat === 'reducaoDanoMagico') pct += Math.abs(Number(e.value) || 0);
   }
   if (pct > 0) valor = Math.round(valor * (1 - Math.min(100, pct) / 100));
-  valor = Math.max(0, valor - (Number(alvo?.defesa) || 0));
+  // D-65: canhões que ignoram parte da defesa reduzem a armadura numérica antes
+  // de descontá-la, igual ao `_applyDamage` do motor.
+  const ignora = Math.min(100, Math.max(0, Number(ignoraDefesaPct) || 0));
+  const defesa = Math.max(0, Math.round((Number(alvo?.defesa) || 0) * (1 - ignora / 100)));
+  valor = Math.max(0, valor - defesa);
   if (valor === 0 && bruto > 0) valor = Math.max(1, Math.round(bruto * 0.1));
   return valor;
 }
@@ -335,6 +349,23 @@ function makeFighter(name, team, attrs = {}, extra = {}) {
   const a = { forca: 5, inteligencia: 5, resistencia: 5, destreza: 5, reflexos: 5, ...attrs };
   const hpMax = 500 + (a.resistencia || 5) * 10;
   const mpMax = (a.inteligencia || 5) * 10;
+  const level = Number(extra.level) || 1;
+  // A árvore é filtrada DEPOIS do spread: golpes bloqueados/acima do nível
+  // ficam guardados na ficha, mas nunca entram na mesa (paridade com o motor).
+  const temArvore = Array.isArray(extra.skills);
+  const skillsDisponiveis = temArvore ? golpesDisponiveis(extra.skills, level) : [];
+  const idsDisponiveis = new Set(skillsDisponiveis.map((s) => s?.id || s?.nome).filter(Boolean));
+  const spellsBrutos = Array.isArray(extra.spells) ? extra.spells : [];
+  // Chefes e fichas antigas usam só `spells` (catálogo SPELLS): não filtrar.
+  // Quando há árvore, só caem os ids de golpes guardados/bloqueados; magias do
+  // catálogo continuam disponíveis mesmo que a ficha nunca tenha sido re-salva.
+  const idsCatalogo = new Set([
+    ...Object.keys(SPELLS),
+    ...Object.values(SPELLS).map((s) => s?.nome).filter(Boolean),
+  ]);
+  const spellsDisponiveis = temArvore && skillsDisponiveis.length
+    ? spellsBrutos.filter((ref) => idsDisponiveis.has(ref) || idsCatalogo.has(ref))
+    : spellsBrutos;
   return {
     id: uid(), name, team,
     hp: hpMax, hpMax, mp: mpMax, mpMax,
@@ -344,18 +375,18 @@ function makeFighter(name, team, attrs = {}, extra = {}) {
     statusEffects: [],
     initiative: null,
     cooldowns: {},
-    protection: extra.protection || null,
-    equipment: extra.equipment || {},
-    spells: extra.spells || [],
-    skills: golpesDisponiveis(extra.skills || [], extra.level || 1),
-    inventory: extra.inventory || [],
-    level: extra.level || 1,
     defense: false,
     defesa: Number(extra.defesa) || 0,
     drunk: false,
     drunkTurns: 0,
-    _charId: extra._charId || null,
     ...extra,
+    level,
+    protection: extra.protection || null,
+    equipment: extra.equipment || {},
+    inventory: extra.inventory || [],
+    _charId: extra._charId || null,
+    skills: skillsDisponiveis,
+    spells: spellsDisponiveis,
     hpMaxOriginal: extra.hpMaxOriginal ?? hpMax,
   };
 }
@@ -380,13 +411,16 @@ function effectiveStat(fighter, stat) {
     if (stat === 'destreza') base -= 1;
     if (stat === 'reflexos') base -= 1;
   }
+  // D-66: malefícios de equipamento (ex.: −1 DEX/REF do Canhão Bombasta)
+  // também valem na mira da mesa, como no motor principal.
+  base -= penalidadesEquipamento(fighter?.equipment || {})[stat] || 0;
   for (const e of fighter.statusEffects) {
     if (e.stat === stat) base += e.value;
   }
   return Math.max(0, base);
 }
 
-function computeHitChance(attacker, defender, fumacaAtacante = 0, fumacaAlvo = 0) {
+function computeHitChance(attacker, defender, fumacaAtacante = 0, fumacaAlvo = 0, acertoPenalidade = 0) {
   const atkMod = effectiveStat(attacker, 'destreza') + effectiveStat(attacker, 'forca') * 0.3;
   const defMod = effectiveStat(defender, 'reflexos') + effectiveStat(defender, 'resistencia') * 0.2;
   const base = 0.5;
@@ -396,7 +430,7 @@ function computeHitChance(attacker, defender, fumacaAtacante = 0, fumacaAlvo = 0
   const atkPenal = penalidadesDeStatus(attacker);
   const defPenal = penalidadesDeStatus(defender);
   return Math.max(0.05, Math.min(0.95,
-    base + delta - fumacaPenal - atkPenal.acc - defPenal.dodge,
+    base + delta - fumacaPenal - atkPenal.acc - defPenal.dodge - acertoPenalidade,
   ));
 }
 
@@ -455,6 +489,11 @@ const [lastRoll, setLastRoll] = useState(null);
   const [selSpellId, setSelSpellId] = useState('');
   const [selItemId, setSelItemId] = useState('');
 
+  // Painel dedicado de artilharia (🧰), espelhando o Campo de Batalha.
+  const [canhaoAtirador, setCanhaoAtirador] = useState('');
+  const [canhaoId, setCanhaoId] = useState('');
+  const [canhaoAlvos, setCanhaoAlvos] = useState([]);
+
   // Controle de recarga e usos de armas utilitárias (canhões etc.)
   // wpnRecarga[armaId] = turnos restantes até poder usar novamente
   // wpnUsos[armaId] = usos restantes antes de precisar recarregar
@@ -495,6 +534,62 @@ const [lastRoll, setLastRoll] = useState(null);
     }
     return lista;
   }, []);
+
+  // D-64: artilharia exige atirador + 1 aliado vivo. A mesa não tem papéis de
+  // tripulação persistentes: qualquer combatente vivo do mesmo time serve.
+  const tripulacaoIncompleta = useCallback((atirador, arma) => {
+    const minimo = Number(arma?.tripulacaoMinima) || 0;
+    if (minimo <= 1 || !atirador) return false;
+    const ajudantes = fighters.filter((f) =>
+      f.id !== atirador.id && f.hp > 0 && f.team === atirador.team);
+    return ajudantes.length < minimo - 1;
+  }, [fighters]);
+
+  // Canhões equipados pelo atirador (8 de artilharia + 5 utilitários).
+  const canhoesDoLutador = useCallback(
+    (f) => armasDoLutador(f).filter(ehCanhao),
+    [armasDoLutador],
+  );
+  const atiradorCanhao = useMemo(
+    () => fighters.find((f) => f.id === canhaoAtirador) || null,
+    [fighters, canhaoAtirador],
+  );
+  const canhaoSelecionado = useMemo(() => (
+    atiradorCanhao
+      ? canhoesDoLutador(atiradorCanhao).find((a) => a.id === canhaoId) || null
+      : null
+  ), [atiradorCanhao, canhaoId, canhoesDoLutador]);
+  useEffect(() => {
+    if (!canhaoAtirador) {
+      setCanhaoId('');
+      setCanhaoAlvos([]);
+      return;
+    }
+    const atk = fighters.find((f) => f.id === canhaoAtirador);
+    const opcoes = canhoesDoLutador(atk);
+    if (opcoes.some((a) => a.id === canhaoId)) return;
+    const preferida = opcoes.find((a) => CANHOES_IDS.has(a.id)) || opcoes[0];
+    setCanhaoId(preferida ? preferida.id : '');
+    setCanhaoAlvos([]);
+  }, [canhaoAtirador, fighters, canhaoId, canhoesDoLutador]);
+
+  // Estado do painel de artilharia: tripulação, carga, recarga e calor.
+  const canhaoTripIncompleta = !!canhaoSelecionado
+    && tripulacaoIncompleta(atiradorCanhao, canhaoSelecionado);
+  const canhaoRecarga = canhaoAtirador && canhaoSelecionado
+    ? Number((wpnRecarga[canhaoAtirador] || {})[canhaoSelecionado.id]) || 0
+    : 0;
+  const canhaoUsos = canhaoAtirador && canhaoSelecionado
+    ? ((wpnUsos[canhaoAtirador] || {})[canhaoSelecionado.id]) ?? canhaoSelecionado.usosMax
+    : 0;
+  const canhaoTravado = canhaoAtirador && canhaoSelecionado
+    ? Number((wpnSuperaquecido[canhaoAtirador] || {})[canhaoSelecionado.id]) || 0
+    : 0;
+  const canhaoAutoAlvo = !!canhaoSelecionado
+    && alvoNormalizado(canhaoSelecionado).tipo === 'area';
+  const canhaoBloqueado = !canhaoAtirador || !canhaoSelecionado || canhaoRecarga > 0
+    || canhaoTravado > 0 || (!!canhaoSelecionado?.usosMax && canhaoUsos <= 0)
+    || (!canhaoAutoAlvo && canhaoAlvos.length === 0);
 
   // Arma escolhida no painel de ações e se ela está travada por superaquecimento.
   const armaSelecionada = useMemo(() => {
@@ -581,11 +676,11 @@ const [lastRoll, setLastRoll] = useState(null);
   // Resolve o modo de alvo de um golpe (unico/area/cone/explosao) e devolve os
   // alvos válidos: somente inimigos vivos, com o alvo principal escolhido
   // primeiro. Em área, todos os inimigos vivos entram automaticamente.
-  const alvosDoGolpe = useCallback((attacker, golpe) => {
+  const alvosDoGolpe = useCallback((attacker, golpe, selecionados = actTargets) => {
     const spec = alvoNormalizado(golpe || {});
     if (!attacker) return { spec, alvos: [] };
     const inimigos = fighters.filter((f) => f.hp > 0 && f.team !== attacker.team);
-    const escolhidos = actTargets
+    const escolhidos = selecionados
       .map((id) => fighters.find((f) => f.id === id))
       .filter((f) => f && f.hp > 0 && f.team !== attacker.team);
 
@@ -704,44 +799,31 @@ const [lastRoll, setLastRoll] = useState(null);
 
   const addFighter = useCallback(() => {
     if (!newName.trim()) return;
-    setFighters((prevFighters) => {
-      const next = [...prevFighters, makeFighter(newName.trim(), newTeam, { ...newAttrs })];
-      if (initiativeRolled) {
-        setInitiativeOrder((prevOrder) => [...prevOrder, next[next.length - 1].id]);
-      }
-      return next;
-    });
+    const f = makeFighter(newName.trim(), newTeam, { ...newAttrs });
+    setFighters((prevFighters) => [...prevFighters, f]);
+    // setState dentro de updater roda duas vezes no StrictMode e duplica a ordem.
+    if (initiativeRolled) setInitiativeOrder((prevOrder) => [...prevOrder, f.id]);
     setNewName('');
   }, [newName, newTeam, newAttrs, initiativeRolled]);
 
   const removeFighter = useCallback((id) => {
-    setFighters((prevFighters) => {
-      const removedIdx = prevFighters.findIndex((f) => f.id === id);
-      const updated = prevFighters.filter((f) => f.id !== id);
-      setInitiativeOrder((prevOrder) => {
-        if (!prevOrder.includes(id)) return prevOrder;
-        const next = prevOrder.filter((fid) => fid !== id);
-        const curIdx = prevOrder.indexOf(id);
-        let newIdx = currentTurnIndex;
-        if (curIdx <= currentTurnIndex) newIdx = Math.max(0, currentTurnIndex - 1);
-        if (newIdx >= next.length) newIdx = Math.max(0, next.length - 1);
-        setCurrentTurnIndex(newIdx);
-        return next;
-      });
-      return updated;
-    });
-  }, [currentTurnIndex]);
+    setFighters((prevFighters) => prevFighters.filter((f) => f.id !== id));
+    if (!initiativeOrder.includes(id)) return;
+    const next = initiativeOrder.filter((fid) => fid !== id);
+    const curIdx = initiativeOrder.indexOf(id);
+    let newIdx = currentTurnIndex;
+    if (curIdx <= currentTurnIndex) newIdx = Math.max(0, currentTurnIndex - 1);
+    if (newIdx >= next.length) newIdx = Math.max(0, next.length - 1);
+    setInitiativeOrder(next);
+    setCurrentTurnIndex(newIdx);
+  }, [currentTurnIndex, initiativeOrder]);
 
   const importCharacter = useCallback((charId) => {
     const c = characters.find((ch) => ch.id === charId);
     if (!c) return;
-    setFighters((prevFighters) => {
-      const next = [...prevFighters, { ...fighterFromCharacter(c, importTeam), _charId: charId }];
-      if (initiativeRolled) {
-        setInitiativeOrder((prevOrder) => [...prevOrder, next[next.length - 1].id]);
-      }
-      return next;
-    });
+    const f = { ...fighterFromCharacter(c, importTeam), _charId: charId };
+    setFighters((prevFighters) => [...prevFighters, f]);
+    if (initiativeRolled) setInitiativeOrder((prevOrder) => [...prevOrder, f.id]);
   }, [characters, importTeam, initiativeRolled]);
 
   // Inicializa wpnUsos, wpnRecarga, calor, travamento e fumaça para fighters
@@ -811,13 +893,8 @@ const [lastRoll, setLastRoll] = useState(null);
       { ...def.attributes },
       { protection, _bossId: def.id, _eclipse: bossEclipse && def.varianteEclipse ? true : null, spells: def.spells || [] }
     );
-    setFighters((prevFighters) => {
-      const next = [...prevFighters, f];
-      if (initiativeRolled) {
-        setInitiativeOrder((prevOrder) => [...prevOrder, next[next.length - 1].id]);
-      }
-      return next;
-    });
+    setFighters((prevFighters) => [...prevFighters, f]);
+    if (initiativeRolled) setInitiativeOrder((prevOrder) => [...prevOrder, f.id]);
     const golpes = (def.spells || []).map((s) => SPELLS[s]?.nome || s).join(', ');
     const protoTxt = protection
       ? ` 🛡️ Proteção: ${protection.hp}/${protection.maxHp} (${bossEclipse ? 'Eclipse' : 'normal'})`
@@ -828,20 +905,20 @@ const [lastRoll, setLastRoll] = useState(null);
 
   // Rola iniciativa (D20 + VEL) para todos que ainda não têm e define a ordem de turnos.
   const rollInitiative = useCallback(() => {
-    setFighters((prev) =>
-      prev.map((f) => ({
-        ...f,
-        initiative: f.initiative ?? Math.floor(Math.random() * 20) + 1 + effectiveStat(f, 'destreza'),
-      }))
-    );
-    const order = [...fighters]
+    // Usa o estado recém-calculado (não o `fighters` fechado) para a ordem.
+    const atualizados = fighters.map((f) => ({
+      ...f,
+      initiative: f.initiative ?? Math.floor(Math.random() * 20) + 1 + effectiveStat(f, 'destreza'),
+    }));
+    setFighters(atualizados);
+    const order = atualizados
       .filter((f) => f.hp > 0)
       .sort((a, b) => (b.initiative ?? 0) - (a.initiative ?? 0))
       .map((f) => f.id);
     setInitiativeOrder(order);
     setCurrentTurnIndex(0);
     setInitiativeRolled(true);
-    addLog(`🎯 Iniciativa rolada! Ordem: ${order.map((id) => fighters.find((f) => f.id === id)?.name).join(' → ')}`);
+    addLog(`🎯 Iniciativa rolada! Ordem: ${order.map((id) => atualizados.find((f) => f.id === id)?.name).join(' → ')}`);
   }, [fighters, addLog, effectiveStat]);
 
   const applyBuff = useCallback(() => {
@@ -871,194 +948,191 @@ const [lastRoll, setLastRoll] = useState(null);
     setCbName('');
   }, [cbName, cbStat, cbValue, cbIcon, customBuffs, customDebuffs]);
 
-  // Executa uma ação rápida: ataque físico, magia (consome MP) ou item (cura).
-  const executarAcao = useCallback(() => {
-    const attacker = fighters.find((f) => f.id === actAttacker);
-    if (!attacker || attacker.hp <= 0) return;
-    if (temStatus(attacker, 'congelamento')) {
-      addLog(`🧊 ${attacker.name} está congelado e não pode agir neste turno.`);
-      return;
+  // Valida recarga/usos/superaquecimento e consome o disparo UMA vez, mesmo
+  // quando ele erra ou atinge vários alvos. Compartilhado pelas Ações Rápidas
+  // e pelo "Ataque com Dado": os dois caminhos precisam pagar o mesmo preço.
+  const prepararDisparo = useCallback((attacker, arma) => {
+    const usaRecarga = armaUsaRecarga(arma);
+    // D-64: sem ajudante o tiro sai, mas custa mais um turno de recarga e -20% de mira.
+    const tripIncompleta = tripulacaoIncompleta(attacker, arma);
+    if (tripIncompleta && usaRecarga) {
+      addLog(`⚙️ ${arma.nome} sem tripulação mínima: −20% de acerto e +1 turno de recarga.`);
+    }
+    const recargaAtual = ((wpnRecarga[attacker.id] || {})[arma.id]) || 0;
+    const usosAtuais = ((wpnUsos[attacker.id] || {})[arma.id]) ?? arma.usosMax ?? 1;
+    if (usaRecarga && recargaAtual > 0) {
+      addLog(`⏳ ${arma.nome} ainda está recarregando (${recargaAtual} turno(s)).`);
+      return false;
+    }
+    if (usaRecarga && arma.usosMax && usosAtuais <= 0) {
+      addLog(`🔫 ${arma.nome} está sem munição.`);
+      return false;
+    }
+    const superaquecimentoAtual = ((wpnSuperaquecido[attacker.id] || {})[arma.id]) || 0;
+    if (superaquecimentoAtual > 0) {
+      addLog(`🌡️ ${arma.nome} está superaquecida e precisa esfriar (${superaquecimentoAtual} rodada(s)).`);
+      return false;
     }
 
-    // Respeita a ordem de turno quando a iniciativa já foi rolada.
-    if (initiativeRolled && initiativeOrder.length > 0) {
-      const currentId = initiativeOrder[currentTurnIndex];
-      if (actAttacker !== currentId) {
-        const current = fighters.find((f) => f.id === currentId);
-        addLog(`⛔ Não é a vez de ${attacker.name}. Aguarde a vez de ${current ? current.name : '—'}.`);
-        return;
-      }
-    }
-
-    if (actionMode === 'attack') {
-      const armas = armasDoLutador(attacker);
-      const arma =
-        armas.find((a) => a.id === selWeaponId) ||
-        armas
-          .filter((a) => a.categoria !== 'utilitaria')
-          .sort((a, b) => (danoBaseDaArma(b) || 0) - (danoBaseDaArma(a) || 0))[0] ||
-        armas[0];
-      const { spec, alvos } = alvosDoGolpe(attacker, arma);
-      if (alvos.length === 0) {
-        addLog(`🎯 ${attacker.name} não encontrou inimigos vivos para atacar.`);
-        setActTargets([]);
-        return;
-      }
-
-      // ── Recarga e usos de canhões/armas utilitárias (por lutador e arma) ──
-      const usaRecarga = armaUsaRecarga(arma);
-      const recargaAtual = ((wpnRecarga[attacker.id] || {})[arma.id]) || 0;
-      const usosAtuais = ((wpnUsos[attacker.id] || {})[arma.id]) ?? arma.usosMax ?? 1;
-      if (usaRecarga && recargaAtual > 0) {
-        addLog(`⏳ ${arma.nome} ainda está recarregando (${recargaAtual} turno(s)).`);
-        setActTargets([]);
-        return;
-      }
-      if (usaRecarga && arma.usosMax && usosAtuais <= 0) {
-        addLog(`🔫 ${arma.nome} está sem munição.`);
-        setActTargets([]);
-        return;
-      }
-
-      // Superaquecimento: a arma travada não dispara até esfriar.
-      const superaquecimentoAtual = ((wpnSuperaquecido[attacker.id] || {})[arma.id]) || 0;
-      if (superaquecimentoAtual > 0) {
-        addLog(
-          `🌡️ ${arma.nome} está superaquecida e precisa esfriar (${superaquecimentoAtual} rodada(s)).`,
-        );
-        setActTargets([]);
-        return;
-      }
-
-      // O disparo consome munição uma única vez, mesmo quando erra ou atinge
-      // vários alvos. Armas com `usosMax` (canhões/utilitárias) só recarregam
-      // ao esvaziar a carga; as demais armas de fogo entram em recarga após
-      // cada disparo.
-      if (usaRecarga) {
-        const recargaTurnos = recargaDeArma(arma);
-        if (arma.usosMax) {
-          const restante = usosAtuais - 1;
-          setWpnUsos((prev) => ({
-            ...prev,
-            [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: restante },
-          }));
-          if (restante <= 0 && recargaTurnos > 0) {
-            setWpnRecarga((prev) => ({
-              ...prev,
-              [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: recargaTurnos + 1 },
-            }));
-          }
-        } else if (recargaTurnos > 0) {
+    if (usaRecarga) {
+      const recargaTurnos = recargaDeArma(arma) + (tripIncompleta ? 1 : 0);
+      if (arma.usosMax) {
+        const restante = usosAtuais - 1;
+        setWpnUsos((prev) => ({
+          ...prev,
+          [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: restante },
+        }));
+        if (restante <= 0 && recargaTurnos > 0) {
           setWpnRecarga((prev) => ({
             ...prev,
             [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: recargaTurnos + 1 },
           }));
         }
+      } else if (recargaTurnos > 0) {
+        setWpnRecarga((prev) => ({
+          ...prev,
+          [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: recargaTurnos + 1 },
+        }));
       }
+    }
 
-      // O tiro saiu: esquenta a arma e levanta fumaça, mesmo se errar ou
-      // atingir vários alvos. A fumaça do disparo atual só passa a valer
-      // para os próximos tiros (a mira usa o estado anterior à emissão).
-      if (armaDeFogo(arma)) {
-        const calorAntes = Number((wpnCalor[attacker.id] || {})[arma.id]) || 0;
-        const calorDepois = Math.min(
-          SUPERAQUECIMENTO.calorMax,
-          calorAntes + calorDoDisparo(arma),
-        );
+    if (armaDeFogo(arma)) {
+      const calorAntes = Number((wpnCalor[attacker.id] || {})[arma.id]) || 0;
+      const calorDepois = Math.min(
+        SUPERAQUECIMENTO.calorMax,
+        calorAntes + calorDoDisparo(arma),
+      );
+      setWpnCalor((prev) => ({
+        ...prev,
+        [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: calorDepois },
+      }));
+      setWpnDisparou((prev) => ({
+        ...prev,
+        [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: true },
+      }));
+      if (calorDepois >= SUPERAQUECIMENTO.calorMax) {
+        setWpnSuperaquecido((prev) => ({
+          ...prev,
+          [attacker.id]: {
+            ...(prev[attacker.id] || {}),
+            [arma.id]: SUPERAQUECIMENTO.bloqueioTurnos + 1,
+          },
+        }));
         setWpnCalor((prev) => ({
           ...prev,
-          [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: calorDepois },
+          [attacker.id]: {
+            ...(prev[attacker.id] || {}),
+            [arma.id]: SUPERAQUECIMENTO.calorAposBloqueio,
+          },
         }));
-        setWpnDisparou((prev) => ({
-          ...prev,
-          [attacker.id]: { ...(prev[attacker.id] || {}), [arma.id]: true },
-        }));
-        if (calorDepois >= SUPERAQUECIMENTO.calorMax) {
-          setWpnSuperaquecido((prev) => ({
-            ...prev,
-            [attacker.id]: {
-              ...(prev[attacker.id] || {}),
-              [arma.id]: SUPERAQUECIMENTO.bloqueioTurnos + 1,
-            },
-          }));
-          setWpnCalor((prev) => ({
-            ...prev,
-            [attacker.id]: {
-              ...(prev[attacker.id] || {}),
-              [arma.id]: SUPERAQUECIMENTO.calorAposBloqueio,
-            },
-          }));
-          addLog(
-            `🔥 ${arma.nome} SUPERAQUECEU! ${attacker.name} precisa deixá-la esfriar por ${SUPERAQUECIMENTO.bloqueioTurnos} rodada(s).`,
-          );
-        } else if (
-          calorAntes < SUPERAQUECIMENTO.limiarAviso &&
-          calorDepois >= SUPERAQUECIMENTO.limiarAviso
-        ) {
-          addLog(
-            `🥵 ${arma.nome} está muito quente (${Math.round(calorDepois)}/${SUPERAQUECIMENTO.calorMax}).`,
-          );
-        }
-
-        const fumacaAntes = Number(fumaca[attacker.id]) || 0;
-        const fumacaDepois = Math.min(
-          FUMACA.max,
-          fumacaAntes + fumacaDoDisparo(arma, rajadaDaArma(arma)),
-        );
-        setFumaca((prev) => ({ ...prev, [attacker.id]: fumacaDepois }));
-        if (fumacaAntes < FUMACA.limiarDenso && fumacaDepois >= FUMACA.limiarDenso) {
-          addLog(
-            `🌫️ A fumaça ao redor de ${attacker.name} fica densa (${Math.round(fumacaDepois)}/${FUMACA.max}).`,
-          );
-        } else if (fumacaAntes < FUMACA.limiarVisivel && fumacaDepois >= FUMACA.limiarVisivel) {
-          addLog(`💨 ${attacker.name} some parcialmente numa nuvem de fumaça.`);
-        }
+        addLog(`🔥 ${arma.nome} SUPERAQUECEU! ${attacker.name} precisa deixá-la esfriar por ${SUPERAQUECIMENTO.bloqueioTurnos} rodada(s).`);
+      } else if (
+        calorAntes < SUPERAQUECIMENTO.limiarAviso &&
+        calorDepois >= SUPERAQUECIMENTO.limiarAviso
+      ) {
+        addLog(`🥵 ${arma.nome} está muito quente (${Math.round(calorDepois)}/${SUPERAQUECIMENTO.calorMax}).`);
       }
 
-      const danoBase = danoFisicoAtaque(effectiveStat(attacker, 'forca'), danoBaseDaArma(arma));
-      const buffDano = multiplicadorDano(attacker, 'fisico');
-      // Dificuldade do golpe (rolar-menor): ataque comum = 100% (dif. 0);
-      // armas com efeito pesado (ex.: congelamento) reduzem o alvo de acerto.
-      const dificuldade = dificuldadeDoGolpe({
-        poder: 100,
-        status: arma.efeito ? { turnos: arma.efeito.turnos, dano: arma.efeito.dano } : null,
-      });
-      const resultados = [];
-      const efeitosPorAlvo = new Map();
+      const fumacaAntes = Number(fumaca[attacker.id]) || 0;
+      const fumacaDepois = Math.min(
+        FUMACA.max,
+        fumacaAntes + fumacaDoDisparo(arma, rajadaDaArma(arma)) + (Number(arma.fumacaExtra) || 0),
+      );
+      setFumaca((prev) => ({ ...prev, [attacker.id]: fumacaDepois }));
+      if (fumacaAntes < FUMACA.limiarDenso && fumacaDepois >= FUMACA.limiarDenso) {
+        addLog(`🌫️ A fumaça ao redor de ${attacker.name} fica densa (${Math.round(fumacaDepois)}/${FUMACA.max}).`);
+      } else if (fumacaAntes < FUMACA.limiarVisivel && fumacaDepois >= FUMACA.limiarVisivel) {
+        addLog(`💨 ${attacker.name} some parcialmente numa nuvem de fumaça.`);
+      }
+    }
+    return true;
+  }, [wpnRecarga, wpnUsos, wpnSuperaquecido, wpnCalor, fumaca, addLog, tripulacaoIncompleta]);
 
-      // Cada alvo tem sua própria rolagem de acerto, crítico e multiplicador
-      // de dano (principal usa `danoMult`; secundários usam `splash`).
-      alvos.forEach((alvo, i) => {
+  // Validações compartilhadas pelas Ações Rápidas e pelo painel de artilharia.
+  const podeAgir = useCallback((attacker, atiradorId) => {
+    if (!attacker || attacker.hp <= 0) return false;
+    if (temStatus(attacker, 'congelamento')) {
+      addLog(`🧊 ${attacker.name} está congelado e não pode agir neste turno.`);
+      return false;
+    }
+    // Respeita a ordem de turno quando a iniciativa já foi rolada.
+    if (initiativeRolled && initiativeOrder.length > 0) {
+      const currentId = initiativeOrder[currentTurnIndex];
+      if (atiradorId !== currentId) {
+        const current = fighters.find((f) => f.id === currentId);
+        addLog(`⛔ Não é a vez de ${attacker.name}. Aguarde a vez de ${current ? current.name : '—'}.`);
+        return false;
+      }
+    }
+    return true;
+  }, [addLog, fighters, initiativeRolled, initiativeOrder, currentTurnIndex]);
+
+  // Disparo de arma da mesa: usado pelas Ações Rápidas e pelo botão 🧰 de
+  // artilharia. Um único caminho consome recarga/usos/calor/fumaça uma vez,
+  // inclusive quando o tiro erra ou atinge vários alvos.
+  const dispararArmaMesa = useCallback((attacker, arma, alvosForcados = null) => {
+    const { spec, alvos } = alvosForcados
+      ? { spec: alvoNormalizado(arma), alvos: alvosForcados }
+      : alvosDoGolpe(attacker, arma);
+    if (alvos.length === 0) {
+      addLog(`🎯 ${attacker.name} não encontrou inimigos vivos para atacar.`);
+      setActTargets([]);
+      return;
+    }
+    const tripIncompleta = tripulacaoIncompleta(attacker, arma);
+
+    // Recarga/usos/superaquecimento e consumo do disparo (compartilhados com
+    // o Ataque com Dado).
+    if (!prepararDisparo(attacker, arma)) {
+      setActTargets([]);
+      return;
+    }
+
+    const danoBase = danoFisicoAtaque(effectiveStat(attacker, 'forca'), danoBaseDaArma(arma));
+    const buffDano = multiplicadorDano(attacker, 'fisico');
+    // D-68: ataque comum = 100% (dif. 0); armas com efeito pesado (ex.:
+    // congelamento) aumentam a exigência do d20 no sistema rolar-maior.
+    const dificuldade = dificuldadeDoGolpe({
+      poder: 100,
+      status: arma.efeito ? { turnos: arma.efeito.turnos, dano: arma.efeito.dano } : null,
+    });
+    const resultados = [];
+    const efeitosPorAlvo = new Map();
+
+    // Cada alvo tem sua própria rolagem de acerto, crítico e multiplicador
+    // de dano (principal usa `danoMult`; secundários usam `splash`).
+    alvos.forEach((alvo, i) => {
         const roll = Math.floor(Math.random() * 20) + 1;
         const chance = computeHitChance(
           attacker,
           alvo,
           Number(fumaca[attacker.id]) || 0,
           Number(fumaca[alvo.id]) || 0,
+          tripIncompleta ? 0.2 : 0,
         );
-        const threshold = Math.max(1, Math.min(19, Math.ceil(chance * 20) - dificuldade));
-        const nivel = nivelDificuldadeD20(roll);
-        // Acerto "rolar-menor" (igual ao Campo): 20 é crítico, 1 é falha.
+        const exigencia = exigenciaD20(chance, dificuldade);
+        const nivel = nivelDificuldadeD20(exigencia);
+        // D-68: 20 é crítico natural, 1 é falha natural.
         const isCrit = roll === 20;
         const isFail = roll === 1;
-        const hit = isCrit || (!isFail && roll <= threshold);
+        const hit = isCrit || (!isFail && roll >= exigencia);
         const mult = i > 0 ? spec.splash : spec.danoMult;
         const alvoTxt = alvos.length > 1 ? `${alvo.name}${i === 0 ? ' (principal)' : ''}` : alvo.name;
         const difTxt = dificuldade > 0 ? ` · dif. +${dificuldade}` : '';
 
         if (!hit) {
-          addLog(`⚔️ ${attacker.name} erra ${alvoTxt} com ${arma.nome || 'desarmado'} → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold}${difTxt})`);
+          addLog(`⚔️ ${attacker.name} erra ${alvoTxt} com ${arma.nome || 'desarmado'} → D20:${roll} · ${nivel?.nome || '—'} (≥${exigencia}${difTxt})`);
           return;
         }
 
         const bruto = danoBase * (isCrit ? 2 : 1) * mult * buffDano;
-        const dmg = danoComDefesa(alvo, bruto, 'fisico');
+        const dmg = danoComDefesa(alvo, bruto, 'fisico', arma?.ignoraDefesaPct || 0);
         const res = applyDamageWithProtection(alvo, dmg);
         resultados.push({ id: alvo.id, res });
         const multTxt = mult < 1 ? ` (${Math.round(mult * 100)}%)` : '';
         const redTxt = dmg < Math.round(bruto) ? ' (defesa)' : '';
         const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${multTxt}${redTxt}` : '';
-        addLog(`⚔️ ${attacker.name} ataca ${alvoTxt} com ${arma.nome || 'desarmado'} → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold}${difTxt}) ${isCrit ? 'CRÍTICO ' : ''}${suffix}`);
+        addLog(`⚔️ ${attacker.name} ataca ${alvoTxt} com ${arma.nome || 'desarmado'} → D20:${roll} · ${nivel?.nome || '—'} (≥${exigencia}${difTxt}) ${isCrit ? 'CRÍTICO ' : ''}${suffix}`);
         if (res.protecaoQuebrou) addLog(res.msg);
 
         // Efeito da arma (ex.: congelamento) só em quem foi atingido e sobreviveu.
@@ -1072,17 +1146,52 @@ const [lastRoll, setLastRoll] = useState(null);
         }
       });
 
-      if (resultados.length > 0 || efeitosPorAlvo.size > 0) {
-        setFighters((prev) => prev.map((f) => {
-          let nf = f;
-          const r = resultados.find((x) => x.id === f.id);
-          if (r) nf = aplicarDanoAoCombatente(nf, r.res);
-          const efeitos = efeitosPorAlvo.get(f.id);
-          if (efeitos) nf = { ...nf, statusEffects: efeitos };
-          return nf;
-        }));
-      }
-      setActTargets([]);
+    if (resultados.length > 0 || efeitosPorAlvo.size > 0) {
+      setFighters((prev) => prev.map((f) => {
+        let nf = f;
+        const r = resultados.find((x) => x.id === f.id);
+        if (r) nf = aplicarDanoAoCombatente(nf, r.res);
+        const efeitos = efeitosPorAlvo.get(f.id);
+        if (efeitos) nf = { ...nf, statusEffects: efeitos };
+        return nf;
+      }));
+    }
+    setActTargets([]);
+    setCanhaoAlvos([]);
+  }, [alvosDoGolpe, fumaca, addLog, prepararDisparo, tripulacaoIncompleta]);
+
+  // Disparo do painel dedicado de artilharia (🧰).
+  const dispararCanhao = useCallback(() => {
+    if (!podeAgir(atiradorCanhao, canhaoAtirador) || !canhaoSelecionado) return;
+    if (canhaoBloqueado) {
+      if (canhaoRecarga > 0) addLog(`⏳ ${canhaoSelecionado.nome} ainda está recarregando (${canhaoRecarga} turno(s)).`);
+      else if (canhaoTravado > 0) addLog(`🔥 ${canhaoSelecionado.nome} precisa esfriar (${canhaoTravado} rodada(s)).`);
+      else if (!!canhaoSelecionado.usosMax && canhaoUsos <= 0) addLog(`🔫 ${canhaoSelecionado.nome} está sem carga.`);
+      else addLog(`🎯 Escolha pelo menos um alvo para ${canhaoSelecionado.nome}.`);
+      return;
+    }
+    const { alvos } = alvosDoGolpe(atiradorCanhao, canhaoSelecionado, canhaoAlvos);
+    dispararArmaMesa(atiradorCanhao, canhaoSelecionado, alvos);
+  }, [
+    podeAgir, atiradorCanhao, canhaoAtirador, canhaoSelecionado, canhaoBloqueado,
+    canhaoRecarga, canhaoTravado, canhaoUsos, addLog, alvosDoGolpe, canhaoAlvos,
+    dispararArmaMesa,
+  ]);
+
+  // Executa uma ação rápida: ataque físico, magia (consome MP) ou item (cura).
+  const executarAcao = useCallback(() => {
+    const attacker = fighters.find((f) => f.id === actAttacker);
+    if (!podeAgir(attacker, actAttacker)) return;
+
+    if (actionMode === 'attack') {
+      const armas = armasDoLutador(attacker);
+      const arma =
+        armas.find((a) => a.id === selWeaponId) ||
+        armas
+          .filter((a) => a.categoria !== 'utilitaria')
+          .sort((a, b) => (danoBaseDaArma(b) || 0) - (danoBaseDaArma(a) || 0))[0] ||
+        armas[0];
+      dispararArmaMesa(attacker, arma);
       return;
     }
 
@@ -1217,18 +1326,18 @@ const [lastRoll, setLastRoll] = useState(null);
             Number(fumaca[alvo.id]) || 0,
           )
           : 1;
-        const threshold = Math.max(1, Math.min(19, Math.ceil(chance * 20) - dificuldade));
-        const nivel = multi ? nivelDificuldadeD20(roll) : null;
-        // Acerto "rolar-menor" (igual ao Campo): 20 é crítico, 1 é falha.
+        const exigencia = multi ? exigenciaD20(chance, dificuldade) : 20;
+        const nivel = multi ? nivelDificuldadeD20(exigencia) : null;
+        // D-68: 20 é crítico natural, 1 é falha natural.
         const isCrit = multi && roll === 20;
         const isFail = multi && roll === 1;
-        const hit = !multi || isCrit || (!isFail && roll <= threshold);
+        const hit = !multi || isCrit || (!isFail && roll >= exigencia);
         const mult = i > 0 ? spec.splash : spec.danoMult;
         const alvoTxt = alvos.length > 1 ? `${alvo.name}${i === 0 ? ' (principal)' : ''}` : alvo.name;
         const difTxt = dificuldade > 0 ? ` · dif. +${dificuldade}` : '';
 
         if (!hit) {
-          addLog(`🔮 ${attacker.name} erra ${skill.nome} em ${alvoTxt} → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold}${difTxt})${i === 0 ? ` (MP ${custo})` : ''}`);
+          addLog(`🔮 ${attacker.name} erra ${skill.nome} em ${alvoTxt} → D20:${roll} · ${nivel?.nome || '—'} (≥${exigencia}${difTxt})${i === 0 ? ` (MP ${custo})` : ''}`);
           return;
         }
 
@@ -1238,7 +1347,7 @@ const [lastRoll, setLastRoll] = useState(null);
         resultados.push({ id: alvo.id, res });
         const multTxt = mult < 1 ? ` (${Math.round(mult * 100)}%)` : '';
         const redTxt = dmg < Math.round(bruto) ? ' (defesa)' : '';
-        const rollTxt = multi ? ` → D20:${roll} · ${nivel?.nome || '—'} (≤${threshold}${difTxt})${isCrit ? ' CRÍTICO' : ''}` : '';
+        const rollTxt = multi ? ` → D20:${roll} · ${nivel?.nome || '—'} (≥${exigencia}${difTxt})${isCrit ? ' CRÍTICO' : ''}` : '';
         const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${multTxt}${redTxt}` : '';
         addLog(`🔮 ${attacker.name} lança ${skill.nome} em ${alvoTxt}${rollTxt}${suffix}${i === 0 ? ` (MP ${custo})` : ''}`);
         if (res.protecaoQuebrou) addLog(res.msg);
@@ -1298,7 +1407,14 @@ const [lastRoll, setLastRoll] = useState(null);
 
       setFighters((prev) => prev.map((f) => {
         if (f.id !== attacker.id) return f;
-        let nf = { ...f, inventory: (f.inventory || []).filter((x) => x.id !== it.id) };
+        // Consome UMA cópia: itens iguais ocupam entradas distintas no inventário.
+        const idx = (f.inventory || []).findIndex((x) => x.id === it.id);
+        let nf = {
+          ...f,
+          inventory: idx < 0
+            ? (f.inventory || [])
+            : (f.inventory || []).filter((_, i) => i !== idx),
+        };
         let hp = nf.hp;
         let mp = nf.mp;
         if (it.cura) hp = Math.max(0, Math.min(nf.hpMax, hp + curaItem));
@@ -1325,9 +1441,8 @@ const [lastRoll, setLastRoll] = useState(null);
   }, [
     fighters, actAttacker, actTargets, actionMode, selWeaponId, selSpellId, selItemId,
     armasDoLutador, magiasDoLutador, itensDoLutador, alvosDoGolpe, alvosDeSuporte,
-    magiaSuporte, addLog,
-    initiativeRolled, initiativeOrder, currentTurnIndex, wpnRecarga, wpnUsos,
-    wpnCalor, wpnSuperaquecido, fumaca,
+    magiaSuporte, addLog, prepararDisparo, podeAgir, dispararArmaMesa,
+    tripulacaoIncompleta, fumaca,
   ]);
 
   const removeCustomEffect = useCallback((type, uid_) => {
@@ -1405,6 +1520,10 @@ const [lastRoll, setLastRoll] = useState(null);
         .sort((a, b) => (danoBaseDaArma(b) || 0) - (danoBaseDaArma(a) || 0))[0]
       || armas[0]
       || null;
+    // Mesmo caminho das Ações Rápidas: arma travada/sem munição não dispara,
+    // e o tiro consome munição, recarga, calor e fumaça.
+    const tripIncompleta = tripulacaoIncompleta(attacker, arma);
+    if (arma && !prepararDisparo(attacker, arma)) return;
     setRolling(true);
     setRollResult(null);
     let step = 0;
@@ -1422,33 +1541,34 @@ const [lastRoll, setLastRoll] = useState(null);
           defender,
           Number(fumaca[attacker.id]) || 0,
           Number(fumaca[defender.id]) || 0,
+          tripIncompleta ? 0.2 : 0,
         );
-        const threshold = Math.ceil(hitChance * 20);
-        const nivel = nivelDificuldadeD20(finalRoll);
-        // Acerto "rolar-menor" (igual ao Campo): 20 é crítico, 1 é falha.
+        const exigencia = exigenciaD20(hitChance);
+        const nivel = nivelDificuldadeD20(exigencia);
+        // D-68: 20 é crítico natural, 1 é falha natural.
         const isCrit = finalRoll === 20;
         const isFail = finalRoll === 1;
-        const hit = isCrit || (!isFail && finalRoll <= threshold);
+        const hit = isCrit || (!isFail && finalRoll >= exigencia);
         if (hit) {
           const bruto = computeDamage(attacker, isCrit, arma);
-          const dmg = danoComDefesa(defender, bruto, 'fisico');
+          const dmg = danoComDefesa(defender, bruto, 'fisico', arma?.ignoraDefesaPct || 0);
           const res = applyDamageWithProtection(defender, dmg);
           setFighters((prev) => prev.map((f) => (
             f.id === defender.id ? aplicarDanoAoCombatente(f, res) : f
           )));
           const critText = isCrit ? ' 🎯 CRÍTICO!' : '';
           const suffix = res.msg ? ` ${res.msg}` : res.danoReal > 0 ? ` → ${dmg} dano${isCrit ? ' x2' : ''}` : '';
-          addLog(`${attacker.name} ataca ${defender.name} → D20: ${finalRoll} · ${nivel?.nome || '—'} (≤${threshold}) → ACERTA${critText}${suffix}`);
+          addLog(`${attacker.name} ataca ${defender.name} → D20: ${finalRoll} · ${nivel?.nome || '—'} (≥${exigencia}) → ACERTA${critText}${suffix}`);
           if (res.protecaoQuebrou) addLog(res.msg);
-          setRollResult({ roll: finalRoll, threshold, hit: true, isCrit, damage: res.danoReal, nivel });
+          setRollResult({ roll: finalRoll, exigencia, threshold: exigencia, hit: true, isCrit, damage: res.danoReal, nivel });
         } else {
-          addLog(`${attacker.name} ataca ${defender.name} → D20: ${finalRoll} · ${nivel?.nome || '—'} (≤${threshold}) → ERRA`);
-          setRollResult({ roll: finalRoll, threshold, hit: false, isCrit: false, damage: 0, nivel });
+          addLog(`${attacker.name} ataca ${defender.name} → D20: ${finalRoll} · ${nivel?.nome || '—'} (≥${exigencia}) → ERRA`);
+          setRollResult({ roll: finalRoll, exigencia, threshold: exigencia, hit: false, isCrit: false, damage: 0, nivel });
         }
       }
     }, 60);
     rollTimers.current.add(interval);
-  }, [atkAttacker, atkDefender, fighters, addLog, initiativeRolled, initiativeOrder, currentTurnIndex, fumaca, armasDoLutador, selWeaponId]);
+  }, [atkAttacker, atkDefender, fighters, addLog, initiativeRolled, initiativeOrder, currentTurnIndex, fumaca, armasDoLutador, selWeaponId, prepararDisparo, tripulacaoIncompleta]);
 
   // Fim de rodada: avança a recarga de cada arma e recarrega as utilitárias
   // quando o contador zera (volta ao `usosMax`).
@@ -1994,11 +2114,11 @@ const [lastRoll, setLastRoll] = useState(null);
                     const fumacaA = Number(fumaca[a.id]) || 0;
                     const fumacaD = Number(fumaca[d.id]) || 0;
                     const chance = computeHitChance(a, d, fumacaA, fumacaD);
-                    const threshold = Math.ceil(chance * 20);
+                    const exigencia = exigenciaD20(chance);
                     const penalFumaca = fumacaMiraPenalidade(fumacaA) + fumacaCamuflagemBonus(fumacaD);
                     return (
                       <>
-                        <span className="chance-text">Chance: {(chance * 100).toFixed(0)}% (precisa de {threshold} ou menos no D20; 20 é crítico)</span>
+                        <span className="chance-text">Chance: {(chance * 100).toFixed(0)}% (exige {exigencia} ou mais no D20; 20 é crítico, 1 é falha)</span>
                         <span className="modifier-text">VEL: {effectiveStat(a, 'destreza')} vs REF: {effectiveStat(d, 'reflexos')}</span>
                         {penalFumaca > 0 && (
                           <span className="modifier-text smoke-warning">
@@ -2025,7 +2145,7 @@ const [lastRoll, setLastRoll] = useState(null);
                   </div>
                 )}
               </div>
-              <div className="d20-tiers" title="Faixas de dificuldade do d20 (rolar-menor: quanto maior, mais difícil)">
+              <div className="d20-tiers" title="Faixas de exigência do d20 (D-68, rolar-maior: quanto maior o número, mais difícil a exigência)">
                 <span className="d20-tiers-label">🎲 d20</span>
                 {NIVEIS_DIFICULDADE_D20.map((t) => (
                   <span key={t.id} className={`d20-tier d20-${t.id}`}>
@@ -2043,7 +2163,17 @@ const [lastRoll, setLastRoll] = useState(null);
               <div className="actions-row">
                 <div className="action-field">
                   <label>Atacante</label>
-                  <select value={actAttacker} onChange={(e) => { setActAttacker(e.target.value); setActTargets([]); }}>
+                  <select
+                    value={actAttacker}
+                    onChange={(e) => {
+                      setActAttacker(e.target.value);
+                      setActTargets([]);
+                      // Magia/item do lutador anterior não existem no novo:
+                      // sem limpar, o botão fica habilitado e a ação não faz nada.
+                      setSelSpellId('');
+                      setSelItemId('');
+                    }}
+                  >
                     <option value="">—</option>
                     {alive.map((f) => (
                       <option key={f.id} value={f.id}>{f.name} (HP {f.hp} MP {f.mp})</option>
@@ -2145,8 +2275,9 @@ const [lastRoll, setLastRoll] = useState(null);
                     <label>Item</label>
                     <select value={selItemId} onChange={(e) => setSelItemId(e.target.value)}>
                       <option value="">— Escolha um item —</option>
-                      {itensDoLutador(fighters.find((f) => f.id === actAttacker)).map((it) => (
-                        <option key={it.id} value={it.id}>{it.nome}{it.cura ? ` +${it.cura} HP` : ''}{it.mana ? ` +${it.mana} MP` : ''}</option>
+                      {itensDoLutador(fighters.find((f) => f.id === actAttacker)).map((it, idx) => (
+                        // Itens repetidos têm o mesmo id: a chave precisa da posição.
+                        <option key={`${it.id}-${idx}`} value={it.id}>{it.nome}{it.cura ? ` +${it.cura} HP` : ''}{it.mana ? ` +${it.mana} MP` : ''}</option>
                       ))}
                     </select>
                   </div>
@@ -2194,6 +2325,126 @@ const [lastRoll, setLastRoll] = useState(null);
                   }
                 >
                   ▶ Executar Ação
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="panel actions-section">
+            <h2>💣 Artilharia — Canhões (🧰)</h2>
+            <p className="muted small">
+              Painel de tiro dedicado: peças de artilharia e canhões utilitários usam
+              a mesma recarga/carga, tripulação mínima (D-64) e fumaça do Campo de Batalha.
+            </p>
+            <div className="attack-panel actions-command">
+              <div className="actions-row">
+                <div className="action-field">
+                  <label>Atirador</label>
+                  <select value={canhaoAtirador} onChange={(e) => {
+                    setCanhaoAtirador(e.target.value);
+                    setCanhaoAlvos([]);
+                  }}>
+                    <option value="">—</option>
+                    {alive.map((f) => (
+                      <option key={f.id} value={f.id}>{f.name} (HP {f.hp})</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="action-field">
+                  <label>Peça</label>
+                  <select value={canhaoId} onChange={(e) => {
+                    setCanhaoId(e.target.value);
+                    setCanhaoAlvos([]);
+                  }} disabled={!canhaoAtirador}>
+                    {!canhaoAtirador && <option value="">Escolha o atirador</option>}
+                    {canhaoAtirador && canhoesDoLutador(atiradorCanhao).length === 0 && (
+                      <option value="">Nenhum canhão equipado</option>
+                    )}
+                    {canhoesDoLutador(atiradorCanhao).map((arma) => {
+                      const r = Number((wpnRecarga[canhaoAtirador] || {})[arma.id]) || 0;
+                      const u = ((wpnUsos[canhaoAtirador] || {})[arma.id]) ?? arma.usosMax;
+                      const travada = Number((wpnSuperaquecido[canhaoAtirador] || {})[arma.id]) || 0;
+                      const status = travada > 0 ? ` — 🔥 ${travada}t`
+                        : r > 0 ? ` — ⏳ ${r}t`
+                          : arma.usosMax ? ` — ${u}/${arma.usosMax}` : '';
+                      return (
+                        <option key={arma.id} value={arma.id} disabled={r > 0 || travada > 0 || (!!arma.usosMax && u <= 0)}>
+                          💣 {arma.nome} (dano base {danoBaseDaArma(arma)}){status}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              </div>
+              {canhaoAtirador && (
+                <div className="actions-row">
+                  <div className="action-field action-field-full">
+                    <label>{canhaoAutoAlvo ? 'Alvos (área: todos automaticamente)' : 'Alvo(s)'}</label>
+                    <select
+                      multiple
+                      size={Math.min(4, Math.max(1, alive.length))}
+                      value={canhaoAlvos}
+                      onChange={(e) => setCanhaoAlvos(Array.from(e.target.selectedOptions).map((o) => o.value))}
+                      disabled={canhaoAutoAlvo}
+                    >
+                      {alive
+                        .filter((f) => f.id !== canhaoAtirador && f.team !== atiradorCanhao?.team)
+                        .map((f) => (
+                          <option key={f.id} value={f.id}>{f.name} (HP {f.hp})</option>
+                        ))}
+                      {alive.length <= 1 && <option disabled>Sem outros alvos vivos</option>}
+                    </select>
+                  </div>
+                </div>
+              )}
+              {canhaoSelecionado && (() => {
+                const fumacaAtirador = Number(fumaca[canhaoAtirador]) || 0;
+                const info = fumacaEstado(fumacaAtirador);
+                const alvo = fighters.find((f) => f.id === canhaoAlvos[0]);
+                const chance = alvo
+                  ? computeHitChance(
+                    atiradorCanhao, alvo, fumacaAtirador, Number(fumaca[alvo.id]) || 0,
+                    canhaoTripIncompleta ? 0.2 : 0,
+                  )
+                  : 0.5;
+                const dificuldade = dificuldadeDoGolpe({
+                  poder: 100,
+                  status: canhaoSelecionado.efeito
+                    ? { turnos: canhaoSelecionado.efeito.turnos, dano: canhaoSelecionado.efeito.dano }
+                    : null,
+                });
+                return (
+                  <div className="attack-info">
+                    <span className="chance-text">
+                      💣 {canhaoSelecionado.nome} · recarga {recargaDeArma(canhaoSelecionado)}t
+                      {canhaoTripIncompleta ? ' + 1t (sem ajudante)' : ''}
+                      {canhaoSelecionado.usosMax ? ` · carga ${canhaoUsos}/${canhaoSelecionado.usosMax}` : ''}
+                      {canhaoRecarga > 0 ? ` · ⏳ ${canhaoRecarga}t restantes` : ''}
+                      {canhaoTripIncompleta ? ' · sem ajudante: −20% de acerto' : ''}
+                      {alvo ? ` · exige ${exigenciaD20(chance, dificuldade)} no D20` : ''}
+                    </span>
+                    {canhaoTripIncompleta && (
+                      <span className="modifier-text smoke-warning">
+                        ⚙️ Tripulação incompleta (D-64): precisa de 2 vivos no mesmo lado.
+                      </span>
+                    )}
+                    {fumacaAtirador > 0 && (
+                      <span className="modifier-text smoke-warning">
+                        🌫️ Fumaça {Math.round(info.pct)}% — mira −{Math.round(info.mira * 100)}%
+                        {(Number(canhaoSelecionado.fumacaExtra) || 0) > 0 ? ' · +1 por disparo (D-67)' : ''}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+              <div className="actions-row actions-row-execute">
+                <button
+                  className="dice-btn dice-btn-execute"
+                  onClick={dispararCanhao}
+                  disabled={canhaoBloqueado}
+                  title={canhaoRecarga > 0 ? 'Aguardando recarga' : canhaoTravado > 0 ? 'Superaquecida' : 'Disparar com a peça escolhida'}
+                >
+                  🧰 Disparar Canhão
                 </button>
               </div>
             </div>

@@ -527,7 +527,7 @@ export default function Forge({ onBack, player, characters, walletCents, onWalle
       </header>
 
       <div className="content">
-        <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 24, padding: 16 }}>
+        <div className="forja-layout">
           {/* Painel esquerdo */}
           <div style={{ border: '1px solid #3a2e54', borderRadius: 12, padding: 16, background: '#241a3a' }}>
             <h3 style={{ marginTop: 0, color: '#b8a9cf' }}>1. Tipo de Equipamento</h3>

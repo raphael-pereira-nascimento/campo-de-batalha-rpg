@@ -139,7 +139,8 @@ export function normalizeSkill(s = {}) {
     afetaAliados: !!s.afetaAliados,
     buffTipo: s.buffTipo === 'fisico' || s.buffTipo === 'magico' ? s.buffTipo : null,
     duracao: s.duracao ? clampInt(s.duracao, 1, 8) : null,
-    alvo: ALVO_TIPOS[s.alvo] || null,
+    // ALVO_TIPOS é um dicionário de rótulos; a ficha guarda a CHAVE (area, cone...).
+    alvo: ALVO_TIPOS[s.alvo] ? s.alvo : null,
     alvos: s.alvos ? clampInt(s.alvos, 2, 10) : null,
     splash: s.splash ? clampFloat(s.splash, 0.1, 1) : null,
     danoMult: s.danoMult ? clampFloat(s.danoMult, 0.1, 1) : null,
@@ -259,6 +260,9 @@ function presetSkillsFrom(classes) {
       const key = s.nome;
       if (out.some((x) => x.id === key)) continue;
       out.push({
+        // Golpes de classe também entram na árvore já com metadados, sem
+        // depender de um re-save pelo gerenciador.
+        ...normalizarMetadadosGolpe({}),
         id: key,
         nome: s.nome,
         tipo: s.tipo === 'ataque' ? 'magia' : s.tipo,
@@ -279,7 +283,7 @@ function presetSkillsFrom(classes) {
   return out;
 }
 
-export function buildCharacterData(playerId, { name, gender, attributes, races, classes, passiva, skills, ultimate, especial, equipment, habilidades, race, raceChoice, class: legacyClass }) {
+export function buildCharacterData(playerId, { name, gender, attributes, races, classes, passiva, desc, skills, ultimate, especial, equipment, habilidades, race, raceChoice, class: legacyClass }) {
   const trimmed = String(name).trim();
   if (!trimmed) throw new Error('Informe o nome do personagem.');
 
@@ -335,6 +339,7 @@ export function buildCharacterData(playerId, { name, gender, attributes, races, 
     races: normRaces,
     classes: normClasses,
     passiva: String(passiva || '').trim().slice(0, 300),
+    desc: String(desc || '').trim().slice(0, 300),
     skills: skillsList,
     ultimate: normalizeMegaSkill(ultimate),
     especial: normalizeMegaSkill(especial),
@@ -369,8 +374,8 @@ export async function createCharacter(input) {
     `INSERT INTO characters
       (player_id, name, gender, class, race, custom_class_name, races, classes, passiva, skills, ultimate, especial, habilidades,
        level, xp, hp_current, hp_max, mp_current, mp_max,
-       attributes, equipment, inventory, spells)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+       attributes, equipment, inventory, spells, descricao)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
      RETURNING *`,
     [
       data.playerId,
@@ -396,6 +401,7 @@ export async function createCharacter(input) {
       JSON.stringify(data.equipment),
       JSON.stringify(data.inventory),
       JSON.stringify(data.spells),
+      data.desc,
     ],
   );
   return decorateCharacter(rows[0]);
@@ -427,6 +433,8 @@ export function buildCharacterUpdate(existing, input) {
     races: dados.races,
     classes: dados.classes,
     passiva: dados.passiva,
+    // Editor antigo não envia `desc`: não apaga a descrição já salva.
+    desc: input.desc === undefined ? (existing.desc || '') : dados.desc,
     skills: dados.skills,
     ultimate: dados.ultimate,
     especial: dados.especial,
@@ -455,14 +463,16 @@ export async function updateCharacter(characterId, playerId, input) {
         SET name = $1, gender = $2, class = $3, race = $4, custom_class_name = $5,
             races = $6, classes = $7, passiva = $8, skills = $9, ultimate = $10,
             especial = $11, habilidades = $12, attributes = $13, equipment = $14,
-            spells = $15, hp_max = $16, mp_max = $17, hp_current = $18, mp_current = $19
-      WHERE id = $20 AND player_id = $21`,
+            spells = $15, hp_max = $16, mp_max = $17, hp_current = $18, mp_current = $19,
+            descricao = $20
+      WHERE id = $21 AND player_id = $22`,
     [
       c.name, c.gender, c.class, c.race, c.custom_class_name,
       JSON.stringify(c.races), JSON.stringify(c.classes), c.passiva,
       JSON.stringify(c.skills), JSON.stringify(c.ultimate), JSON.stringify(c.especial),
       JSON.stringify(c.habilidades), JSON.stringify(c.attributes), JSON.stringify(c.equipment),
       JSON.stringify(c.spells), c.hp_max, c.mp_max, c.hp_current, c.mp_current,
+      c.desc,
       characterId, playerId,
     ],
   );
@@ -509,6 +519,7 @@ function decorateCharacter(row) {
     races: jsonOrObj(row.races) || [],
     classes: jsonOrObj(row.classes) || [],
     passiva: row.passiva || '',
+    desc: row.descricao || '',
     skills: jsonOrObj(row.skills) || [],
     ultimate: jsonOrObj(row.ultimate) || null,
     especial: jsonOrObj(row.especial) || null,
@@ -959,6 +970,10 @@ export async function grantRewards(battle) {
     const levelsGained = level - char.level;
     // Estilo FF/Pokémon: todos os atributos sobem juntos a cada nível.
     const attributes = aplicarCrescimentoNivel(char.attributes, levelsGained);
+    // `spells` é derivado da árvore: subir de nível pode liberar golpes.
+    const spells = levelsGained > 0
+      ? golpesDisponiveis(char.skills, level).map((s) => s.id)
+      : char.spells;
 
     const stats = applyMaxMults(
       deriveStats(char.classes, level, attributes, char.equipment, char.races),
@@ -987,8 +1002,8 @@ export async function grantRewards(battle) {
     await query(
       `UPDATE characters
        SET xp = $1, level = $2, hp_max = $3, mp_max = $4, hp_current = $5, mp_current = $6,
-           attributes = $7, wins = wins + 1
-       WHERE id = $8`,
+           attributes = $7, spells = $8, wins = wins + 1
+       WHERE id = $9`,
       [
         newXp,
         level,
@@ -997,6 +1012,7 @@ export async function grantRewards(battle) {
         Math.min(char.hp_current + (hpMax - char.hp_max), hpMax),
         Math.min(char.mp_current + (mpMax - char.mp_max), mpMax),
         JSON.stringify(attributes),
+        JSON.stringify(spells),
         p.characterId,
       ],
     );
@@ -1030,6 +1046,8 @@ export function aplicarLevelUpManual(char) {
       level: level + 1,
       xp: xp - cost,
       attributes,
+      // Árvore: o cache `spells` acompanha o nível, como em create/update.
+      spells: golpesDisponiveis(char.skills, level + 1).map((s) => s.id),
       hp_max: stats.hpMax,
       mp_max: stats.mpMax,
       hp_current: Math.min(char.hp_current ?? stats.hpMax, stats.hpMax),
@@ -1050,9 +1068,9 @@ export async function levelUpCharacter(characterId, playerId) {
   await query(
     `UPDATE characters
      SET xp = $1, level = $2, hp_max = $3, mp_max = $4, hp_current = $5, mp_current = $6,
-         attributes = $7
-     WHERE id = $8`,
-    [c.xp, c.level, c.hp_max, c.mp_max, c.hp_current, c.mp_current, JSON.stringify(c.attributes), characterId],
+         attributes = $7, spells = $8
+     WHERE id = $9`,
+    [c.xp, c.level, c.hp_max, c.mp_max, c.hp_current, c.mp_current, JSON.stringify(c.attributes), JSON.stringify(c.spells), characterId],
   );
   return getCharacter(characterId);
 }
@@ -1166,6 +1184,8 @@ export function definirNivelManual(char, novoNivel) {
       level: alvo,
       xp: diff < 0 ? 0 : char.xp || 0,
       attributes,
+      // Ao descer de nível, golpes acima do novo nível voltam para a árvore.
+      spells: golpesDisponiveis(char.skills, alvo).map((s) => s.id),
       hp_max: stats.hpMax,
       mp_max: stats.mpMax,
       hp_current: Math.min(char.hp_current ?? stats.hpMax, stats.hpMax),
@@ -1186,9 +1206,9 @@ export async function setCharacterLevel(characterId, playerId, novoNivel) {
   await query(
     `UPDATE characters
      SET xp = $1, level = $2, hp_max = $3, mp_max = $4, hp_current = $5, mp_current = $6,
-         attributes = $7
-     WHERE id = $8`,
-    [c.xp, c.level, c.hp_max, c.mp_max, c.hp_current, c.mp_current, JSON.stringify(c.attributes), characterId],
+         attributes = $7, spells = $8
+     WHERE id = $9`,
+    [c.xp, c.level, c.hp_max, c.mp_max, c.hp_current, c.mp_current, JSON.stringify(c.attributes), JSON.stringify(c.spells), characterId],
   );
   return getCharacter(characterId);
 }

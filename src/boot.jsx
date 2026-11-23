@@ -2,12 +2,16 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
+import ThemeSwitcher from './components/ThemeSwitcher.jsx';
 import { initConnection } from './api.js';
+import { aplicarTema, temaAtual } from './theme.js';
 import './styles.css';
 
 // Boot compartilhado entre index.html e as páginas standalone
 // (mesa-de-batalha.html, campo-de-batalha.html etc.).
 export function boot(initialView) {
+  // Tema antes de qualquer render/pintura (evita flash entre temas).
+  aplicarTema(temaAtual());
   const rootEl = document.getElementById('root');
   rootEl.innerHTML =
     '<p style="font-family: system-ui, sans-serif; padding: 24px; color: #ccc">' +
@@ -20,6 +24,7 @@ export function boot(initialView) {
       <React.StrictMode>
         <ErrorBoundary>
           <App initialView={initialView} />
+          <ThemeSwitcher />
         </ErrorBoundary>
       </React.StrictMode>,
     );

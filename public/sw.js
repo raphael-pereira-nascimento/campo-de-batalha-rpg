@@ -1,6 +1,6 @@
-// v2: só cacheia respostas válidas (ok). Versão anterior (v1) podia guardar
-// 404/HTML em URL de asset durante rebuilds → tela branca no acesso seguinte.
-const CACHE = 'cbrpg-v2';
+// v11: invalida o cache da v10 para distribuir exclusão por cartão, temas
+// visuais persistidos, correções/UX da árvore e responsividade mobile completa.
+const CACHE = 'cbrpg-v11';
 const PRECACHE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {

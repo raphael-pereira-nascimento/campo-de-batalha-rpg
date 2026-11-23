@@ -107,7 +107,7 @@ export const CLASSES = {
   },
 };
 
-export const ELEMENTOS = ['fisico', 'fogo', 'agua', 'terra', 'ar', 'luz', 'trevas'];
+export const ELEMENTOS = ['fisico', 'fogo', 'agua', 'terra', 'ar', 'luz', 'trevas', 'sangue'];
 
 export const SPELLS = {
   golpe_sangrento: { nome: 'Golpe Sangrento', tipo: 'ataque', custo: 5, poder: 2.0, desc: 'Ataque físico brutal com força aumentada.', status: { tipo: 'sangramento', turnos: 2, dano: 60 }, alcanceVertical: 'terrestre' },
@@ -143,6 +143,30 @@ export const SPELLS = {
   tentaculo_esmagador: { nome: 'Tentáculo Esmagador', tipo: 'ataque', custo: 12, poder: 2.4, desc: 'Tentáculo colossal esmagando o alvo com força titânica.', elemento: 'fisico', status: { tipo: 'lentidao', turnos: 2 }, alcanceVertical: 'limitado', alvo: 'area', alvos: 2 },
   redemoinho_aguas_profundas: { nome: 'Redemoinho das Águas Profundas', tipo: 'ataque', custo: 15, poder: 2.6, desc: 'Redemoinho de mar profundo atingindo todos ao redor.', elemento: 'agua', status: { tipo: 'cegueira', turnos: 2 }, alvo: 'area' },
   maremoto_colossal: { nome: 'Maremoto Colossal', tipo: 'ataque', custo: 25, poder: 3.2, desc: 'Maremoto devastador varrendo o campo inteiro.', elemento: 'agua', status: { tipo: 'lentidao', turnos: 3 }, alvo: 'area' },
+
+  // ── Kraken do Abismo Eclipse (PROVISÓRIO: números e CDs ajustáveis) ──
+  // As CD dos testes e os status abaixo vêm da especificação do chefe;
+  // dano, recarga e quantidade da horda são valores provisórios de balanceamento.
+  tentaculos_da_loucura: {
+    nome: 'Tentáculos da Loucura', tipo: 'ataque', custo: 0, poder: 2.4,
+    desc: 'Até 3 alvos testam D20 + Reflexo (CD 16). Falha: dano físico e Confusão ou Medo por 2 turnos.',
+    elemento: 'fisico', kraken: true, chave: 'tentaculos_da_loucura', saveDC: 16,
+    saveAttr: 'reflexos', alvosMax: 3,
+    statusesAleatorias: [{ tipo: 'confusao', turnos: 2 }, { tipo: 'medo', turnos: 2 }],
+  },
+  mare_negra: {
+    nome: 'Maré Negra', tipo: 'ataque', custo: 0, poder: 2.2,
+    desc: 'Todos testam D20 + Reflexo (CD 18). Falha: dano, Cegueira e Veneno por 3 turnos.',
+    elemento: 'trevas', alvo: 'area', kraken: true, chave: 'mare_negra', saveDC: 18,
+    saveAttr: 'reflexos',
+    statuses: [{ tipo: 'cegueira', turnos: 3 }, { tipo: 'veneno', turnos: 3, dano: 40 }],
+  },
+  chamado_do_abismo: {
+    nome: 'Chamado do Abismo', tipo: 'invocacao', custo: 0, cooldown: 4,
+    desc: 'Invoca 1d4 + 2 Marinheiros Afogados usando o sistema de horda.',
+    kraken: true, chave: 'chamado_do_abismo',
+    invocacaoHorda: { monstro: 'horda_marinheiros_afogados', quantidadeDados: 1, faces: 4, bonus: 2 },
+  },
 
   // Espírito da Floresta
   raiz_enraizante: { nome: 'Raiz Enraizante', tipo: 'ataque', custo: 10, poder: 2.0, desc: 'Raízes brotam do solo, prendendo e causando dano.', elemento: 'terra', status: { tipo: 'lentidao', turnos: 3 }, alcanceVertical: 'terrestre', alvo: 'area' },
@@ -196,7 +220,15 @@ export function skillFromSpell(s) {
     tipo: s.tipo === 'ataque' ? 'magia' : s.tipo,
     poder: Math.round((s.poder || 1) * 100),
     custo: s.custo || 0,
-    cooldown: 0,
+    cooldown: s.cooldown || 0,
+    chave: s.chave || null,
+    kraken: !!s.kraken,
+    saveDC: s.saveDC ?? null,
+    saveAttr: s.saveAttr || null,
+    alvosMax: s.alvosMax ?? null,
+    statuses: s.statuses ? s.statuses.map((x) => ({ ...x })) : null,
+    statusesAleatorias: s.statusesAleatorias ? s.statusesAleatorias.map((x) => ({ ...x })) : null,
+    invocacaoHorda: s.invocacaoHorda ? { ...s.invocacaoHorda } : null,
     todos: !!s.todos || s.nome === 'Cura em Massa',
     afetaAliados: !!s.afetaAliados,
     buffTipo: s.buffTipo === 'fisico' || s.buffTipo === 'magico' ? s.buffTipo : null,
@@ -246,7 +278,7 @@ export const EQUIPMENT = {
     mosquete: { preco: 1000, nome: 'Mosquete', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 9, bonus: { forca: 1 }, socketSlots: 2, alcance: 'longo', recarga: 2, descricao: 'O clássico — lento mas devastador.' },
     bacamarte: { preco: 800, nome: 'Bacamarte', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 7, bonus: { forca: 1 }, socketSlots: 1, alcance: 'medio', recarga: 2, alvo: 'cone', alvos: 3, descricao: 'Dispara chumbos em cone, eficaz contra grupos.' },
     rifle_de_caca: { preco: 2500, nome: 'Rifle de Caça', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 10, bonus: { destreza: 2 }, socketSlots: 2, alcance: 'longo', recarga: 2, descricao: 'Precisão cirúrgica e o maior dano entre as armas de fogo — cara e rara.' },
-    besta_pesada: { preco: 900, nome: 'Besta Pesada', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 6, bonus: { forca: 1 }, socketSlots: 2, alcance: 'longo', recarga: 2, descricao: 'Mais lenta que arco mas ignora parcialmente defesa.' },
+    besta_pesada: { preco: 900, nome: 'Besta Pesada', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 6, bonus: { forca: 1 }, socketSlots: 2, alcance: 'longo', recarga: 2, ignoraDefesaPct: 25, descricao: 'Mais lenta que arco mas ignora 25% da defesa.' },
     cajado_de_fogo: { preco: 1200, nome: 'Cajado de Fogo', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 4, bonus: { inteligencia: 2 }, socketSlots: 2, alcance: 'longo', recarga: 1, descricao: 'Cajado arcano que dispara projéteis de fogo incandescentes.' },
     arco_composto: { preco: 1300, nome: 'Arco Composto', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 7, bonus: { destreza: 2 }, socketSlots: 2, alcance: 'longo', recarga: 0, descricao: 'Arco reforçado com lâmina — multiclasse de precisão.' },
     // Valores PROVISÓRIOS. `recarga` = turnos de espera do personagem após cada
@@ -282,14 +314,17 @@ export const EQUIPMENT = {
     // ── Canhões de artilharia (💣) ───────────────────────────────
     // Peças de cerco pesadas: tiro lento, dano em área ampla, elemento fogo.
     // Usam os campos que o motor de batalha já lê: alvo/alvos/splash.
-    canhao_leve: { preco: 4200, nome: 'Canhão Leve', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 10, bonus: { forca: 1 }, socketSlots: 2, alcance: 'medio', recarga: 3, alvo: 'explosao', alvos: 3, splash: 0.5, descricao: 'Peça de artilharia portátil: alvo principal 100%, vizinhos 50%.' },
-    canhao_cerco: { preco: 6100, nome: 'Canhão de Cerco', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 12, bonus: { forca: 2, resistencia: 1 }, socketSlots: 3, alcance: 'medio', recarga: 4, alvo: 'explosao', alvos: 4, splash: 0.6, descricao: 'Canhão pesado de sítio: vizinhos sofrem 60%. Precisa de tripé para recarregar.' },
-    canhao_ferro: { preco: 8500, nome: 'Canhão de Ferro', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 14, bonus: { forca: 3, resistencia: 2 }, socketSlots: 3, alcance: 'medio', recarga: 4, alvo: 'explosao', alvos: 4, splash: 0.7, descricao: 'Ferro maciço e pólvora negra. Splash 70% — devastador contra grupos.' },
-    canhao_de_salto: { preco: 9800, nome: 'Canhão de Salto', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 13, bonus: { destreza: 2, inteligencia: 1 }, socketSlots: 3, alcance: 'longo', recarga: 4, alvo: 'explosao', alvos: 5, splash: 0.6, descricao: 'Precisão com ajuste de elevação: alcance longo e splash 60%.' },
-    canhao_morteiro: { preco: 11000, nome: 'Canhão Morteiro', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 15, bonus: { inteligencia: 2 }, socketSlots: 3, alcance: 'longo', recarga: 5, alvo: 'explosao', alvos: 5, splash: 0.7, descricao: 'Trajetória curva arcana: explode atrás das linhas inimigas, splash 70%.' },
-    canhao_bombasta: { preco: 14500, nome: 'Canhão Bombasta', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 16, bonus: { forca: 3, resistencia: 3 }, socketSlots: 4, alcance: 'medio', recarga: 5, alvo: 'explosao', alvos: 5, splash: 0.75, descricao: 'A besta dos céus: vizinhos sofrem 75%. Peso quase proibitivo.' },
-    canhao_dragoes: { preco: 18500, nome: 'Canhão de Dragões', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 18, bonus: { inteligencia: 3, resistencia: 2 }, socketSlots: 4, alcance: 'longo', recarga: 5, alvo: 'explosao', alvos: 5, splash: 0.8, descricao: 'Cuspe de dragão em cano de bronze: splash 80%, ignora parte da defesa.' },
-    canhao_abismo: { preco: 24000, nome: 'Canhão do Abismo', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'trevas', danoBase: 20, bonus: { inteligencia: 4, resistencia: 2 }, socketSlots: 4, alcance: 'longo', recarga: 6, alvo: 'explosao', alvos: 5, splash: 0.8, descricao: 'Feito dos engenheiros do Eclipse: splash 80%, elemento trevas.' },
+    // D-62 a D-67: exigem tripulação mínima de 2 (atirador + 1 ajudante);
+    // sem ajudante vivo, −20% de acerto e +1 turno de recarga. Os números
+    // de ignora-defesa, peso, tripé e fumaça são provisórios.
+    canhao_leve: { preco: 4200, nome: 'Canhão Leve', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 10, bonus: { forca: 1 }, socketSlots: 2, alcance: 'medio', recarga: 3, alvo: 'explosao', alvos: 3, splash: 0.5, tripulacaoMinima: 2, descricao: 'Peça de artilharia portátil: alvo principal 100%, vizinhos 50%.' },
+    canhao_cerco: { preco: 6100, nome: 'Canhão de Cerco', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 12, bonus: { forca: 2, resistencia: 1 }, socketSlots: 3, alcance: 'medio', recarga: 5, alvo: 'explosao', alvos: 4, splash: 0.6, tripulacaoMinima: 2, descricao: 'Canhão pesado de sítio: vizinhos sofrem 60%. Tripé embutido: recarga de 5 turnos (+1 sem ajudante).' },
+    canhao_ferro: { preco: 8500, nome: 'Canhão de Ferro', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 14, bonus: { forca: 3, resistencia: 2 }, socketSlots: 3, alcance: 'medio', recarga: 4, alvo: 'explosao', alvos: 4, splash: 0.7, fumacaExtra: 1, tripulacaoMinima: 2, descricao: 'Ferro maciço e pólvora negra: +1 fumaça por disparo. Splash 70% — devastador contra grupos.' },
+    canhao_de_salto: { preco: 9800, nome: 'Canhão de Salto', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 13, bonus: { destreza: 2, inteligencia: 1 }, socketSlots: 3, alcance: 'longo', recarga: 4, alvo: 'explosao', alvos: 5, splash: 0.6, tripulacaoMinima: 2, descricao: 'Precisão com ajuste de elevação: alcance longo e splash 60%.' },
+    canhao_morteiro: { preco: 11000, nome: 'Canhão Morteiro', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 15, bonus: { inteligencia: 2 }, socketSlots: 3, alcance: 'longo', recarga: 5, alvo: 'explosao', alvos: 5, splash: 0.7, tripulacaoMinima: 2, descricao: 'Trajetória curva arcana: explode atrás das linhas inimigas, splash 70%.' },
+    canhao_bombasta: { preco: 14500, nome: 'Canhão Bombasta', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 16, bonus: { forca: 3, resistencia: 3 }, penalidade: { destreza: -1, reflexos: -1 }, socketSlots: 4, alcance: 'medio', recarga: 5, alvo: 'explosao', alvos: 5, splash: 0.75, tripulacaoMinima: 2, descricao: 'A besta dos céus: vizinhos sofrem 75%. Peso quase proibitivo (−1 DEX/REF).' },
+    canhao_dragoes: { preco: 18500, nome: 'Canhão de Dragões', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'fogo', danoBase: 18, bonus: { inteligencia: 3, resistencia: 2 }, socketSlots: 4, alcance: 'longo', recarga: 5, alvo: 'explosao', alvos: 5, splash: 0.8, ignoraDefesaPct: 25, tripulacaoMinima: 2, descricao: 'Cuspe de dragão em cano de bronze: splash 80%, ignora 25% da defesa.' },
+    canhao_abismo: { preco: 24000, nome: 'Canhão do Abismo', tipo: 'arma_fogo', categoria: 'distancia', elemento: 'trevas', danoBase: 20, bonus: { inteligencia: 4, resistencia: 2 }, socketSlots: 4, alcance: 'longo', recarga: 6, alvo: 'explosao', alvos: 5, splash: 0.8, tripulacaoMinima: 2, descricao: 'Feito dos engenheiros do Eclipse: splash 80%, elemento trevas.' },
   },
   acessorios: {
     anel_de_forca: { nome: 'Anel de Força', tipo: 'acessorio', categoria: 'acessorio', preco: 350, icone: '💍', bonus: { forca: 1 }, socketSlots: 1, descricao: 'Um anel simples que canaliza a força bruta de quem o usa.' },
@@ -303,6 +338,7 @@ export const EQUIPMENT = {
     coroa_do_sabio: { nome: 'Coroa do Sábio', tipo: 'acessorio', categoria: 'acessorio', preco: 2600, icone: '👑', bonus: { inteligencia: 3 }, socketSlots: 2, descricao: 'Coroa de metal antigo; dizem que sussurra segredos ao portador.' },
     medalhao_do_guardiao: { nome: 'Medalhão do Guardião', tipo: 'acessorio', categoria: 'acessorio', preco: 2600, icone: '🛡️', bonus: { resistencia: 3 }, socketSlots: 2, descricao: 'Símbolo de um guardião ancestral, reforça a defesa do corpo.' },
     pingente_da_sorte: { nome: 'Pingente da Sorte', tipo: 'acessorio', categoria: 'acessorio', preco: 3000, icone: '🍀', bonus: { forca: 1, destreza: 1, reflexos: 1 }, socketSlots: 1, descricao: 'Um trevo de quatro folhas banhado a ouro; sorte em todas as frentes.' },
+    respirador_abissal: { nome: 'Respirador Abissal', tipo: 'acessorio', categoria: 'acessorio', preco: 1200, icone: '🌬️', bonus: { resistencia: 1 }, efeito: { respiracaoAquatica: true }, socketSlots: 1, descricao: 'Válvula de madrepérola que permite respirar na Água Profunda Corrompida.' },
   },
 };
 
@@ -327,6 +363,10 @@ export const STATUS_DEFS = {
   // Condições próprias dos materiais (não são a mesma coisa entre si).
   podridao: { id: 'podridao', nome: 'Podridão', icon: '🦠', tipo: 'dot', desc: 'Dano por turno sobre a vida máxima original (Tenebrium).', duracaoPadrao: 3, danoPadrao: 0, danoPctVidaMaxima: 20, acumulo: 'renova', sistema: 'podridao', modificadores: '20% da vida máxima original por turno', remocao: ['expiração', 'tratamento de Podridão'] },
   contaminacaoPandemonica: { id: 'contaminacaoPandemonica', nome: 'Contaminação Pandemônica', icon: '☣️', tipo: 'dot', desc: 'Contaminação profana da Prata Pandemônica; o dano depende da aplicação.', duracaoPadrao: 3, danoPadrao: 0, danoPctVidaMaxima: null, reducaoCuraPct: 25, acumulo: 'renova', sistema: 'contaminacaoPandemica', modificadores: 'dano progressivo documentado e −25% de cura/proteção quando aplicável', remocao: ['expiração', 'purificação por Prata Sagrada'] },
+  // Kraken do Abismo Eclipse — condições pedidas pelo criador (PROVISÓRIO: números).
+  confusao: { id: 'confusao', nome: 'Confusão', icon: '🌀', tipo: 'debuff', desc: 'A mente se perde e os ataques ficam menos precisos.', duracaoPadrao: 2, danoPadrao: 0, acumulo: 'renova', modificadores: '-20% de acerto (provisório)', remocao: ['expiração'] },
+  medo: { id: 'medo', nome: 'Medo', icon: '😱', tipo: 'debuff', desc: 'O pavor atrapalha a reação e a mira.', duracaoPadrao: 2, danoPadrao: 0, acumulo: 'renova', modificadores: '-10% de acerto e -10% de esquiva (provisório)', remocao: ['expiração'] },
+  respiracao_aquatica: { id: 'respiracao_aquatica', nome: 'Respiração Aquática', icon: '🌬️', tipo: 'buff', desc: 'Permite respirar e agir normalmente na Água Profunda Corrompida.', duracaoPadrao: 3, danoPadrao: 0, acumulo: 'renova', modificadores: 'imunidade à penalidade da arena do Kraken', remocao: ['expiração'] },
 };
 
 export const STATUS_KEYS = Object.keys(STATUS_DEFS);
@@ -337,6 +377,7 @@ export const POTIONS = {
   pocao_cura_grande: { nome: 'Poção de Cura Grande', tipo: 'pocao', cura: 600, desc: 'Restaura 600 de HP.' },
   elixir_mana: { nome: 'Elixir de Mana', tipo: 'pocao', mana: 25, desc: 'Restaura 25 de MP.' },
   elixir_mana_grande: { nome: 'Elixir de Mana Grande', tipo: 'pocao', mana: 60, desc: 'Restaura 60 de MP.' },
+  pocao_respiracao_aquatica: { nome: 'Poção de Respiração Aquática', tipo: 'pocao', status: { tipo: 'respiracao_aquatica', turnos: 3 }, desc: 'Concede Respiração Aquática por 3 turnos contra a arena do Kraken.' },
 };
 
 export const ATTRIBUTE_KEYS = ['forca', 'inteligencia', 'resistencia', 'destreza', 'reflexos'];
@@ -930,19 +971,41 @@ export function gemsAttrs(equipment = {}, gems = GEMS) {
   return acc;
 }
 
-export function effectiveAttributes(attributes, equipment = {}, races = null, classes = null) {
-  const eff = { ...attributes };
-  if (Array.isArray(races)) {
-    for (const [k, v] of Object.entries(raceBonusTotal(races))) eff[k] = (eff[k] || 0) + v;
-  } else if (races) {
-    const rb = applyRaceBonus(races, {});
-    for (const [k, v] of Object.entries(rb)) eff[k] = (eff[k] || 0) + v;
+// Penalidades de equipamento que também incidem nas rolagens de acerto.
+// `effectiveAttributes` já aplica `penalidade` aos Atributos Finais (usados em
+// dano/vida/mana), mas a mira usa os atributos-base; sem isto um malefício
+// declarado no catálogo — como o −1 DEX/REF do Canhão Bombasta (D-66) — não
+// teria efeito nenhum em combate. Bônus não entram aqui: apenas malefícios.
+export function penalidadesEquipamento(equipment = {}) {
+  const acc = {};
+  const itens = armasDeEquipamento(equipment).map((e) => e.arma)
+    .concat([equipment.armadura, equipment.acessorio]).filter(Boolean);
+  for (const item of itens) {
+    if (!item.penalidade) continue;
+    for (const [k, v] of Object.entries(item.penalidade)) {
+      if (k.startsWith('_')) continue;
+      acc[k] = (acc[k] || 0) + Math.abs(Number(v) || 0);
+    }
   }
-  for (const [k, v] of Object.entries(classBonusTotal(classes))) eff[k] = (eff[k] || 0) + v;
+  return acc;
+}
+
+// Detalhamento usado pela criação de ficha e pela ficha pronta: mostra de onde
+// vem cada número sem mudar o valor salvo em `attributes`. A soma final é a
+// mesma de `effectiveAttributes` (mantida como wrapper para compatibilidade).
+export function attributeBreakdown(attributes, equipment = {}, races = null, classes = null) {
+  const base = { ...(attributes || {}) };
+  const race = Array.isArray(races)
+    ? raceBonusTotal(races)
+    : races ? applyRaceBonus(races, {}) : {};
+  const classe = classBonusTotal(classes);
+  const equipamento = {};
+  const penalidades = {};
+
   // Equipamento: armas equipadas (até 3) + armadura + acessório somam bônus/malefícios.
   // A arma legada equipment.arma entra via armasDeEquipamento sem duplicar.
-  for (const item of armasDeEquipamento(equipment).map((e) => e.arma).concat([equipment.armadura, equipment.acessorio]).filter(Boolean)) {
-    if (!item) continue;
+  for (const item of armasDeEquipamento(equipment).map((e) => e.arma)
+    .concat([equipment.armadura, equipment.acessorio]).filter(Boolean)) {
     // Itens craftados guardam em `atributosFinais` o bônus-base já somado aos
     // efeitos dos materiais. Quando presente, ele substitui `bonus` para não
     // contar o mesmo bônus duas vezes.
@@ -950,21 +1013,44 @@ export function effectiveAttributes(attributes, equipment = {}, races = null, cl
       ? item.atributosFinais
       : item.bonus;
     if (atributosDoItem) {
-      for (const [k, v] of Object.entries(atributosDoItem)) eff[k] = (eff[k] || 0) + v;
+      for (const [k, v] of Object.entries(atributosDoItem)) {
+        equipamento[k] = (equipamento[k] || 0) + v;
+      }
     }
     if (item.penalidade) {
-      // Malefícios sempre reduzem o atributo (armaduras do catálogo guardam
-      // valores negativos; equipamentos customizados guardam valores positivos).
-      for (const [k, v] of Object.entries(item.penalidade)) eff[k] = (eff[k] || 0) - Math.abs(v);
+      // Malefícios sempre reduzem o atributo (catálogo negativo ou custom positivo).
+      for (const [k, v] of Object.entries(item.penalidade)) {
+        penalidades[k] = (penalidades[k] || 0) + Math.abs(v);
+      }
     }
   }
-  // Bônus das gemas socketadas (buffs positivos / debuffs negativos)
-  for (const [k, v] of Object.entries(gemsAttrs(equipment, GEMS))) eff[k] = (eff[k] || 0) + v;
-  for (const key of Object.keys(eff)) {
+
+  const gemas = gemsAttrs(equipment, GEMS);
+  const final = { ...base };
+  const chaves = new Set([
+    ...Object.keys(base), ...Object.keys(race), ...Object.keys(classe),
+    ...Object.keys(equipamento), ...Object.keys(penalidades), ...Object.keys(gemas),
+  ]);
+  for (const key of chaves) {
     if (key.startsWith('_')) continue;
-    eff[key] = Math.max(1, eff[key] || 1);
+    const total = (base[key] || 0) + (race[key] || 0) + (classe[key] || 0)
+      + (equipamento[key] || 0) + (gemas[key] || 0) - (penalidades[key] || 0);
+    final[key] = Math.max(1, total || 1);
   }
-  return eff;
+
+  return {
+    base,
+    race,
+    class: classe,
+    equipment: equipamento,
+    penalties: penalidades,
+    gems: gemas,
+    final,
+  };
+}
+
+export function effectiveAttributes(attributes, equipment = {}, races = null, classes = null) {
+  return attributeBreakdown(attributes, equipment, races, classes).final;
 }
 
 // Fórmulas de vida, mana e dano (regras do criador — ver sistema.js):
@@ -972,7 +1058,8 @@ export function effectiveAttributes(attributes, equipment = {}, races = null, cl
 //   Mana = (Inteligência Final × 10)
 //   Dano = (Força Final + danoBase da arma) × 10   [PROVISÓRIO]
 export function deriveStats(classes, level, attributes, equipment = {}, races = null) {
-  const eff = effectiveAttributes(attributes, equipment, races, classes);
+  const br = attributeBreakdown(attributes, equipment, races, classes);
+  const eff = br.final;
   const list = Array.isArray(classes) ? classes : classes ? [classes] : [];
   const primary = list.find((c) => c.primary) || list[0] || null;
   const hpPerLevel = primary?.hpPerLevel || 10;
@@ -991,7 +1078,7 @@ export function deriveStats(classes, level, attributes, equipment = {}, races = 
   // (maior dano base), igual ao combate.
   const dano = danoFisicoAtaque(eff.forca, danoBaseDaArma(melhorArma(equipment)));
 
-  return { hpMax, mpMax, defesa, dano, effectiveAttributes: eff };
+  return { hpMax, mpMax, defesa, dano, effectiveAttributes: eff, attributeBreakdown: br };
 }
 
 // Ordem de iniciativa: Reflexos pesa mais (reação), Destreza e Resistência

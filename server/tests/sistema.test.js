@@ -54,6 +54,7 @@ import {
   NIVEIS_DIFICULDADE_D20,
   nivelDificuldadeD20,
   rotuloDificuldadeD20,
+  exigenciaD20,
 } from '../src/game/sistema.js';
 
 describe('Mana — fórmula confirmada ((INT Final) × 10)', () => {
@@ -150,7 +151,7 @@ describe('Dano — fórmula provisória (Atributo Final × 10, sem dados)', () =
   });
 });
 
-describe('Dificuldade do golpe no d20 — provisória (rolar-menor)', () => {
+describe('Dificuldade do golpe no d20 — provisória (D-68, rolar-maior)', () => {
   it('golpe comum (100%) não pesa', () => {
     expect(dificuldadeDoGolpe()).toBe(0);
     expect(dificuldadeDoGolpe({ poder: 100 })).toBe(0);
@@ -173,6 +174,23 @@ describe('Dificuldade do golpe no d20 — provisória (rolar-menor)', () => {
   it('respeita o teto de dificuldade', () => {
     expect(dificuldadeDoGolpe({ poder: 900 })).toBe(DIFICULDADE_MAX);
     expect(DIFICULDADE_MAX).toBe(8);
+  });
+
+  it('D-68: converte chance em exigência mantendo a probabilidade', () => {
+    expect(exigenciaD20(0.35)).toBe(14); // 7 faces (14–20)
+    expect(exigenciaD20(0.5)).toBe(11); // 10 faces (11–20)
+    expect(exigenciaD20(0.95)).toBe(2); // 19 faces (2–20)
+    expect(exigenciaD20(0)).toBe(20); // só o crítico natural
+    expect(exigenciaD20(1)).toBe(2); // 1 é falha natural, mesmo com 100%
+  });
+
+  it('D-68: dificuldade aumenta a exigência e a faixa classifica a exigência', () => {
+    const comum = exigenciaD20(0.5);
+    const forte = exigenciaD20(0.5, 2);
+    expect(forte).toBeGreaterThan(comum);
+    expect(nivelDificuldadeD20(comum)).toMatchObject({ id: 'dificil', nome: 'Difícil' });
+    expect(nivelDificuldadeD20(forte)).toMatchObject({ id: 'dificil', nome: 'Difícil' });
+    expect(nivelDificuldadeD20(exigenciaD20(0.5, 6))).toMatchObject({ id: 'muito_dificil', nome: 'Muito Difícil' });
   });
 });
 
