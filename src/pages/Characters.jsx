@@ -6,7 +6,7 @@ import { exportarFicha, importarFicha } from '../utils/fichaFile.js';
 import { api, isOffline } from '../api.js';
 import { shareCharacter, resolveSharedCharacter } from '../utils/shareCharacter.js';
 
-export default function Characters({ player, characters, gameData, customClasses = [], onRefresh, onEnterLobby, onOpenRegistry, onOpenCharacterManager, onOpenCompendium, onOpenRules, onOpenGemForge, onOpenMateriais, onOpenEquipamentos, onOpenForge, onOpenMineracao, onOpenToolShop, onOpenEquipmentShop, onOpenMining, onOpenTavern, onOpenTableBattle, onOpenDungeons, onLogout }) {
+export default function Characters({ player, characters, gameData, customClasses = [], onRefresh, onEnterLobby, onOpenRegistry, onOpenCharacterManager, onOpenCompendium, onOpenRules, onOpenUpdates, onOpenGemForge, onOpenMateriais, onOpenEquipamentos, onOpenForge, onOpenMineracao, onOpenToolShop, onOpenEquipmentShop, onOpenMining, onOpenTavern, onOpenTableBattle, onOpenDungeons, onLogout }) {
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState(null);
   const [importError, setImportError] = useState('');
@@ -68,6 +68,7 @@ export default function Characters({ player, characters, gameData, customClasses
         <button onClick={onOpenTavern}>🍺 Taverna</button>
         <button onClick={onOpenCompendium}>⚔️ Arsenal</button>
         <button onClick={onOpenRules}>📖 Regras</button>
+        <button onClick={onOpenUpdates}>📰 Atualizações</button>
         <button onClick={onOpenTableBattle}>📋 Mesa de Batalha</button>
         <button onClick={() => setPasteModal(true)}>📋 Colar ficha</button>
         <button onClick={() => fileRef.current && fileRef.current.click()}>📥 Importar</button>

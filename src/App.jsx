@@ -17,6 +17,7 @@ const Materiais = lazy(() => import('./pages/Materiais.jsx'));
 const Mineracao = lazy(() => import('./pages/Mineracao.jsx'));
 const ToolShop = lazy(() => import('./pages/ToolShop.jsx'));
 const Tavern = lazy(() => import('./pages/Tavern.jsx'));
+const Updates = lazy(() => import('./pages/Updates.jsx'));
 const Dungeons = lazy(() => import('./pages/Dungeons.jsx'));
 const ShareView = lazy(() => import('./pages/ShareView.jsx'));
 const CharacterManager = lazy(() => import('./pages/CharacterManager.jsx'));
@@ -238,6 +239,7 @@ export default function App({ initialView } = {}) {
         onOpenCharacterManager={() => setView('characterManager')}
         onOpenCompendium={() => setView('compendium')}
         onOpenRules={() => setView('rules')}
+        onOpenUpdates={() => setView('updates')}
         onOpenGemForge={abrirForja}
         onOpenMateriais={() => setView('materiais')}
         onOpenEquipamentos={() => setView('equipamentos')}
@@ -282,6 +284,12 @@ export default function App({ initialView } = {}) {
   if (view === 'rules') {
     return <Suspense fallback={<div className="loading">Carregando...</div>}>
       <Rules onBack={() => setView('characters')} />
+    </Suspense>;
+  }
+
+  if (view === 'updates') {
+    return <Suspense fallback={<div className="loading">Carregando atualizações...</div>}>
+      <Updates onBack={() => setView('characters')} />
     </Suspense>;
   }
 
