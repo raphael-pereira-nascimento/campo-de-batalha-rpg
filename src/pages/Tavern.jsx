@@ -57,6 +57,14 @@ function formatarTempo(segundos) {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
+// Mensagem da tela de carregamento conforme o preparo avança.
+function mensagemPreparo(progresso) {
+  if (progresso < 25) return 'Separanto as laranjas…';
+  if (progresso < 50) return 'Espremendo as laranjas…';
+  if (progresso < 75) return 'Coando e adoçando…';
+  return 'Servindo seu suco…';
+}
+
 // Rótulos legados dos sucos vindos do merge, mantidos para itens antigos que
 // ainda possam trazer `sucoBuffs`/`curaPct` no inventário.
 const SUCO_BUFF_LABEL = {
@@ -113,6 +121,21 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
   const [busca, setBusca] = useState('');
   const [producao, setProducao] = useState(null);
   const [tentativaSom, setTentativaSom] = useState(0);
+  // Preferência da tela de preparo: vídeo ou carregamento com música de fundo.
+  const [modoProducao, setModoProducao] = useState(() => {
+    try {
+      return localStorage.getItem('cbr_suco_producao_modo') === 'carregamento' ? 'carregamento' : 'video';
+    } catch {
+      return 'video';
+    }
+  });
+
+  const alterarModoProducao = (modo) => {
+    setModoProducao(modo);
+    try { localStorage.setItem('cbr_suco_producao_modo', modo); } catch { /* storage indisponível */ }
+    // O clique é um gesto do usuário: remontar o player ajuda o autoplay do som.
+    setTentativaSom((n) => n + 1);
+  };
 
   const alerta = (msg, tipo) => {
     setToast({ msg, tipo });
@@ -193,6 +216,10 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
     if (porCat.outros) cats.push({ id: 'outros', nome: 'Outros Itens', icon: '🍶', blurb: 'O que sobrou no balcão.', itens: porCat.outros });
     return cats;
   }, [listaFiltrada]);
+
+  const progressoProducao = producao
+    ? Math.min(100, Math.max(0, ((producao.totalMs - producao.restanteMs) / producao.totalMs) * 100))
+    : 0;
 
   const comprar = async (bebida) => {
     if (!charId) {
@@ -443,15 +470,52 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
               </div>
             </div>
 
-            <div className="suco-producao-video">
-              <iframe
-                key={`${producao.bebida.id}-${tentativaSom}`}
-                src={SUCO_VIDEO_EMBED}
-                title="Música da produção do suco de laranja"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
+            <div className="suco-producao-modos" role="group" aria-label="Formato da tela de preparo">
+              <button
+                type="button"
+                className={modoProducao === 'video' ? 'is-active' : ''}
+                onClick={() => alterarModoProducao('video')}
+              >
+                🎬 Vídeo
+              </button>
+              <button
+                type="button"
+                className={modoProducao === 'carregamento' ? 'is-active' : ''}
+                onClick={() => alterarModoProducao('carregamento')}
+              >
+                ⏳ Carregamento
+              </button>
             </div>
+
+            {modoProducao === 'video' ? (
+              <div className="suco-producao-video">
+                <iframe
+                  key={`${producao.bebida.id}-${tentativaSom}-video`}
+                  src={SUCO_VIDEO_EMBED}
+                  title="Música da produção do suco de laranja"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              </div>
+            ) : (
+              <div className="suco-producao-loading">
+                <div className="suco-producao-spinner" aria-hidden="true">
+                  <span className="suco-producao-anel" />
+                  <span className="suco-producao-fruta">{producao.bebida.emoji || '🍊'}</span>
+                </div>
+                <p className="suco-producao-loading-titulo">{mensagemPreparo(progressoProducao)}</p>
+                <p className="muted small">🎵 Música tocando de fundo</p>
+                {/* Player oculto: mantém apenas o áudio do mesmo vídeo. */}
+                <div className="suco-producao-audio">
+                  <iframe
+                    key={`${producao.bebida.id}-${tentativaSom}-audio`}
+                    src={SUCO_VIDEO_EMBED}
+                    title="Música de fundo da preparação do suco"
+                    allow="autoplay; encrypted-media"
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="suco-producao-status">
               <div className="suco-producao-cronometro">
@@ -459,25 +523,23 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
                 <span className="muted small">restante de {formatarTempo(producao.totalMs / 1000)}</span>
               </div>
               <div className="suco-producao-barra" aria-hidden="true">
-                <span
-                  style={{
-                    width: `${Math.min(100, Math.max(0, ((producao.totalMs - producao.restanteMs) / producao.totalMs) * 100))}%`,
-                  }}
-                />
+                <span style={{ width: `${progressoProducao}%` }} />
               </div>
               <p className="muted small">
                 Seu suco já está na mochila. O taverneiro está terminando o preparo — a tela volta sozinha ao fim do tempo.
               </p>
               <div className="suco-producao-acoes">
                 <button className="ghost" onClick={() => setTentativaSom((n) => n + 1)}>
-                  🔊 Tocar com som
+                  {modoProducao === 'carregamento' ? '🔊 Ativar música' : '🔊 Tocar com som'}
                 </button>
                 <a href={SUCO_VIDEO_WATCH} target="_blank" rel="noreferrer">
                   Abrir música no YouTube ↗
                 </a>
               </div>
               <p className="muted small suco-producao-dica">
-                Se o som não começar automaticamente, clique em “Tocar com som”.
+                {modoProducao === 'carregamento'
+                  ? 'A música toca de fundo. Se o navegador bloquear o autoplay, clique em “Ativar música”.'
+                  : 'Se o som não começar automaticamente, clique em “Tocar com som”.'}
               </p>
             </div>
           </div>
