@@ -46,6 +46,17 @@ function nomeCategoria(id) {
   return TAVERN_CATEGORIES.find((c) => c.id === id)?.nome || '';
 }
 
+// Música da tela de preparo dos sucos de teste (mesmo vídeo para os três).
+const SUCO_VIDEO_ID = 'ie9rVboWGjg';
+const SUCO_VIDEO_WATCH = `https://www.youtube.com/watch?v=${SUCO_VIDEO_ID}`;
+const SUCO_VIDEO_EMBED = `https://www.youtube-nocookie.com/embed/${SUCO_VIDEO_ID}`
+  + `?autoplay=1&loop=1&playlist=${SUCO_VIDEO_ID}&rel=0&modestbranding=1&playsinline=1`;
+
+function formatarTempo(segundos) {
+  const total = Math.max(0, Math.ceil(segundos));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
 // Rótulos legados dos sucos vindos do merge, mantidos para itens antigos que
 // ainda possam trazer `sucoBuffs`/`curaPct` no inventário.
 const SUCO_BUFF_LABEL = {
@@ -100,6 +111,8 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
   const [busy, setBusy] = useState(false);
   const [filtro, setFiltro] = useState('tudo');
   const [busca, setBusca] = useState('');
+  const [producao, setProducao] = useState(null);
+  const [tentativaSom, setTentativaSom] = useState(0);
 
   const alerta = (msg, tipo) => {
     setToast({ msg, tipo });
@@ -120,6 +133,21 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Contagem regressiva da tela de preparo. Usa timestamp para não atrasar se
+  // a aba ficar em segundo plano; ao zerar, a taverna volta automaticamente.
+  useEffect(() => {
+    if (!producao) return undefined;
+    const timer = setInterval(() => {
+      const restante = producao.fimEm - Date.now();
+      setProducao((atual) => {
+        if (!atual) return null;
+        if (restante <= 0) return null;
+        return { ...atual, restanteMs: restante };
+      });
+    }, 250);
+    return () => clearInterval(timer);
+  }, [producao?.bebida?.id, producao?.fimEm]);
 
   const lista = useMemo(() => Object.entries(items || {}).map(([id, b]) => ({ id, ...b })), [items]);
 
@@ -182,7 +210,20 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
       setCarteira(nova);
       if (onWalletChange) onWalletChange(nova);
       if (onRefresh) await onRefresh();
-      alerta(`✅ ${bebida.emoji || '🍺'} ${bebida.nome} guardado na mochila!`, 'sucesso');
+      if (bebida.sucoTeste && bebida.producaoSegundos > 0) {
+        // O item já entrou na mochila; a tela de preparo mostra a música e
+        // volta sozinha depois do tempo específico de cada suco.
+        const totalMs = bebida.producaoSegundos * 1000;
+        setTentativaSom(0);
+        setProducao({
+          bebida,
+          totalMs,
+          fimEm: Date.now() + totalMs,
+          restanteMs: totalMs,
+        });
+      } else {
+        alerta(`✅ ${bebida.emoji || '🍺'} ${bebida.nome} guardado na mochila!`, 'sucesso');
+      }
     } catch (e) {
       alerta(`❌ ${e.message}`, 'erro');
     } finally {
@@ -235,9 +276,9 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
         <div className="tavern-card-footer">
           <span
             className={`tavern-price${b.precoTeste ? ' is-test' : ''}`}
-            title={b.precoTeste ? 'Preço provisório de teste' : undefined}
+            title={b.precoTeste ? 'Item de teste gratuito' : undefined}
           >
-            {formatCoins(b.preco)}{b.precoTeste ? ' (teste)' : ''}
+            {b.preco === 0 ? 'Grátis' : formatCoins(b.preco)}{b.precoTeste ? ' (teste)' : ''}
           </span>
           <button
             className="tavern-buy"
@@ -379,9 +420,69 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
           {isOffline() ? ' · modo offline (salvo no navegador)' : ''}
           {' '}· 📜 Bebeu demais? O efeito de embriaguez passa em alguns turnos de combate.
           {' '}Comida regenera e sustenta — mas não embriaga.
-          {' '}🍊 Os sucos de laranja são itens de teste: curam em % da máxima, não acumulam buffs entre si e duram turnos de combate; preços são provisórios.
+          {' '}🍊 Os sucos de laranja são itens de teste gratuitos: curam em % da máxima, não acumulam buffs entre si e duram turnos de combate. Ao comprar, acompanhe a preparação com música na tela de produção.
         </p>
       </div>
+
+      {producao && (
+        <div
+          className="suco-producao-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Preparando ${producao.bebida.nome}`}
+        >
+          <div className="suco-producao-card">
+            <div className="suco-producao-top">
+              <span className="suco-producao-emoji" aria-hidden="true">{producao.bebida.emoji || '🍊'}</span>
+              <div>
+                <p className="suco-producao-kicker">🍊 Preparando seu suco</p>
+                <h2>{producao.bebida.nome}</h2>
+                <p className="muted small">
+                  {producao.bebida.qualidade}{producao.bebida.tier ? ` · ${producao.bebida.tier}` : ''} · item de teste
+                </p>
+              </div>
+            </div>
+
+            <div className="suco-producao-video">
+              <iframe
+                key={`${producao.bebida.id}-${tentativaSom}`}
+                src={SUCO_VIDEO_EMBED}
+                title="Música da produção do suco de laranja"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            </div>
+
+            <div className="suco-producao-status">
+              <div className="suco-producao-cronometro">
+                <strong>{formatarTempo(producao.restanteMs / 1000)}</strong>
+                <span className="muted small">restante de {formatarTempo(producao.totalMs / 1000)}</span>
+              </div>
+              <div className="suco-producao-barra" aria-hidden="true">
+                <span
+                  style={{
+                    width: `${Math.min(100, Math.max(0, ((producao.totalMs - producao.restanteMs) / producao.totalMs) * 100))}%`,
+                  }}
+                />
+              </div>
+              <p className="muted small">
+                Seu suco já está na mochila. O taverneiro está terminando o preparo — a tela volta sozinha ao fim do tempo.
+              </p>
+              <div className="suco-producao-acoes">
+                <button className="ghost" onClick={() => setTentativaSom((n) => n + 1)}>
+                  🔊 Tocar com som
+                </button>
+                <a href={SUCO_VIDEO_WATCH} target="_blank" rel="noreferrer">
+                  Abrir música no YouTube ↗
+                </a>
+              </div>
+              <p className="muted small suco-producao-dica">
+                Se o som não começar automaticamente, clique em “Tocar com som”.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

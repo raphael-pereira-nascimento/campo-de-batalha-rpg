@@ -272,7 +272,9 @@ describe('TAVERN_DRINKS — bebidas da taverna (usáveis em batalha)', () => {
       const b = TAVERN_DRINKS[id];
       expect(b.tipo).toBe('bebida');
       expect(typeof b.preco).toBe('number');
-      expect(b.preco).toBeGreaterThan(0);
+      // Os três sucos de teste são gratuitos; o restante do cardápio é pago.
+      expect(b.preco, id).toBeGreaterThanOrEqual(0);
+      if (!b.sucoTeste) expect(b.preco, id).toBeGreaterThan(0);
       expect(typeof b.desc).toBe('string');
       expect(b.desc.length).toBeGreaterThan(0);
     }
@@ -330,7 +332,7 @@ describe('TAVERN_DRINKS — bebidas da taverna (usáveis em batalha)', () => {
 describe('TAVERN_DRINKS — sucos de laranja (conteúdo de teste)', () => {
   const IDS = ['suco_laranja_natural', 'suco_laranja_revigorante', 'suco_laranja_imperial'];
 
-  it('são três bebidas de teste na seção de sucos, com emoji e preço provisório', () => {
+  it('são três bebidas de teste na seção de sucos, com emoji e preço gratuito', () => {
     for (const id of IDS) {
       const s = TAVERN_DRINKS[id];
       expect(s, id).toBeDefined();
@@ -339,11 +341,17 @@ describe('TAVERN_DRINKS — sucos de laranja (conteúdo de teste)', () => {
       expect(s.sucoTeste).toBe(true);
       expect(s.precoTeste).toBe(true);
       expect(s.emoji).toBe('🍊');
-      expect(s.preco).toBeGreaterThan(0);
+      expect(s.preco, id).toBe(0);
       expect(s.desc).toContain('ITEM DE TESTE');
-      expect(s.desc).toContain('preço provisório');
+      expect(s.desc).toContain('grátis');
     }
     expect(TAVERN_CATEGORIES.some((c) => c.id === 'sucos')).toBe(true);
+  });
+
+  it('define o tempo da tela de preparo: 12s, 27s e 2min1s', () => {
+    expect(TAVERN_DRINKS.suco_laranja_natural.producaoSegundos).toBe(12);
+    expect(TAVERN_DRINKS.suco_laranja_revigorante.producaoSegundos).toBe(27);
+    expect(TAVERN_DRINKS.suco_laranja_imperial.producaoSegundos).toBe(121);
   });
 
   it('progressão visual: Comum/Básica → Especial/Intermediária → Premium/Premium', () => {
@@ -383,6 +391,7 @@ describe('TAVERN_DRINKS — sucos de laranja (conteúdo de teste)', () => {
       expect(b.sucoTeste, id).toBeUndefined();
       expect(b.curaPctVidaMaxima, id).toBeUndefined();
       expect(b.buffsTeste, id).toBeUndefined();
+      expect(b.producaoSegundos, id).toBeUndefined();
     }
     expect(TAVERN_DRINKS.suco_do_bosque.cura).toBe(50);
     expect(TAVERN_DRINKS.suco_do_bosque.mana).toBe(15);
