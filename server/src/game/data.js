@@ -718,6 +718,7 @@ export const TAVERN_DRINKS = {
   bebida_098: {"categoria":"adega","nome":"Espumante da Montanha (2)","tipo":"bebida","preco":105,"emoji":"🍷","cura":201,"desc":"Bebida da casa: restaura 201 de HP."},
   bebida_099: {"categoria":"destilados","nome":"Rum das Fadas (2)","tipo":"bebida","preco":140,"emoji":"🧪","cura":214,"status":{"tipo":"regeneracao","turnos":5,"dano":158},"desc":"Bebida da casa: restaura 214 de HP, regenera 158 de HP/turno (5t)."},
   bebida_100: {"categoria":"quentes","nome":"Café Festiva","tipo":"bebida","preco":25,"emoji":"☕","cura":227,"mana":13,"desc":"Bebida da casa: restaura 227 de HP, 13 de MP."},
+
 };
 
 export const TAVERN_FOODS = {

@@ -4073,6 +4073,39 @@ button.danger {
     linear-gradient(160deg, #3a2a0c 0%, #1a1206 100%);
 }
 
+/* [TESTE] Sucos de Laranja - Último Copo: progressão visual de qualidade */
+.tavern-card.is-test-item {
+  position: relative;
+}
+.tavern-card.quality-comum {
+  border-color: #8f9aa8;
+  box-shadow: 0 0 0 1px rgba(143, 154, 168, 0.25), 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+.tavern-card.quality-especial {
+  border-color: #5bb0ff;
+  box-shadow: 0 0 0 1px rgba(91, 176, 255, 0.35), 0 12px 28px rgba(0, 0, 0, 0.4);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(91, 176, 255, 0.12), transparent 55%),
+    linear-gradient(160deg, #1f2936 0%, #121821 100%);
+}
+.tavern-card.quality-premium {
+  border-color: #ffcf5c;
+  box-shadow: 0 0 0 1px rgba(255, 207, 92, 0.45), 0 14px 34px rgba(0, 0, 0, 0.5);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 207, 92, 0.2), transparent 55%),
+    linear-gradient(160deg, #35270f 0%, #171106 100%);
+}
+.tavern-card-img-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px dashed rgba(255,255,255,0.18);
+}
+
 @media (max-width: 600px) {
   .tavern-head { flex-direction: column; align-items: stretch; }
   .tavern-grid { grid-template-columns: 1fr; }

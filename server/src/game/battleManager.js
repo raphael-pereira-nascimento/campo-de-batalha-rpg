@@ -593,8 +593,8 @@ export class BattleManager {
       const pa = battle.participants[a];
       const pb = battle.participants[b];
       // Iniciativa: velocidade + bônus de passivas (ex.: Elfo da Lua).
-      const sa = speedOf(pa.attributes, pa.level) + (efeitosDe(pa).iniciativaBonus || 0) * 10;
-      const sb = speedOf(pb.attributes, pb.level) + (efeitosDe(pb).iniciativaBonus || 0) * 10;
+      const sa = speedOf(pa.attributes, pa.level) * (1 + (Number(pa.sucoBuff?.buffs?.velocidade) || 0) / 100) + (efeitosDe(pa).iniciativaBonus || 0) * 10;
+      const sb = speedOf(pb.attributes, pb.level) * (1 + (Number(pb.sucoBuff?.buffs?.velocidade) || 0) / 100) + (efeitosDe(pb).iniciativaBonus || 0) * 10;
       return sb - sa;
     });
     let turnOrder = [...indices];
@@ -899,6 +899,14 @@ export class BattleManager {
       if ((p[turnos] || 0) > 0) {
         p[turnos] -= 1;
         if (p[turnos] === 0) p[mult] = 1;
+      }
+    }
+    // [TESTE - Último Copo] Duração de buffs de suco em turnos de combate.
+    if (p.sucoBuff && p.sucoBuff.turns > 0) {
+      p.sucoBuff.turns -= 1;
+      if (p.sucoBuff.turns === 0) {
+        p.sucoBuff = null;
+        battle.log.push(makeLog(`🍊 O efeito do suco de laranja de ${p.charName} acabou.`, 'info'));
       }
     }
     if ((p.buffTurns || 0) > 0) p.buffTurns -= 1;
@@ -1238,6 +1246,26 @@ export class BattleManager {
     return Math.max(0, Math.round(bruto * (1 - reducao / 100)));
   }
 
+  // [TESTE - Último Copo] Helpers escopados para buffs de suco. Sem efeito quando sucoBuff ausente.
+  _sucoBuff(p) {
+    const sb = p?.sucoBuff;
+    return sb && sb.turns > 0 && sb.buffs ? sb.buffs : null;
+  }
+
+  _sucoMult(p, chave) {
+    const b = this._sucoBuff(p);
+    const pct = Number(b?.[chave]) || 0;
+    return pct > 0 ? 1 + pct / 100 : 1;
+  }
+
+  _sucoReducaoDano(p, kind) {
+    const b = this._sucoBuff(p);
+    if (!b) return 0;
+    if (kind === 'physical') return Math.max(0, Number(b.resistenciaFisica) || 0) / 100;
+    if (kind === 'magic') return Math.max(0, Number(b.resistenciaMagica) || 0) / 100;
+    return 0;
+  }
+
   _lifesteal(battle, p, damageDealt) {
     const pct = efeitosDe(p).rouboVida || 0;
     if (pct <= 0 || !p.alive) return;
@@ -1269,7 +1297,10 @@ export class BattleManager {
     if (kind === 'magic' && efeito.reducaoDanoMagico) {
       baseDamage = Math.round(baseDamage * (1 - efeito.reducaoDanoMagico));
     }
-    const ignoraDefesaPct = clamp(Number(opts.ignoraDefesaPct) || 0, 0, 100);
+    // [TESTE - Último Copo] Resistências de suco (escopo isolado).
+    const sucoRed = this._sucoReducaoDano(target, kind);
+    if (sucoRed > 0) baseDamage = Math.round(baseDamage * (1 - sucoRed));
+        const ignoraDefesaPct = clamp(Number(opts.ignoraDefesaPct) || 0, 0, 100);
     const defesa = Math.max(0, Math.round((target.defesa || 0) * (1 - ignoraDefesaPct / 100)));
     const reduced = Math.max(0, baseDamage - defesa);
     let finalDamage = reduced === 0 ? Math.max(1, Math.round(baseDamage * 0.1)) : reduced;
@@ -1419,6 +1450,14 @@ export class BattleManager {
     if (chance < 1 && Math.random() > chance) {
       battle.log.push(makeLog(`💨 ${target.charName} resiste a ${def.nome.toLowerCase()}.`, 'info'));
       return;
+    }
+    // [TESTE - Último Copo] Resistência a venenos do suco (escopo isolado).
+    if (status.tipo === 'veneno') {
+      const resVeneno = Math.max(0, Number(this._sucoBuff(target)?.resistenciaVeneno) || 0) / 100;
+      if (resVeneno > 0 && Math.random() < resVeneno) {
+        battle.log.push(makeLog(`🛡️ ${target.charName} resiste a ${def.nome.toLowerCase()} (efeito do suco).`, 'info'));
+        return;
+      }
     }
     // Dano do status: valor explícito do golpe ou percentual oficial sobre a
     // vida máxima ORIGINAL (Podridão = 20%, Ferida Pandemônica = 10%).
@@ -1716,7 +1755,7 @@ export class BattleManager {
     const dmg = physicalDamage(
       this._withDrunk(p),
       weapon,
-      this._physMult(p) * this._especializacaoMult(p, weapon) * (p.buffPhysical || 1),
+      this._physMult(p) * this._especializacaoMult(p, weapon) * (p.buffPhysical || 1) * this._sucoMult(p, 'danoFisico'),
     );
     const danoBase = dmg.total;
     // Falha crítica (d20 = 1): golpe multi-alvo pode sair pela culatra.
@@ -1811,10 +1850,10 @@ export class BattleManager {
     // Dano base (independe do alvo: usa apenas os atributos do atacante).
     let danoBase;
     if (skill.tipo === 'fisico') {
-      const mult = this._physMult(p) * (p.buffPhysical || 1);
+      const mult = this._physMult(p) * (p.buffPhysical || 1) * this._sucoMult(p, 'danoFisico');
       danoBase = danoFisicoGolpe(this._finalAttrs(p, battle).forca, skill.poder, mult, mega ? DANO_COEF_MEGA : undefined);
     } else {
-      danoBase = magicDamage(p, { poder: skill.poder }, this._magMult(p) * (p.buffMagic || 1)).total;
+      danoBase = magicDamage(p, { poder: skill.poder }, this._magMult(p) * (p.buffMagic || 1) * this._sucoMult(p, 'danoMagico')).total;
     }
     // Falha crítica (d20 = 1): golpe multi-alvo pode sair pela culatra.
     if (mira.roll === 1) {
@@ -2133,6 +2172,47 @@ export class BattleManager {
     }
     p.inventory.splice(idx, 1);
     const consumiu = [];
+
+    // [TESTE - Último Copo] Sucos de laranja: % de Vida/Mana máx, buffs substituem
+    // buffs anteriores de suco (sem acumular). Escopo isolado para não alterar itens existentes.
+    if (item.testeUltimoCopo || item.grupoSuco === 'laranja') {
+      if (item.curaPct) {
+        const before = p.hp;
+        const valor = Math.round((Number(p.hpMax) || 0) * (Number(item.curaPct) / 100));
+        p.hp = clamp(p.hp + this._curaRecebida(p, valor), 0, p.hpMax);
+        consumiu.push(`recupera ${p.hp - before} de HP (${item.curaPct}% máx)`);
+      }
+      if (item.manaPct) {
+        const before = p.mp;
+        const valor = Math.round((Number(p.mpMax) || 0) * (Number(item.manaPct) / 100));
+        p.mp = clamp(p.mp + valor, 0, p.mpMax);
+        consumiu.push(`restaura ${p.mp - before} de MP (${item.manaPct}% máx)`);
+      }
+      if (item.sucoBuffs && typeof item.sucoBuffs === 'object' && (item.buffTurns || 0) > 0) {
+        // Regra 3/4: buffs de sucos não acumulam entre si; novo suco substitui o anterior.
+        p.sucoBuff = {
+          grupo: item.grupoSuco || 'laranja',
+          nome: item.nome,
+          turns: Math.max(0, Number(item.buffTurns) || 0),
+          buffs: { ...item.sucoBuffs },
+        };
+        const rotulos = {
+          resistenciaFisica: 'resistência física',
+          resistenciaMagica: 'resistência mágica',
+          resistenciaVeneno: 'resistência a venenos',
+          velocidade: 'velocidade',
+          danoFisico: 'dano físico',
+          danoMagico: 'dano mágico',
+        };
+        const buffsTxt = Object.entries(p.sucoBuff.buffs)
+          .map(([k, v]) => `+${v}% ${rotulos[k] || k}`)
+          .join(', ');
+        if (buffsTxt) consumiu.push(`buffs: ${buffsTxt} (${p.sucoBuff.turns}t)`);
+      } else if (p.sucoBuff) {
+        // Suco sem buffs (Natural) substitui/limpa buffs de suco anteriores.
+        p.sucoBuff = null;
+      }
+    } else {
     if (item.cura) {
       const before = p.hp;
       // Cura de item sofre a mesma redução de cura recebida (Contaminação etc.).
@@ -2175,6 +2255,7 @@ export class BattleManager {
       p.drunk = true;
       p.drunkTurns = Math.max(p.drunkTurns || 0, item.drunkTurns || 3);
       consumiu.push('fica bêbado');
+    }
     }
     const icone = item.tipo === 'bebida' ? (item.emoji || '🍺') : item.tipo === 'comida' ? (item.emoji || '🍽️') : '🧪';
     const detalhe = consumiu.length ? `: ${consumiu.join(', ')}.` : '.';

@@ -46,13 +46,33 @@ function nomeCategoria(id) {
   return TAVERN_CATEGORIES.find((c) => c.id === id)?.nome || '';
 }
 
+// Rótulos legados dos sucos vindos do merge, mantidos para itens antigos que
+// ainda possam trazer `sucoBuffs`/`curaPct` no inventário.
+const SUCO_BUFF_LABEL = {
+  resistenciaFisica: 'resistência física',
+  resistenciaMagica: 'resistência mágica',
+  resistenciaVeneno: 'resistência a venenos',
+  velocidade: 'velocidade',
+  danoFisico: 'dano físico',
+  danoMagico: 'dano mágico',
+};
+
 // Resume os efeitos de uma bebida em etiquetas legíveis.
 function efeitosDaBebida(b) {
   const out = [];
+  if (b.curaPct) out.push({ k: 'cura', txt: `+${b.curaPct}% da Vida máxima` });
   if (b.cura) out.push({ k: 'cura', txt: `+${b.cura} HP` });
+  if (b.manaPct) out.push({ k: 'mana', txt: `+${b.manaPct}% da Mana máxima` });
   if (b.mana) out.push({ k: 'mana', txt: `+${b.mana} MP` });
   if (b.buffFisico) out.push({ k: 'buffFisico', txt: `+${Math.round(b.buffFisico * 100)}% dano físico (${b.buffTurns || 3}t)` });
   if (b.buffMagico) out.push({ k: 'buffMagico', txt: `+${Math.round(b.buffMagico * 100)}% dano mágico (${b.buffTurns || 3}t)` });
+  if (b.sucoBuffs && typeof b.sucoBuffs === 'object') {
+    for (const [k, v] of Object.entries(b.sucoBuffs)) {
+      const label = SUCO_BUFF_LABEL[k] || k;
+      const icon = k.startsWith('dano') ? (k === 'danoMagico' ? 'buffMagico' : 'buffFisico') : 'status';
+      out.push({ k: icon, txt: `+${v}% ${label}` });
+    }
+  }
   if (b.status) out.push({ k: 'status', txt: `Regenera ${b.status.dano} HP/turno (${b.status.turnos}t)` });
   if (b.removeStatus) {
     const arr = Array.isArray(b.removeStatus) ? b.removeStatus : [b.removeStatus];
@@ -174,19 +194,32 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
     const semMoedas = carteira < b.preco;
     const semChar = !charId;
     const bloqueado = semMoedas || semChar || busy;
+    const temBuffs = Boolean(
+      b.buffFisico || b.buffMagico
+      || (b.sucoBuffs && Object.keys(b.sucoBuffs).length > 0)
+      || (b.buffsTeste && Object.keys(b.buffsTeste).length > 0),
+    );
+    const duracaoBuffs = temBuffs ? (b.buffTurns || 3) : null;
+    const qualidadeClass = b.qualidade ? ` quality-${String(b.qualidade).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()}` : '';
     return (
-      <div className={`tavern-card${destacada ? ' is-featured' : ''}`} key={b.id}>
+      <div className={`tavern-card${destacada ? ' is-featured' : ''}${(b.sucoTeste || b.testeUltimoCopo) ? ' is-test-item' : ''}${qualidadeClass}`} key={b.id}>
         <div className="tavern-card-head">
-          <span className="tavern-card-icon">{b.emoji || (b.tipo === 'comida' ? '🍽️' : '🍺')}</span>
+          <span className="tavern-card-icon tavern-card-img-placeholder" title="Imagem / espaço reservado">
+            {b.emoji || (b.tipo === 'comida' ? '🍽️' : '🍺')}
+          </span>
           <strong>{b.nome}</strong>
           <span className="tavern-kind">{b.tipo === 'comida' ? '🍽️ Comida' : '🍺 Bebida'}</span>
         </div>
-        {b.sucoTeste && (
+        {(b.sucoTeste || b.testeUltimoCopo || b.qualidade) && (
           <div className="tavern-test-head">
-            <span className="tavern-quality" data-quality={String(b.qualidade || 'comum').toLowerCase()}>
-              {b.qualidade} · {b.tier}
-            </span>
-            <span className="tavern-test-badge" title="Conteúdo de teste do Último Copo">TESTE</span>
+            {b.qualidade && (
+              <span className="tavern-quality" data-quality={String(b.qualidade).toLowerCase()}>
+                {b.qualidade}{b.tier ? ` · ${b.tier}` : ''}
+              </span>
+            )}
+            {(b.sucoTeste || b.testeUltimoCopo) && (
+              <span className="tavern-test-badge" title="Conteúdo de teste do Último Copo">TESTE</span>
+            )}
           </div>
         )}
         <p className="tavern-card-desc">{b.desc}</p>
@@ -196,6 +229,8 @@ export default function Tavern({ player, characters = [], onBack, onRefresh, onW
               {EFEITO_CHIP[e.k] || '•'} {e.txt}
             </span>
           ))}
+          {duracaoBuffs && <span className="tavern-tag">⏱️ Duração dos buffs: {duracaoBuffs} turnos</span>}
+          {!temBuffs && (b.sucoTeste || b.testeUltimoCopo) && <span className="tavern-tag">⏱️ Recuperação instantânea</span>}
         </div>
         <div className="tavern-card-footer">
           <span
