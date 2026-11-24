@@ -1,6 +1,6 @@
 # Pendências — Materiais, Metais e Podridão
 
-Atualizado em 21/11/2026 — Etapa 9 (runas na forja, Corrupção com API/UI,
+Atualizado em 23/11/2026 — Etapa 9 (runas na forja, Corrupção com API/UI,
 imunidade do Tenebrium e preparação de Contaminação Profana/Núcleo Pandemônico),
 rodada de buffs, cura, Ações Rápidas e canhões (D-44 a D-47), auditoria de
 correções de comportamento em fichas, motores e Batalha de Mesa (1.9) e
@@ -12,8 +12,9 @@ artilharia na Batalha de Mesa e D20 “rolar-maior” com números de
 exigência em mesa, Campo e servidor (seções 1.11 e 3.18) e a revisão de
 interface de 21/11: rótulos dinâmicos de `poder`, elemento mágico Sangue como
 elemento comum de combate e detalhamento Base/BR/BC/Final na criação e na
-ficha (seção 3.19). Nenhuma regra oficial foi inventada: D-01 a D-61 continuam
-válidos e D-62 em diante seguem provisórios.
+ficha (seção 3.19), dos três sucos de laranja de teste no Último Copo (seção 3.21).
+Nenhuma regra oficial foi inventada: D-01 a D-61 continuam válidos e D-62
+em diante seguem provisórios.
 
 Este arquivo separa o que já foi **aprovado**, o que foi implementado como
 **provisório**, o que continua **pendente** e o que é apenas **sugestão**.
@@ -1210,6 +1211,22 @@ golpes.
 | Testes | Novo `server/tests/skillTree.test.js` (semântica de `null`, paridade cliente/servidor, `spells` derivado na criação e recalculado ao subir/descer de nível). Suíte completa: **636/636**, 0 falhas |
 | Validação local | `npm run build` OK (Vite 5.4.21; apenas aviso de tamanho de chunk). Smoke em `http://127.0.0.1:5173/` com conta offline: seletor 🎨 aplicou `data-theme="claro"` e persistiu `cbr_theme`; botão de exclusão abriu o modal e, ao confirmar, removeu a ficha da lista e do `localStorage` sem erros de console; gerenciador mostrou `3 golpes na árvore / 1 disponíveis / 2 níveis ocupados`, nós `🔒 Bloqueado` e `⏳ Requer nível 9` distintos, e a busca por “gelo” filtrou para um único nó. Nenhum erro de console |
 | Publicação | Service worker bumpado para `cbrpg-v11`, invalidando `cbrpg-v10`. Commit `d2672c6` em `origin/main`, Actions **#131** (run `44934980160`) verde com jobs `build` e `deploy` em `success`, deployment Pages `7967455489` com status `success`. Verificação em `https://raphael-pereira-nascimento.github.io/campo-de-batalha-rpg/`: cache ativo `cbrpg-v11`, SW `activated`, seletor 🎨 visível, menu mobile `☰ Navegação` presente, tema `📜 Pergaminho` aplicado/persistido e botão `🗑️ Excluir` no cartão abrindo o modal e removendo a ficha após confirmação. Únicos erros de console: as duas chamadas conhecidas a `/api/health` do Render offline |
+
+### 3.21 Sucos de laranja — itens de teste no Último Copo (23/11)
+
+| Área | Resultado |
+| --- | --- |
+| Decisões | Pedido do usuário: três sucos de laranja seguindo o padrão visual/de dados da taverna, sem alterar itens existentes nem regras gerais de Vida, Mana, combate ou consumíveis. Progressão **Natural (básica) → Revigorante (intermediária) → Imperial (premium)**. Rodada 3.20 permanece publicada e não foi reaberta |
+| Catálogo | Nova categoria `sucos` em `TAVERN_CATEGORIES`, espelhada nos dois `game/data.js`. IDs `suco_laranja_natural` (Comum · Básica, 40 ℛ), `suco_laranja_revigorante` (Especial · Intermediária, 90 ℛ) e `suco_laranja_imperial` (Premium · Premium, 160 ℛ). Todos com `emoji: '🍊'`, `sucoTeste: true`, `precoTeste: true`, `ITEM DE TESTE` e `preço provisório` na descrição |
+| Recuperação | Natural: +15% da Vida máxima, sem Mana e sem buffs. Revigorante: +30% Vida / +15% Mana máximas. Imperial: +40% Vida / +25% Mana máximas. Valores em % da máxima, com teto na máxima, aplicados no instante do consumo; em combate o consumo ocupa a ação do turno |
+| Buffs de teste | Revigorante: +5% resistência física, a venenos e velocidade por 3 turnos. Imperial: +10% resistência física, mágica e velocidade, +5% dano físico e mágico por 5 turnos. Buffs de suco **não acumulam**: o suco seguinte substitui o anterior (o Natural também limpa). Duração contada em turnos de combate, nunca em tempo real |
+| Isolamento | `_applySucoTeste()` nos dois `battleManager.js` roda **somente** quando o item traz `sucoTeste: true`. Nenhum item antigo ganhou o campo; curas fixas, buffs, embriaguez e todos os sistemas existentes seguem o caminho original. O decay em `_resolveTurnGains` também é condicional ao estado `p.sucoTesteBuff` |
+| Persistência | `src/api.js` (offline) e `server/src/index.js` (online) copiam para o inventário apenas os campos extras quando `sucoTeste` — `qualidade`, `tier`, percentuais e `buffsTeste`. Itens existentes não recebem chaves novas |
+| Visualização de teste | Os bônus de **resistência física, resistência a venenos, resistência mágica e velocidade** ficam registrados no estado `p.sucoTesteBuff`, exibidos nos chips do card, no log/descrição e na documentação, mas **não existem como campos gerais no motor**; não entram nas fórmulas de defesa/velocidade. Apenas `danoFisico`/`danoMagico` alimentam os multiplicadores já existentes (`buffPhysical`/`buffMagic`). Preços e o emoji 🍊 também são provisórios/de teste |
+| Interface | `Tavern.jsx`: chips de %/buffs, selo de qualidade (`Comum · Básica`, `Especial · Intermediária`, `Premium · Premium`), badge `TESTE`, preço com `(teste)` e aviso no cabeçalho. Barra de pesquisa no filtro, tolerante a acento/caixa, buscando nome, id, descrição, categoria, tipo, qualidade, efeitos e a palavra `teste`; combina com os botões Tudo/Bebidas/Comidas, mostra contador de resultados, botão de limpar e estado vazio dedicado. `styles.css`: `.tavern-quality`, `.tavern-test-badge`, `.tavern-price.is-test`, `.tavern-test-head`, `.tavern-search*`, `.tavern-empty` |
+| Testes | Casos em `server/tests/data.test.js` (metadados, progressão, preços e não alteração dos itens antigos) e `server/tests/battle.test.js` (% da máxima, teto, substituição sem acúmulo, decay em turnos e gasto da ação). Suíte completa: **644/644**, 0 falhas |
+| Validação local | `npm run build` OK (Vite 5.4.21; apenas aviso de tamanho de chunk). Smoke em `http://127.0.0.1:5173/taverna.html` com conta offline de teste: 229 cards, 3 sucos com qualidade/badge/chips/preços corretos; grid com 2 colunas em 800 px e 1 coluna em 390 px (iframe), cards de 351 px sem overflow horizontal, nenhum erro de console. Busca validada com `laranja`/`LARANJA` (3 sucos), `veneno` (6 itens por efeito), `suco teste` (3), termo sem resultado (estado vazio + limpar) e combinação com `🍽️ Comidas`; campo de 351×44 px no mobile. Screenshots desktop e mobile capturados |
+| Publicação | **Pendente** — o usuário não pediu publicação nesta rodada. O site público continua em `cbrpg-v11`. Quando aprovado: bump para `cbrpg-v12` em `public/sw.js`, commit/push, acompanhar Actions/Pages e validar os três cards no site público |
 
 ---
 

@@ -406,6 +406,7 @@ export const TAVERN_CATEGORIES = [
   { id: 'quentes', nome: 'Quentes & Calmantes', icon: '🍵', blurb: 'Infusões e caldos servidos fumegando no balcão.' },
   { id: 'barman', nome: 'Poções do Taverneiro', icon: '⚗️', blurb: 'Misturas secretas que ninguém sabe bem o que levam.' },
   { id: 'sobrio', nome: 'Sem Álcool', icon: '🥤', blurb: 'Refrescos para quem ainda tem um dragão para enfrentar hoje.' },
+  { id: 'sucos', nome: 'Sucos de Laranja (teste)', icon: '🍊', blurb: 'Três versões experimentais: Natural (básica) → Revigorante (intermediária) → Imperial (premium).' },
   // Comidas
   { id: 'petiscos', nome: 'Petiscos', icon: '🥟', blurb: 'Beliscos para abrir o apetite antes da briga.' },
   { id: 'assados', nome: 'Assados & Grelhados', icon: '🍖', blurb: 'Carne na brasa — sustentação de verdade.' },
@@ -582,6 +583,38 @@ export const TAVERN_DRINKS = {
     nome: 'Suco do Bosque', tipo: 'bebida', preco: 30, emoji: '🧃',
     cura: 50, mana: 15,
     desc: 'Frutas esmagadas na hora. Restaura 50 de HP e 15 de MP — sóbrio e pronto para o próximo turno.',
+  },
+
+  // ── Sucos de Laranja (CONTEÚDO DE TESTE — não são regras oficiais) ──
+  // `preco` é provisório e só existe para a página exibir um valor. `sucoTeste`
+  // ativa o tratamento dedicado no combate: cura/mana em % da máxima, troca de
+  // buffs entre sucos (sem acúmulo) e duração contada em turnos de combate.
+  // Itens existentes NÃO usam esse campo e permanecem intocados.
+  suco_laranja_natural: {
+    categoria: 'sucos', sucoTeste: true, precoTeste: true,
+    qualidade: 'Comum', tier: 'Básica',
+    nome: 'Suco de Laranja Natural', tipo: 'bebida', preco: 40, emoji: '🍊',
+    curaPctVidaMaxima: 15,
+    desc: 'Suco natural preparado com laranjas frescas. Uma bebida simples e refrescante, muito procurada por viajantes e aventureiros. Recupera 15% da Vida máxima, sem Mana e sem buffs (recuperação instantânea). ITEM DE TESTE · preço provisório.',
+  },
+  suco_laranja_revigorante: {
+    categoria: 'sucos', sucoTeste: true, precoTeste: true,
+    qualidade: 'Especial', tier: 'Intermediária',
+    nome: 'Suco de Laranja Revigorante', tipo: 'bebida', preco: 90, emoji: '🍊',
+    curaPctVidaMaxima: 30, manaPctMaxima: 15, buffTurns: 3,
+    buffsTeste: { resistenciaFisica: 0.05, resistenciaVeneno: 0.05, velocidade: 0.05 },
+    desc: 'Uma receita aprimorada de suco de laranja, preparada com mel e ervas revigorantes. Ideal para aventureiros que precisam recuperar as forças antes ou durante uma batalha. Recupera 30% da Vida e 15% da Mana máximas; +5% de resistência física, a venenos e de velocidade por 3 turnos. ITEM DE TESTE · preço provisório.',
+  },
+  suco_laranja_imperial: {
+    categoria: 'sucos', sucoTeste: true, precoTeste: true,
+    qualidade: 'Premium', tier: 'Premium',
+    nome: 'Suco de Laranja Imperial', tipo: 'bebida', preco: 160, emoji: '🍊',
+    curaPctVidaMaxima: 40, manaPctMaxima: 25, buffTurns: 5,
+    buffsTeste: {
+      resistenciaFisica: 0.1, resistenciaMagica: 0.1, velocidade: 0.1,
+      danoFisico: 0.05, danoMagico: 0.05,
+    },
+    desc: 'Uma bebida refinada, preparada com laranjas selecionadas, mel dourado e ingredientes especiais. Sua composição proporciona uma recuperação intensa e mantém o corpo revigorado por mais tempo. Recupera 40% da Vida e 25% da Mana máximas; +10% de resistência física, mágica e de velocidade, +5% de dano físico e mágico por 5 turnos. ITEM DE TESTE · preço provisório.',
   },
 
   // ── Novas bebidas (100 geradas) ──

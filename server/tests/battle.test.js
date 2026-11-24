@@ -11,7 +11,7 @@ import {
   exigenciaD20,
   nivelDificuldadeD20,
 } from '../src/game/sistema.js';
-import { SPELLS, skillFromSpell } from '../src/game/data.js';
+import { SPELLS, skillFromSpell, TAVERN_DRINKS } from '../src/game/data.js';
 
 function makeCharacter(overrides = {}) {
   return {
@@ -816,6 +816,132 @@ describe('BattleManager — bebidas da taverna em combate', () => {
     expect(p.drunkTurns).toBe(0);
     expect(p.drunk).toBe(false);
     expect(battle.log.some((l) => l.text.includes('recuperou a sobriedade'))).toBe(true);
+  });
+});
+
+describe('BattleManager — sucos de laranja (conteúdo de teste)', () => {
+  function makeBebedor() {
+    return {
+      charName: 'Hero',
+      alive: true,
+      hp: 100,
+      hpMax: 1000,
+      mp: 10,
+      mpMax: 100,
+      statuses: [],
+      inventory: [],
+      buffPhysical: 1,
+      buffMagic: 1,
+      buffPhysicalTurns: 0,
+      buffMagicTurns: 0,
+      buffTurns: 0,
+      drunk: false,
+      drunkTurns: 0,
+      races: [],
+      classes: [],
+      equipment: {},
+      voando: false,
+      ultimateMode: false,
+    };
+  }
+  const suco = (id) => ({ id, ...TAVERN_DRINKS[id] }); // o id entra no inventário na compra
+  const usar = (manager, battle, p, item) => {
+    p.inventory.push(item);
+    manager._resolveItem(battle, p, item);
+  };
+
+  it('cura e mana usam a máxima e nunca passam dela', () => {
+    const { manager } = makeManager();
+    const battle = { log: [] };
+    const p = makeBebedor();
+    const natural = suco('suco_laranja_natural');
+    usar(manager, battle, p, natural); // 15% de 1000 = 150
+    expect(p.hp).toBe(250);
+    expect(p.mp).toBe(10);
+    expect(p.inventory).toHaveLength(0);
+
+    p.hp = 990; // o teto impede passar de 1000
+    usar(manager, battle, p, natural);
+    expect(p.hp).toBe(1000);
+
+    const revigorante = suco('suco_laranja_revigorante'); // 15% de 100 = 15
+    usar(manager, battle, p, revigorante);
+    expect(p.mp).toBe(25);
+    p.mp = 95;
+    usar(manager, battle, p, revigorante);
+    expect(p.mp).toBe(100);
+  });
+
+  it('um novo suco substitui os buffs do anterior sem somar', () => {
+    const { manager } = makeManager();
+    const battle = { log: [] };
+    const p = makeBebedor();
+    usar(manager, battle, p, suco('suco_laranja_imperial'));
+    expect(p.sucoTesteBuff.id).toBe('suco_laranja_imperial');
+    expect(p.sucoTesteBuff.turnos).toBe(5);
+    expect(p.buffPhysical).toBeCloseTo(1.05);
+    expect(p.buffMagic).toBeCloseTo(1.05);
+
+    usar(manager, battle, p, suco('suco_laranja_revigorante'));
+    expect(p.sucoTesteBuff.id).toBe('suco_laranja_revigorante');
+    expect(p.sucoTesteBuff.turnos).toBe(3);
+    expect(p.sucoTesteBuff.danoFisico).toBeUndefined();
+    expect(p.buffPhysical).toBeCloseTo(1);
+    expect(p.buffMagic).toBeCloseTo(1);
+    expect(battle.log.some((l) => l.text.includes('substitui os buffs de suco anteriores'))).toBe(true);
+
+    // O Natural não tem buffs: também limpa os do suco anterior.
+    usar(manager, battle, p, suco('suco_laranja_natural'));
+    expect(p.sucoTesteBuff).toBeNull();
+  });
+
+  it('a duração dos buffs é contada em turnos de combate', () => {
+    const { manager } = makeManager();
+    const battle = { log: [] };
+    const p = makeBebedor();
+    usar(manager, battle, p, suco('suco_laranja_imperial'));
+    for (let i = 0; i < 4; i += 1) manager._resolveTurnGains(battle, p);
+    expect(p.sucoTesteBuff.turnos).toBe(1);
+    expect(p.buffPhysical).toBeCloseTo(1.05);
+    manager._resolveTurnGains(battle, p);
+    expect(p.sucoTesteBuff).toBeNull();
+    expect(p.buffPhysical).toBeCloseTo(1);
+  });
+
+  it('consumir um suco gasta a ação do turno', () => {
+    const { manager } = makeManager();
+    const natural = suco('suco_laranja_natural');
+    const battle = manager.createBattle({
+      name: 'Sucos', mode: 'mestre', host: 'p1', hostName: 'M',
+      character: makeCharacter({ inventory: [natural] }),
+    });
+    manager.addMonster({
+      battleId: battle.id, hostId: 'p1',
+      monsterDef: { ...makeMonsterDef(), id: 'alvo', nome: 'Alvo' },
+    });
+    manager.startBattle({ battleId: battle.id, playerId: 'p1' });
+    const hero = battle.participants.find((q) => !q.isMonster);
+    let guard = 0;
+    while (battle.participants[battle.turnOrder[battle.currentTurnIndex]] !== hero && guard < 30) {
+      guard += 1;
+      const atual = battle.participants[battle.turnOrder[battle.currentTurnIndex]];
+      manager.handleAction({
+        battleId: battle.id,
+        characterId: atual.isMonster ? atual.uid : atual.characterId,
+        playerId: 'p1',
+        action: { type: 'defend' },
+      });
+    }
+    const turnoAntes = battle.currentTurnIndex;
+    manager.handleAction({
+      battleId: battle.id,
+      characterId: hero.characterId,
+      playerId: 'p1',
+      action: { type: 'useItem', itemId: natural.id },
+    });
+    expect(hero.inventory.some((it) => it.id === natural.id)).toBe(false);
+    expect(battle.currentTurnIndex).not.toBe(turnoAntes);
+    expect(battle.log.some((l) => l.text.includes('Suco de Laranja Natural'))).toBe(true);
   });
 });
 

@@ -902,6 +902,19 @@ export class BattleManager {
       }
     }
     if ((p.buffTurns || 0) > 0) p.buffTurns -= 1;
+    // Sucos de teste: duração em turnos de combate, nunca em tempo real.
+    if (p.sucoTesteBuff && p.sucoTesteBuff.turnos > 0) {
+      p.sucoTesteBuff.turnos -= 1;
+      if (p.sucoTesteBuff.turnos === 0) {
+        if (p.sucoTesteBuff.danoFisico && (p.buffPhysicalTurns || 0) > 0) {
+          p.buffPhysical = Math.max(1, (p.buffPhysical || 1) - p.sucoTesteBuff.danoFisico);
+        }
+        if (p.sucoTesteBuff.danoMagico && (p.buffMagicTurns || 0) > 0) {
+          p.buffMagic = Math.max(1, (p.buffMagic || 1) - p.sucoTesteBuff.danoMagico);
+        }
+        p.sucoTesteBuff = null;
+      }
+    }
     if (p.drunk && p.drunkTurns > 0) {
       p.drunkTurns -= 1;
       if (p.drunkTurns === 0) {
@@ -2155,6 +2168,9 @@ export class BattleManager {
     if (item.buffFisico || item.buffMagico) {
       p.buffTurns = Math.max(p.buffTurns || 0, item.buffTurns || 3);
     }
+    // Sucos de teste do Último Copo: ativados apenas por `sucoTeste`. Itens
+    // existentes não têm esse campo e seguem exatamente o caminho acima.
+    if (item.sucoTeste) this._applySucoTeste(battle, p, item, consumiu);
     if (item.drunk) {
       p.drunk = true;
       p.drunkTurns = Math.max(p.drunkTurns || 0, item.drunkTurns || 3);
@@ -2163,6 +2179,57 @@ export class BattleManager {
     const icone = item.tipo === 'bebida' ? (item.emoji || '🍺') : item.tipo === 'comida' ? (item.emoji || '🍽️') : '🧪';
     const detalhe = consumiu.length ? `: ${consumiu.join(', ')}.` : '.';
     battle.log.push(makeLog(`${icone} ${p.charName} usa ${item.nome}${detalhe}`, 'heal'));
+  }
+
+  // Efeitos exclusivos dos sucos de teste. Nada aqui é regra geral: só roda
+  // quando a definição do item traz `sucoTeste: true`.
+  _applySucoTeste(battle, p, item, consumiu) {
+    const pctVida = Math.max(0, Number(item.curaPctVidaMaxima) || 0);
+    if (pctVida > 0) {
+      const antes = p.hp;
+      const cura = this._curaRecebida(p, Math.max(1, Math.round((p.hpMax || 0) * pctVida / 100)));
+      p.hp = clamp(p.hp + cura, 0, p.hpMax);
+      if (!p.isMonster) {
+        p.contribuicao = p.contribuicao || { dano: 0, cura: 0, acertos: 0, acoes: 0, suporte: 0 };
+        p.contribuicao.cura += p.hp - antes;
+      }
+      consumiu.push(`recupera ${p.hp - antes} de HP (${pctVida}% da máxima)`);
+    }
+    const pctMana = Math.max(0, Number(item.manaPctMaxima) || 0);
+    if (pctMana > 0) {
+      const antes = p.mp;
+      p.mp = clamp(p.mp + Math.max(1, Math.round((p.mpMax || 0) * pctMana / 100)), 0, p.mpMax);
+      consumiu.push(`restaura ${p.mp - antes} de MP (${pctMana}% da máxima)`);
+    }
+
+    // Sucos não acumulam: a parcela de dano do suco anterior é devolvida antes
+    // de aplicar a do novo. Buffs de outras fontes não são alterados.
+    const anterior = p.sucoTesteBuff;
+    if (anterior?.danoFisico && (p.buffPhysicalTurns || 0) > 0) {
+      p.buffPhysical = Math.max(1, (p.buffPhysical || 1) - anterior.danoFisico);
+    }
+    if (anterior?.danoMagico && (p.buffMagicTurns || 0) > 0) {
+      p.buffMagic = Math.max(1, (p.buffMagic || 1) - anterior.danoMagico);
+    }
+    if (anterior) consumiu.push('substitui os buffs de suco anteriores');
+
+    const buffs = { ...(item.buffsTeste || {}) };
+    const turnos = Math.max(1, Number(item.buffTurns) || 1);
+    if (Object.keys(buffs).length === 0) {
+      p.sucoTesteBuff = null;
+      return;
+    }
+    p.sucoTesteBuff = { id: item.id, nome: item.nome, turnos, ...buffs };
+    if (buffs.danoFisico) {
+      p.buffPhysical = (p.buffPhysical || 1) + buffs.danoFisico;
+      p.buffPhysicalTurns = Math.max(p.buffPhysicalTurns || 0, turnos);
+      p.buffTurns = Math.max(p.buffTurns || 0, turnos);
+    }
+    if (buffs.danoMagico) {
+      p.buffMagic = (p.buffMagic || 1) + buffs.danoMagico;
+      p.buffMagicTurns = Math.max(p.buffMagicTurns || 0, turnos);
+      p.buffTurns = Math.max(p.buffTurns || 0, turnos);
+    }
   }
 
   // Congelamento: aplica o pulo de turno e consome UMA duração. Usado tanto

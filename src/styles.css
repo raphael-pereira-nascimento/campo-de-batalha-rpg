@@ -3875,9 +3875,45 @@ button.danger {
   color: var(--muted);
   white-space: nowrap;
 }
+/* Sucos de teste: selo de qualidade/progressão e identificação explícita */
+.tavern-test-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.tavern-quality {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: #ffd9a0;
+}
+.tavern-quality[data-quality='comum'] { border-color: #8fa0b8; color: #c8d4e6; }
+.tavern-quality[data-quality='especial'] { border-color: #63b6d6; color: #9de2ff; }
+.tavern-quality[data-quality='premium'] {
+  border-color: #ffcf5c;
+  color: #ffe08a;
+  background: linear-gradient(135deg, #3a2a0c, #1a1206);
+}
+.tavern-test-badge {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  padding: 3px 7px;
+  border-radius: 6px;
+  border: 1px dashed #ffcf5c;
+  color: #ffcf5c;
+}
+.tavern-price.is-test { border-style: dashed; }
+
 .tavern-filters {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   margin: 4px 0 8px;
 }
@@ -3886,6 +3922,52 @@ button.danger {
   border-color: #ffd9a0;
   color: #ffd9a0;
 }
+.tavern-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 260px;
+  min-width: 220px;
+  max-width: 420px;
+}
+.tavern-search-icon {
+  position: absolute;
+  left: 12px;
+  font-size: 14px;
+  pointer-events: none;
+  opacity: 0.85;
+}
+.tavern-search input {
+  width: 100%;
+  height: 40px;
+  padding: 8px 36px 8px 34px;
+  font-size: 14px;
+}
+.tavern-search input::-webkit-search-cancel-button {
+  display: none;
+}
+.tavern-search-clear {
+  position: absolute;
+  right: 6px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+}
+.tavern-search-clear:hover {
+  color: var(--text);
+  border-color: var(--border);
+}
+.tavern-search-count { margin: 0 0 12px; }
+.tavern-empty {
+  padding: 28px 16px;
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  background: var(--panel-2);
+}
+.tavern-empty p { margin: 0 0 12px; }
 .tavern-card-desc {
   margin: 0;
   font-size: 13px;
@@ -3995,6 +4077,8 @@ button.danger {
   .tavern-head { flex-direction: column; align-items: stretch; }
   .tavern-grid { grid-template-columns: 1fr; }
   .tavern-sign { flex-direction: column; align-items: flex-start; text-align: left; }
+  .tavern-search { flex: 1 1 100%; max-width: none; }
+  .tavern-filters .ghost { flex: 1 1 auto; }
 }
 
 /* ─── Batalha de Mesa: layout organizado ─── */

@@ -327,6 +327,70 @@ describe('TAVERN_DRINKS — bebidas da taverna (usáveis em batalha)', () => {
   });
 });
 
+describe('TAVERN_DRINKS — sucos de laranja (conteúdo de teste)', () => {
+  const IDS = ['suco_laranja_natural', 'suco_laranja_revigorante', 'suco_laranja_imperial'];
+
+  it('são três bebidas de teste na seção de sucos, com emoji e preço provisório', () => {
+    for (const id of IDS) {
+      const s = TAVERN_DRINKS[id];
+      expect(s, id).toBeDefined();
+      expect(s.tipo).toBe('bebida');
+      expect(s.categoria).toBe('sucos');
+      expect(s.sucoTeste).toBe(true);
+      expect(s.precoTeste).toBe(true);
+      expect(s.emoji).toBe('🍊');
+      expect(s.preco).toBeGreaterThan(0);
+      expect(s.desc).toContain('ITEM DE TESTE');
+      expect(s.desc).toContain('preço provisório');
+    }
+    expect(TAVERN_CATEGORIES.some((c) => c.id === 'sucos')).toBe(true);
+  });
+
+  it('progressão visual: Comum/Básica → Especial/Intermediária → Premium/Premium', () => {
+    expect(TAVERN_DRINKS.suco_laranja_natural.qualidade).toBe('Comum');
+    expect(TAVERN_DRINKS.suco_laranja_natural.tier).toBe('Básica');
+    expect(TAVERN_DRINKS.suco_laranja_revigorante.qualidade).toBe('Especial');
+    expect(TAVERN_DRINKS.suco_laranja_revigorante.tier).toBe('Intermediária');
+    expect(TAVERN_DRINKS.suco_laranja_imperial.qualidade).toBe('Premium');
+    expect(TAVERN_DRINKS.suco_laranja_imperial.tier).toBe('Premium');
+  });
+
+  it('recuperação em % da máxima e duração dos buffs estão corretas', () => {
+    expect(TAVERN_DRINKS.suco_laranja_natural.curaPctVidaMaxima).toBe(15);
+    expect(TAVERN_DRINKS.suco_laranja_natural.manaPctMaxima).toBeUndefined();
+    expect(TAVERN_DRINKS.suco_laranja_natural.buffsTeste).toBeUndefined();
+
+    const rev = TAVERN_DRINKS.suco_laranja_revigorante;
+    expect(rev.curaPctVidaMaxima).toBe(30);
+    expect(rev.manaPctMaxima).toBe(15);
+    expect(rev.buffTurns).toBe(3);
+    expect(rev.buffsTeste).toEqual({ resistenciaFisica: 0.05, resistenciaVeneno: 0.05, velocidade: 0.05 });
+
+    const imp = TAVERN_DRINKS.suco_laranja_imperial;
+    expect(imp.curaPctVidaMaxima).toBe(40);
+    expect(imp.manaPctMaxima).toBe(25);
+    expect(imp.buffTurns).toBe(5);
+    expect(imp.buffsTeste).toEqual({
+      resistenciaFisica: 0.1, resistenciaMagica: 0.1, velocidade: 0.1,
+      danoFisico: 0.05, danoMagico: 0.05,
+    });
+  });
+
+  it('nenhum item existente virou suco de teste nem perdeu seus efeitos', () => {
+    const sucos = new Set(IDS);
+    for (const [id, b] of Object.entries(TAVERN_DRINKS)) {
+      if (sucos.has(id)) continue;
+      expect(b.sucoTeste, id).toBeUndefined();
+      expect(b.curaPctVidaMaxima, id).toBeUndefined();
+      expect(b.buffsTeste, id).toBeUndefined();
+    }
+    expect(TAVERN_DRINKS.suco_do_bosque.cura).toBe(50);
+    expect(TAVERN_DRINKS.suco_do_bosque.mana).toBe(15);
+    expect(TAVERN_DRINKS.cerveja_rustica.cura).toBe(60);
+    expect(TAVERN_DRINKS.dose_do_taverneiro.buffFisico).toBe(0.2);
+  });
+});
+
 describe('TAVERN_FOODS — comidas da taverna (usáveis em batalha)', () => {
   it('catálogo tem comidas com preço em cobre e tipo "comida"', () => {
     const ids = Object.keys(TAVERN_FOODS);

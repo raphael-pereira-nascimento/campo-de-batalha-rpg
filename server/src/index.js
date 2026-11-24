@@ -370,6 +370,16 @@ app.post('/api/tavern/buy', requireAuth, async (req, res) => {
           buffTurns: item.buffTurns || null,
           drunk: item.drunk || false,
           drunkTurns: item.drunkTurns || 0,
+          // Campos exclusivos dos sucos de teste; itens existentes não ganham chaves novas.
+          ...(item.sucoTeste ? {
+            sucoTeste: true,
+            precoTeste: true,
+            qualidade: item.qualidade || null,
+            tier: item.tier || null,
+            curaPctVidaMaxima: item.curaPctVidaMaxima || null,
+            manaPctMaxima: item.manaPctMaxima || null,
+            buffsTeste: item.buffsTeste || null,
+          } : {}),
         });
         await query('UPDATE characters SET inventory = $1 WHERE id = $2', [
           JSON.stringify(inventory),

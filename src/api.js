@@ -741,6 +741,16 @@ export const api = {
             buffTurns: drink.buffTurns || null,
             drunk: drink.drunk || false,
             drunkTurns: drink.drunkTurns || 0,
+            // Campos exclusivos dos sucos de teste; itens existentes não ganham chaves novas.
+            ...(drink.sucoTeste ? {
+              sucoTeste: true,
+              precoTeste: true,
+              qualidade: drink.qualidade || null,
+              tier: drink.tier || null,
+              curaPctVidaMaxima: drink.curaPctVidaMaxima || null,
+              manaPctMaxima: drink.manaPctMaxima || null,
+              buffsTeste: drink.buffsTeste || null,
+            } : {}),
           });
           saveOfflineCharacter(char);
         }
