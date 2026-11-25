@@ -205,6 +205,8 @@ export const SPELLS = {
   fenda_eclipsada: { nome: 'Fenda Eclipsada', tipo: 'ataque', custo: 28, poder: 3.5, desc: 'Fendas do Eclipse engolem o campo de batalha.', elemento: 'terra', status: { tipo: 'lentidao', turnos: 4 }, alvo: 'area' },
   cataclismo_eclipsado: { nome: 'Cataclismo Eclipsado', tipo: 'ataque', custo: 30, poder: 3.6, desc: 'A montanha anda e racha o mundo em dois.', elemento: 'terra', status: { tipo: 'lentidao', turnos: 4 }, alvo: 'area' },
   sol_negro: { nome: 'Sol Negro', tipo: 'ataque', custo: 32, poder: 4.0, desc: 'O céu queima antes do fogo chegar: o ultimate do Eclipse.', elemento: 'fogo', status: { tipo: 'queimadura', turnos: 4 }, alvo: 'area' },
+  // Aprovado pelo criador no chat: ultimate eclipsado do Golem de Pedra.
+  desmoronamento_eclipsado: { nome: 'Desmoronamento Eclipsado', tipo: 'ataque', custo: 28, poder: 3.5, desc: 'O colosso eclipsado racha a terra e sepulta todos sob pedra sombria.', elemento: 'terra', status: { tipo: 'lentidao', turnos: 4 }, alvo: 'area' },
 };
 
 /**

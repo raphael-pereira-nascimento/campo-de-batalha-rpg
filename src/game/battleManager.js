@@ -478,7 +478,8 @@ export class BattleManager {
       def.nome = `${def.nome} (${variante.prefixo})`;
       def.efeitos = { ...(def.efeitos || {}), ...variante.efeitos };
       def.passiva = `${def.passiva || ''} ${variante.desc}`.trim();
-      def.varianteEclipse = variante.id;
+      // Preserva varianteEclipse (objeto do chefe) e guarda a variante aleatória separadamente.
+      def.varianteEclipseAleatoria = variante.id;
     }
     const m = buildMonster(def);
     m.uid = uid;

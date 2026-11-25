@@ -73,6 +73,13 @@ export const MONSTERS = {
     multiplicadorHP: 2.5,
     fraquezas: ['agua', 'ar'],
     resistencias: ['terra', 'fisico'],
+    // Aprovado pelo criador no chat: forma de Eclipse do Golem de Pedra.
+    varianteEclipse: {
+      sufixo: 'Eclipsado',
+      spell: 'desmoronamento_eclipsado',
+      passiva: 'No Eclipse, o colosso desperta rachado pela sombra: cada passo desaba a terra.',
+      efeitos: { danoFisicoMult: 0.15, danoMagicoMult: 0.1 },
+    },
   },
   // ── Chefes de Bioma (PROVISÓRIO: números sujeitos a ajuste) ──────────
   kraken: {
