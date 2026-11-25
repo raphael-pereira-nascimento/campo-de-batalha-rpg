@@ -25,8 +25,9 @@ import {
   dificuldadeDoGolpe,
   exigenciaD20,
 } from '../game/sistema.js';
-import { MONSTERS } from '../game/monsters.js';
+import { MONSTERS, chefeHpMultPorAdversarios } from '../game/monsters.js';
 import { SPELLS, STATUS_DEFS, EQUIPMENT, armasDeEquipamento, skillFromSpell, penalidadesEquipamento } from '../game/data.js';
+import { estadoEclipse, aplicarVarianteEclipseEmChefe } from '../game/eclipse.js';
 import { danoDeStatus, normalizarChance } from '../game/combatEffects.js';
 import { golpesDisponiveis } from '../game/skillValidation.js';
 
@@ -439,6 +440,34 @@ function computeDamage(attacker, isCrit, arma = null) {
   const base = danoFisicoAtaque(effectiveStat(attacker, 'forca'), danoBaseDaArma(arma));
   const buff = multiplicadorDano(attacker, 'fisico');
   return Math.max(1, Math.round(base * (isCrit ? 2 : 1) * buff));
+}
+
+function calcBossHpMax(def, fighters, eclipseAtivo, selfId = null) {
+  if (!def) return 1;
+  // Adversários = aliados do chefe; se ainda não houver aliados, usa todos os
+  // outros lutores para não deixar o chefe com 50 HP ao ser invocado primeiro.
+  let adversarios = fighters.filter((f) => f.id !== selfId && f.team === 'ally' && !f._bossId);
+  if (adversarios.length === 0) {
+    adversarios = fighters.filter((f) => f.id !== selfId && !f._bossId);
+  }
+  const sumHp = adversarios.reduce((s, f) => s + (Number(f.hpMax) || 0), 0);
+  const n = Math.max(1, adversarios.length);
+  const mult = Number(def.multiplicadorHP) || 3;
+  let hpBase = Math.max(50, Math.round(sumHp * mult * chefeHpMultPorAdversarios(n)));
+  if (eclipseAtivo) {
+    const est = estadoEclipse(30, 'comum');
+    hpBase = Math.max(50, Math.round(hpBase * (Number(est.chefeMult) || 1)));
+  }
+  return hpBase;
+}
+
+function aplicarEclipseDefMesa(def, eclipseAtivo) {
+  if (!def) return def;
+  if (!eclipseAtivo) return { ...def };
+  const est = estadoEclipse(30, 'comum');
+  let d = { ...def };
+  d = aplicarVarianteEclipseEmChefe(d, est);
+  return d;
 }
 
 export default function TableBattle({ onBack, characters = [], gameData }) {
@@ -883,25 +912,69 @@ const [lastRoll, setLastRoll] = useState(null);
   );
 
   const addBoss = useCallback(() => {
-    const def = MONSTERS[bossId];
-    if (!def) return;
-    const cfg = PROTECTION_CHEFS[def.id];
-    const protection = cfg ? makeProtection(cfg, bossEclipse) : null;
+    const baseDef = MONSTERS[bossId];
+    if (!baseDef) return;
+    const eclipseAtivo = !!(bossEclipse && baseDef.varianteEclipse);
+    const def = aplicarEclipseDefMesa(baseDef, eclipseAtivo);
+    const cfg = PROTECTION_CHEFS[baseDef.id];
+    const protection = cfg ? makeProtection(cfg, eclipseAtivo) : null;
     const f = makeFighter(
-      `${bossEclipse && def.varianteEclipse ? '🌑 ' : ''}${def.icone || '👑'} ${def.nome}${bossEclipse && def.varianteEclipse ? ` (${def.varianteEclipse.sufixo || 'Eclipse'})` : ''}`,
+      `${eclipseAtivo ? '🌑 ' : ''}${def.icone || '👑'} ${def.nome}`,
       'enemy',
       { ...def.attributes },
-      { protection, _bossId: def.id, _eclipse: bossEclipse && def.varianteEclipse ? true : null, spells: def.spells || [] }
+      {
+        protection,
+        _bossId: baseDef.id,
+        _bossEclipse: eclipseAtivo,
+        _eclipse: eclipseAtivo || !!baseDef.isEclipse || null,
+        spells: def.spells || [],
+        passiva: def.passiva || baseDef.passiva || '',
+        efeitos: def.efeitos || baseDef.efeitos || {},
+        monsterDef: { ...baseDef },
+      }
     );
-    setFighters((prevFighters) => [...prevFighters, f]);
-    if (initiativeRolled) setInitiativeOrder((prevOrder) => [...prevOrder, f.id]);
+    const hpMax = calcBossHpMax(baseDef, fighters, eclipseAtivo, f.id);
+    const bossFighter = { ...f, hp: hpMax, hpMax, hpMaxOriginal: hpMax };
+    setFighters((prevFighters) => {
+      const next = [...prevFighters, bossFighter];
+      return next.map((x) => {
+        if (!x._bossId) return x;
+        const bd = MONSTERS[x._bossId];
+        if (!bd) return x;
+        const novoMax = calcBossHpMax(bd, next, !!x._bossEclipse, x.id);
+        if (novoMax === x.hpMax) return x;
+        const ratio = x.hpMax > 0 ? x.hp / x.hpMax : 1;
+        const novoHp = Math.max(0, Math.min(novoMax, Math.round(novoMax * ratio)));
+        return { ...x, hpMax: novoMax, hp: novoHp, hpMaxOriginal: novoMax };
+      });
+    });
+    if (initiativeRolled) setInitiativeOrder((prevOrder) => [...prevOrder, bossFighter.id]);
     const golpes = (def.spells || []).map((s) => SPELLS[s]?.nome || s).join(', ');
     const protoTxt = protection
-      ? ` 🛡️ Proteção: ${protection.hp}/${protection.maxHp} (${bossEclipse ? 'Eclipse' : 'normal'})`
+      ? ` 🛡️ Proteção: ${protection.hp}/${protection.maxHp} (${eclipseAtivo ? 'Eclipse' : 'normal'})`
       : '';
-    addLog(`👑 ${def.nome} (Nv.${def.nivel}) entra na mesa como inimigo! Passiva: ${def.passiva || '—'}${golpes ? ` Golpes: ${golpes}.` : ''}${protoTxt}`);
+    addLog(`👑 ${def.nome} (Nv.${baseDef.nivel}) entra na mesa como inimigo! HP ${hpMax}. Passiva: ${def.passiva || '—'}${golpes ? ` Golpes: ${golpes}.` : ''}${protoTxt}`);
     setBossId('');
-  }, [bossId, addLog, initiativeRolled, bossEclipse]);
+  }, [bossId, addLog, initiativeRolled, bossEclipse, fighters]);
+
+  // Reescala HP de chefes quando personagens/combatentes são adicionados/removidos.
+  useEffect(() => {
+    setFighters((prev) => {
+      let changed = false;
+      const next = prev.map((f) => {
+        if (!f._bossId) return f;
+        const bd = MONSTERS[f._bossId];
+        if (!bd) return f;
+        const novoMax = calcBossHpMax(bd, prev, !!f._bossEclipse, f.id);
+        if (novoMax === f.hpMax) return f;
+        changed = true;
+        const ratio = f.hpMax > 0 ? f.hp / f.hpMax : 1;
+        const novoHp = Math.max(0, Math.min(novoMax, Math.round(novoMax * ratio)));
+        return { ...f, hpMax: novoMax, hp: novoHp, hpMaxOriginal: novoMax };
+      });
+      return changed ? next : prev;
+    });
+  }, [fighters]);
 
   // Rola iniciativa (D20 + VEL) para todos que ainda não têm e define a ordem de turnos.
   const rollInitiative = useCallback(() => {
@@ -2015,14 +2088,14 @@ const [lastRoll, setLastRoll] = useState(null);
                 ))}
               </select>
               <button onClick={addBoss} disabled={!bossId}>Invocar chefão</button>
-              {bossId && PROTECTION_CHEFS[bossId] && (
+              {bossId && (PROTECTION_CHEFS[bossId] || MONSTERS[bossId]?.varianteEclipse) && (
                 <label className="check-label inline" style={{ marginLeft: 10 }}>
                   <input
                     type="checkbox"
                     checked={bossEclipse}
                     onChange={(e) => setBossEclipse(e.target.checked)}
                   />
-                  🌑 Modo Eclipse (proteção extra)
+                  🌑 Modo Eclipse (forma eclipsada)
                 </label>
               )}
             </div>
@@ -2033,17 +2106,24 @@ const [lastRoll, setLastRoll] = useState(null);
               const proto = cfg ? makeProtection(cfg, bossEclipse) : null;
               return (
                 <div className="muted small" style={{ marginTop: 8 }}>
-                  <div><strong>Passiva:</strong> {b.passiva}</div>
-                  <div><strong>Golpes:</strong> {(b.spells || []).map((s) => SPELLS[s]?.nome || s).join(' · ')}</div>
-                  {(b.especial || b.ultimate) && (
-                    <div>
-                      {b.especial && <><strong>Especial:</strong> {SPELLS[b.especial]?.nome || b.especial} </>}
-                      {b.ultimate && <><strong>Ultimate:</strong> {SPELLS[b.ultimate]?.nome || b.ultimate}</>}
-                      {b.varianteEclipse?.spell && (
-                        <> · <strong>Eclipse:</strong> {SPELLS[b.varianteEclipse.spell]?.nome || b.varianteEclipse.spell}</>
-                      )}
-                    </div>
-                  )}
+                  {(() => {
+                    const defMes = aplicarEclipseDefMesa(b, bossEclipse);
+                    return (
+                      <>
+                        <div><strong>Passiva:</strong> {defMes.passiva}</div>
+                        <div><strong>Golpes:</strong> {(defMes.spells || []).map((s) => SPELLS[s]?.nome || s).join(' · ')}</div>
+                        {(defMes.especial || defMes.ultimate || b.varianteEclipse?.spell) && (
+                          <div>
+                            {defMes.especial && <><strong>Especial:</strong> {SPELLS[defMes.especial]?.nome || defMes.especial} </>}
+                            {defMes.ultimate && <><strong>Ultimate:</strong> {SPELLS[defMes.ultimate]?.nome || defMes.ultimate}</>}
+                            {bossEclipse && b.varianteEclipse?.spell && (
+                              <> · <strong>Eclipse:</strong> {SPELLS[b.varianteEclipse.spell]?.nome || b.varianteEclipse.spell}</>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                   {proto && (
                     <div style={{ marginTop: 6, padding: 6, background: 'rgba(255, 209, 102, 0.12)', border: '1px solid var(--accent-2)', borderRadius: 8 }}>
                       <strong>🛡️ Proteção do chefe:</strong> {proto.hp}/{proto.maxHp} HP ・
